@@ -93,11 +93,6 @@ def parse_step_unordered_list(text: str) -> [str]:
 
 
 def parse_final_response(text: str) -> (bool, str):
-    # match: re.Match = _all_look_good_answer_re.match(text)
-    # if match is None:
-    #     raise ParseError(f"Text cannot be parsed with regular expression {_all_look_good_answer_re}")
-    # prediction = _utils.str_or_blank(match.group(1))
-    # return 'all look good' in prediction, _utils.remove_brackets(match.group(2))
     return 'the answer is correct' in text.lower(), _utils.str_or_blank(text)
 
 

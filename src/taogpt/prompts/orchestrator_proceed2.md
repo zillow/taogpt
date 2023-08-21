@@ -1,4 +1,3 @@
----
 Please proceed according to the above instructions.
 
 Make sure start with headings `# I_WILL_ANSWER_THIS_STEP_DIRECTLY`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, 

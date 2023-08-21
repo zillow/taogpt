@@ -1,13 +1,16 @@
 from __future__ import annotations
 import dataclasses as _dc
+import time
 import typing as _t
 from _collections import defaultdict
+
+import taogpt.tao_model
 from .runtime_env import Invocation, Backtrack, StepABC
 from .parsing import *
 from .constants import *
 import taogpt.utils as _utils
 from .utils import log_debug, safe_subn
-from .tao_model import PromptSet
+from taogpt.prompts import PromptSet
 
 
 @_dc.dataclass(repr=False)
@@ -105,7 +108,8 @@ class AskForAnalysisStep(Step):
             try:
                 desc = my_invocation.executor.llm.ask(system_prompt, prompts,
                                                       reason='request_analysis',
-                                                      always_shown=True, step_id=f"{self.step_id}/{n_retries}",
+                                                      temperature=0.0,
+                                                      step_id=f"{self.step_id}/{n_retries}",
                                                       log_request=n_retries == 0)
                 return TaoAnalysisStep(self, self.step_id + 1, desc, ROLE_SOLVER)
             except Exception as e:
@@ -154,7 +158,26 @@ class TaoAnalysisStep(TaoReplyStep):
         return _utils.str_or_blank(self.description)
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        return ProceedStep(self, self.step_id+1, "How do you want to proceed?", ROLE_ORCHESTRATOR)
+        prompt_db: PromptSet  = my_invocation.executor.prompts
+        prompts: _t.List[(str, str)] = my_invocation.executor.show_conversation_thread()
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_direct_solve))
+        llm: taogpt.tao_model.LLM = my_invocation.executor.llm
+        intuition: str | None = None
+        n_retries = 0
+        while True:
+            try:
+                intuition = llm.ask('',prompts, reason='intuition', temperature=0.0)
+                break
+            except Exception as e:
+                n_retries += 1
+                time.sleep(n_retries)
+                if n_retries >= MAX_RETRIES:
+                    raise e
+        return ProceedStep(self, self.step_id+1, "How do you want to proceed?", ROLE_ORCHESTRATOR,
+                           prepared=intuition)
+
+    def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
+        return False
 
 
 @_dc.dataclass(repr=False)
@@ -198,6 +221,9 @@ class GiveUpStep(TaoReplyStep):
         self.description = _utils.str_or_blank(sections[FREE_TEXT])
         if len(self.description) == 0:
             raise ParseError("Must provide explanation why you gave up.")
+
+    def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
+        return False
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         raise Backtrack(f"Problem or step is unsolvable. I gave up.", my_invocation)
@@ -290,6 +316,7 @@ def parse_to_step(step: Step, response: str) -> Step:
 class ExpandableStep(Step):
     choices: _t.List[Step] | None = None
     rankings: _t.Dict[int, float] = None
+    prepared: str|None=None
 
     @property
     def step_title(self) -> str:
@@ -322,9 +349,8 @@ class ExpandableStep(Step):
         system_prompt = prompt_db.system_step_expansion
         tao_templates = prompt_db.tao_templates.format(examples=prompt_db.tao_templates_examples)
         prompts: _t.List[(str, str)] = my_invocation.executor.show_conversation_thread()
+        prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
         scratchpad = my_invocation.executor.find_scratchpad()
-
-        prompts.append((ROLE_ORCHESTRATOR, tao_templates))
         work_prompt = self.get_expansion_prompt(prompt_db, scratchpad)
         if work_prompt is not None:
             work_prompt = prompt_db.orchestrator_proceed2.format(expansion_prompt=work_prompt)
@@ -341,10 +367,13 @@ class ExpandableStep(Step):
             while n_retries < MAX_RETRIES:
                 try:
                     n = len(self.choices)
+                    temperature = 0.0 if len(self.choices) == 0 else None
                     plan = my_invocation.executor.llm.ask(system_prompt, prompts_to_be_sent,
                                                           reason=self._expansion_reason(),
-                                                          always_shown=True, step_id=f"{self.step_id}/{n}",
-                                                          log_request=(len(self.choices) == 0 and n_retries == 0))
+                                                          step_id=f"{self.step_id}/{n}",
+                                                          temperature=temperature,
+                                                          log_request=(len(self.choices) == 0 and n_retries == 0),
+                                                          collapse_contents={'tao_templates': tao_templates})
                     choice = parse_to_step(self, plan)
                     self.choices.append(choice)
                     log_debug(f"===> received choice {len(self.choices)}: {plan[:30]}...", level=2)
@@ -359,6 +388,11 @@ class ExpandableStep(Step):
                     if n_retries >= MAX_RETRIES:
                         print(f"failed after {n_retries}")
                         raise e
+        if len(_utils.str_or_blank(self.prepared)) > 0:
+            self.prepared = _utils.str_or_blank(self.prepared)
+            if UNSOLVABLE not in self.prepared:
+                self.prepared = f"# {WILL_ANSWER_DIRECTLY}\n{self.prepared}"
+            self.choices.append(parse_to_step(self, self.prepared))
 
     def get_expansion_prompt(self, prompt_db, scratchpad) -> str | None:
         return None
@@ -374,8 +408,8 @@ class ExpandableStep(Step):
             prompts.append((ROLE_ORCHESTRATOR, criticism))
         work_prompt = prompt_db.orchestrator_eval_strategy_choices.format(
             tao_templates=tao_templates,
-            plans='\n\n---\n\n'.join([
-                f"# [Plan {i+1}] {plan.step_title}\n\n{plan.description_with_extras}"
+            approaches='\n\n---\n\n'.join([
+                f"# [Approach {i+1}] {plan.step_title}\n\n{plan.description_with_extras}"
                 for i, plan in enumerate(self.choices)
             ])
         )
@@ -385,9 +419,15 @@ class ExpandableStep(Step):
         while n_success < MAX_VOTING_FACTOR:
             n_retries = 0
             try:
-                response = my_invocation.executor.llm.ask(system_prompt, prompts, reason='rank_choices',
+                rank_choice_instruction = prompt_db.orchestrator_eval_strategy_choices.split('---')[-1].strip()
+                response = my_invocation.executor.llm.ask(
+                    system_prompt, prompts,
+                    reason='rank_choices',
                                                           step_id=f"{self.step_id}/{n_success}",
-                                                          log_request=(n_success == 0 and n_retries == 0))
+                                                          temperature=0.0 if n_success == 0 else 0.1,
+                                                          log_request=(n_success == 0 and n_retries == 0),
+                                                          collapse_contents={'tao_templates': tao_templates,
+                                                                             'rank_choices': rank_choice_instruction})
                 scores = parse_ranking_response(response, len(self.choices))
                 if isinstance(scores, str):
                     assert scores == 'backtrack'

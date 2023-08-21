@@ -1,4 +1,4 @@
-I'm acting as the orchestrator. Which step you want to work on next? You can reply in one-line either:
+Which step you want to work on next? You can reply in one-line either:
 
 ```
 I want to work on: <step description>
@@ -20,6 +20,3 @@ need not be re-written in the final answer.
 
 (Tao, if you've asked user questions, they should've been answered by the user at this point; please find the
 answers in the conversation history instead of going back to the same questions.)
-
-## SCRATCHPAD_AT_THIS_POINT:
-{scratchpad}

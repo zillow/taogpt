@@ -55,7 +55,7 @@ following template **strictly** so the orchestrator can parse it and show the qu
 ```
 
 ##### 4. **Direct Answer**:
-Go with this strategy only if the step is simple and you're confident you know the answer.
+Go with this strategy if the step is simple and you know the correct answer.
 
 **After the answer**, you can additional sections in this order:
 1. One optional explanation section explaining your answer.

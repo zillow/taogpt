@@ -3,6 +3,35 @@ from __future__ import annotations
 import re
 import typing as _t
 import re as _re
+from dataclasses import  MISSING as _MISSING
+from typing import Generic, TypeVar
+
+_T = TypeVar('_T')
+
+
+# credit: https://stackoverflow.com/questions/61237131/how-to-make-attribute-in-dataclass-read-only
+class Frozen(Generic[_T]):
+    __slots__ = (
+        '_default',
+        '_private_name',
+    )
+
+    def __init__(self, default: _T = _MISSING):
+        self._default = default
+
+    def __set_name__(self, owner, name):
+        self._private_name = '_' + name
+
+    def __get__(self, obj, objtype=None) -> _T:
+        value = getattr(obj, self._private_name, self._default)
+        return value
+
+    def __set__(self, obj, value):
+        if hasattr(obj, self._private_name):
+            msg = f'Attribute `{self._private_name[1:]}` is immutable!'
+            raise TypeError(msg) from None
+
+        setattr(obj, self._private_name, value)
 
 
 def str_or_blank(s: str) -> str:

@@ -3,6 +3,7 @@ import dataclasses as _dc
 import typing as _t
 import math as _math
 from frozenlist import FrozenList as _FrozenList
+
 from .runtime_env import *
 from .tao_model import *
 from .program import *
@@ -11,9 +12,10 @@ import taogpt.utils as _utils
 
 @_dc.dataclass
 class Orchestrator(Executor):
-    llm: LLM
-    prompts: PromptSet
-    markdown_logger: _utils.MarkdownLogger
+    llm: LLM = _utils.Frozen()
+    prompts: PromptSet = _utils.Frozen()
+    markdown_logger: _utils.MarkdownLogger = _utils.Frozen()
+    max_tokens: int = 100000
 
     def __post_init__(self):
         self._chain: [Invocation] = []
@@ -23,7 +25,7 @@ class Orchestrator(Executor):
     def logger(self) -> MarkdownLogger:
         return self.markdown_logger
 
-    def start(self, task: str | Step):
+    def start(self, task: str | Step, try_intuition=False):
         if isinstance(task, str):
             root_step = InitialStep(None, 0, task, role=ROLE_USER)
         elif isinstance(task, InitialStep):
@@ -32,10 +34,18 @@ class Orchestrator(Executor):
             raise ValueError(f"Expecting string description of task or a Step object, got {type(task)}")
         self.reset()
         self._chain.append(Invocation(root_step, _executor=self))
-        init_analysis_step = AskForAnalysisStep(root_step, root_step.step_id+1, '', ROLE_ORCHESTRATOR)
-        self._chain.append(Invocation(init_analysis_step, _executor=self))
+        if try_intuition:
+            init_analysis_step = AskForAnalysisStep(root_step, root_step.step_id+1, '', ROLE_ORCHESTRATOR)
+            self._chain.append(Invocation(init_analysis_step, _executor=self))
         self._execute_with_backtracking()
 
+    def resume(self, additional_token_allowance: int|None=None):
+        if self.llm.total_tokens >= self.max_tokens:
+            additional_token_allowance = (additional_token_allowance or self.max_tokens)
+            if self.max_tokens > 0:
+                self.max_tokens += additional_token_allowance
+            print(f"extend token allowance by {additional_token_allowance} to {self.max_tokens}")
+            self._execute_with_backtracking()
     def _execute_with_backtracking(self):
         done = False
         try:
@@ -111,6 +121,8 @@ class Orchestrator(Executor):
             if isinstance(new_step, FinalAnswerStep):
                 self.check_final_solution(self._chain[-1])
                 return True
+            if self.max_tokens > 0 and self.llm.total_tokens >= self.max_tokens:
+                raise RuntimeError(f"Used {self.llm.total_tokens}, exceeded token allowance of {self.max_tokens}")
         return done or len(self._chain) == 0
 
     def show_conversation_thread(self, with_extras=False, selector: _t.Callable[[int, Invocation], bool]|None=None) \
@@ -133,12 +145,14 @@ class Orchestrator(Executor):
         step = self._chain[-1].step
         system_prompt = self.prompts.system_step_expansion
         prompts = self.show_conversation_thread()
-        work_prompt = self.prompts.orchestrator_next_step.format(
-            scratchpad=self.find_scratchpad()
-        )
+        work_prompt = self.prompts.orchestrator_next_step
         prompts.append((ROLE_ORCHESTRATOR, work_prompt))
+        scratchpad = self.find_scratchpad()
+        if len(_utils.str_or_blank(scratchpad)) > 0:
+            prompts.append((ROLE_ORCHESTRATOR, f"### {SCRATCHPAD_AT_THIS_POINT}\n{scratchpad}\n"))
         decision, next = self.vote(system_prompt, prompts, lambda reply: parse_next_step_reply(reply),
-                                   reason='next_step', step_id=step.step_id)
+                                   reason='next_step', step_id=step.step_id,
+                                   collapse_contents={'next_step': work_prompt})
         if decision == DONE:
             return FinalAnswerStep(step, step.step_id+1, next, role=ROLE_SOLVER)
         work_prompt = self.prompts.orchestrator_proceed.format(
@@ -154,7 +168,8 @@ class Orchestrator(Executor):
         sage_prompt = self.prompts.sage_check_dead_end
         prompts.append((ROLE_SAGE, sage_prompt))
         self.check_execution_state(system_prompt, prompts, invocation, parse_dead_end_check_response,
-                                   reason='check_dead_end')
+                                   reason='check_dead_end',
+                                   collapse_contents={'check_dead_end': sage_prompt})
 
     def check_final_solution(self, invocation: Invocation):
         system_prompt = self.prompts.sage
@@ -174,30 +189,40 @@ class Orchestrator(Executor):
                               prompts: [(str, str)],
                               invocation: Invocation,
                               response_parser: _t.Callable[[str], (bool, str)],
-                              reason='check_state'):
+                              max_voting_factor=MAX_VOTING_FACTOR,
+                              reason='check_state',
+                              collapse_contents: {str:str}=None):
         all_criticism: [str] = []
-        min_yes_needed = int(_math.ceil(MAX_VOTING_FACTOR * CONTINUE_VOTE_QUORUM))
-        max_no_allowed = int(_math.ceil(MAX_VOTING_FACTOR * (1 - CONTINUE_VOTE_QUORUM)))
+        min_yes_needed = int(max_voting_factor * CONTINUE_VOTE_QUORUM)
+        max_no_allowed = int(_math.ceil(max_voting_factor * (1 - CONTINUE_VOTE_QUORUM)))
         n_success, n_true = 0, 0
-        for i in range(MAX_VOTING_FACTOR):
-            try:
-                response = self.llm.ask(system_prompt, prompts,
-                                        reason=reason,
-                                        step_id=f"{invocation.step.step_id}/{i}",
-                                        log_request=i == 0)
-                result, text = response_parser(response)
-                n_success += 1
-                if result:
-                    n_true += 1
-                elif text is not None and len(text.strip()) > 0:
-                    all_criticism.append(text.strip())
-                log_debug(f"===> received dead-end check reply {i}: {result} ({n_true}/{n_success})")
-                if n_true >= min_yes_needed:
-                    break
-                if (n_success - n_true) >= max_no_allowed:
-                    break
-            except:
-                pass
+        for i in range(max_voting_factor):
+            n_retries = 0
+            prompts_to_be_sent = prompts.copy()
+            response: str = ''
+            while n_retries < MAX_RETRIES:
+                try:
+                    response = self.llm.ask(system_prompt, prompts_to_be_sent,
+                                            reason=reason,
+                                            step_id=f"{invocation.step.step_id}/{i}",
+                                            temperature=0.0 if n_success == 0 else 0.1,
+                                            collapse_contents=collapse_contents,
+                                            log_request=i == 0)
+                    result, text = response_parser(response)
+                    n_success += 1
+                    if result:
+                        n_true += 1
+                    elif text is not None and len(text.strip()) > 0:
+                        all_criticism.append(text.strip())
+                    log_debug(f"===> received dead-end check reply {i}: {result} ({n_true}/{n_success})")
+                    if n_true >= min_yes_needed:
+                        break
+                    if (n_success - n_true) >= max_no_allowed:
+                        break
+                except Exception as e:
+                    n_retries += 1
+                    self._handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
+                                             self.prompts.orchestrator_parse_error)
         if len(all_criticism) > 0:
             self.record_criticisms(all_criticism)
         if n_success == 0:
@@ -237,7 +262,8 @@ class Orchestrator(Executor):
         self._frozen_chain = _FrozenList()
 
     def vote(self, system_prompt: str, prompts: [(str, str)], parser: _t.Callable[[str], _t.Any],
-             reason: str=None, step_id:str=None, min_threshold=0.0, majority=1) -> (_t.Any, int|float):
+             reason: str=None, step_id:str=None, min_threshold=0.0, majority=1,
+             collapse_contents: {str: str}=None) -> (_t.Any, int|float):
         assert majority == 1 # todo: can't handle multiple votes yet
         prompt_db: PromptSet = self.prompts
         min_threshold = min_threshold * majority
@@ -249,8 +275,12 @@ class Orchestrator(Executor):
             response: str = ''
             while n_retries < MAX_RETRIES:
                 try:
-                    response = self.llm.ask(system_prompt, prompts_to_be_sent, reason=reason, step_id=f"{step_id}",
-                                            log_request=i == 0)
+                    response = self.llm.ask(system_prompt,
+                                            prompts_to_be_sent,
+                                            reason=reason,
+                                            step_id=f"{step_id}",
+                                            temperature=0.0 if i == 0 else 0.1,
+                                            log_request=i == 0, collapse_contents=collapse_contents)
                     result, data = parser(response)
                     existing = rankings.get(result, (0, data))
                     existing = existing[0] + 1, data # todo this can't handle multiple votes yet
@@ -259,17 +289,21 @@ class Orchestrator(Executor):
                     break
                 except Exception as e:
                     n_retries += 1
-                    if isinstance(e, ParseError) and len(prompts_to_be_sent) <= len(prompts):
-                        prompts_to_be_sent.append((ROLE_SOLVER, response))
-                        message = prompt_db.orchestrator_next_step_parse_error.format(error=str(e))
-                        prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
-                        self.logger.log(f"\n***RETRY***\n{message}")
-                    if n_retries >= MAX_RETRIES:
-                        print(f"failed after {n_retries}")
-                        raise e
+                    self._handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
+                                             prompt_db.orchestrator_next_step_parse_error)
         choices = sorted([item for item in rankings.items() if item[1][0] >= min_threshold],
                          key=lambda item: item[1][0], reverse=True)
         if len(choices) == 0:
             raise Backtrack('No candidate passes min. threshold.', blame=self._chain[-1])
         result = choices[0]
         return result[0], result[1][1]
+
+    def _handle_parse_error(self, e: Exception, n_retries, prompts, prompts_to_be_sent, response: str, retry_req: str):
+        if isinstance(e, ParseError) and len(prompts_to_be_sent) <= len(prompts):
+            prompts_to_be_sent.append((ROLE_SOLVER, response))
+            message = retry_req.format(error=str(e))
+            prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
+            self.logger.log(f"\n***RETRY***\n{message}")
+        if n_retries >= MAX_RETRIES:
+            print(f"failed after {n_retries}")
+            raise e

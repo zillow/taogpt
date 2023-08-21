@@ -1,59 +1,36 @@
 from __future__ import annotations
-import dataclasses as _dc
-import pathlib as _path
 import typing as _t
 import time as _time
-from collections import defaultdict as _defaultdict
-import langchain as lc
+from langchain.chat_models import ChatOpenAI as _ChatOpenAI
 from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_SOLVER, ROLE_SYSTEM, ROLE_SAGE
 import taogpt.utils as _utils
-import taogpt._dummies as _d
 
 
 class LLM:
 
-    def ask(self, system_prompt: str, conversation: _t.List[_t.Tuple[str, str]], reason=None, log_request=True, **_):
+    @property
+    def total_tokens(self):
+        return 0
+
+    def ask(self, system_prompt: str, conversation: _t.List[_t.Tuple[str, str]], reason=None,
+            temperature: float|None=None,
+            log_request=True, collapse_contents: {str: str}=None,**_):
         pass
 
     def reset(self):
         pass
-
-
-class DummyLLM(LLM):
-    def __init__(self, n_log_per_reason=1):
-        self.request_counts_by_reason = _defaultdict(lambda: 0)
-        self.n_log_per_reason = n_log_per_reason
-
-    def reset(self):
-        self.request_counts_by_reason.clear()
-
-    def ask(self,  system_prompt: str, conversation: _t.List[_t.Tuple[str, str]],
-            reason=None, log_request=True, always_shown=False, dummy_resp=None, step_id=None) -> str:
-        print(f"  == {reason} @ {step_id} ==")
-        if reason is not None:
-            n_logged_for_reason = self.request_counts_by_reason[reason]
-            self.request_counts_by_reason[reason] += 1
-        else:
-            n_logged_for_reason = 0
-        if dummy_resp is None:
-            dummy_resp = _d.get_dummy(reason, n_logged_for_reason)
-        if dummy_resp is not None and '{step_id}' in dummy_resp:
-            dummy_resp = dummy_resp.format(step_id=step_id)
-        if n_logged_for_reason >= self.n_log_per_reason and not always_shown:
-            return dummy_resp
-        print(f"system>", system_prompt)
-        for role, text in conversation:
-            text = _utils.str_or_blank(text)
-            if text == '':
-                continue
-            print(f"{role}> {text}\n\n")
-        return dummy_resp
 
 
 _last_conversation: _t.List|None = None
 
 
-def get_last_conversation():
+def get_last_conversation() -> _t.List|None:
+    """
+    Get the last conversation thread sent (for debugging purposes.) For `LangChainLLM`, the items are the `ChatMessage`
+    objects.
+
+    :return: a list of message items
+    """
     global _last_conversation
     return _last_conversation
 
@@ -67,30 +44,59 @@ class LangChainLLM(LLM):
         ROLE_SYSTEM: 'system',
     }
 
-    def __init__(self, llm: lc.llms.openai.OpenAIChat,logger: _utils.MarkdownLogger):
+    def __init__(self, llm: _ChatOpenAI,logger: _utils.MarkdownLogger):
         self.llm = llm
         self._logger = logger
+        self.reset()
 
     def reset(self):
-        pass
+        self._total_tokens = 0
+        self.collapsed_contents: {str} = set()
 
     def __delete__(self, instance):
         self._logger = None
 
+    @property
+    def total_tokens(self):
+        return self._total_tokens
+
     def ask(self,  system_prompt: str, conversation: _t.List[_t.Tuple[str, str]],
-            reason=None, always_shown=False, step_id=None, log_request=True) -> str:
+            reason=None, always_shown=False, step_id = None, log_request = True,
+            temperature: float|None=None,
+            collapse_contents: {str:str}=None) -> str:
+        old_temp = self.llm.temperature
+        try:
+            return self._ask(system_prompt, conversation,
+                             reason=reason, step_id=step_id,
+                             log_request=log_request, temperature=temperature,
+                             collapse_contents=collapse_contents)
+        finally:
+            if temperature is not None:
+                self.llm.temperature = old_temp
+
+    def _ask(self,  system_prompt: str, conversation: _t.List[_t.Tuple[str, str]],
+            reason=None, step_id = None, log_request = True,
+            temperature: float|None=None,
+            collapse_contents: {str:str}=None) -> str:
         self._logger.log(f"# SEND TO LLM for {reason}/{step_id}\n")
         from langchain.schema.messages import ChatMessage, SystemMessage
 
-        self._logger.new_message_section(ROLE_SYSTEM, -1)
-        if log_request:
-            self._logger.log(system_prompt, demote_h1=True)
-        else:
-            self._logger.log(f"... [text of length {len(system_prompt)}] ...")
-        self._logger.close_message_section()
-        messages = [
-            SystemMessage(content=system_prompt),
-        ]
+        if temperature is not None:
+            self.llm.temperature = temperature
+        collapse_contents = collapse_contents or dict()
+        messages: [ChatMessage] = []
+        context_len = 0
+
+        if system_prompt is not None and len(system_prompt) > 0:
+            context_len += len(system_prompt)
+            self._logger.new_message_section(ROLE_SYSTEM, -1)
+            if log_request and system_prompt not in self.collapsed_contents:
+                self._logger.log(system_prompt, demote_h1=True)
+                self.collapsed_contents.add(system_prompt)
+            else:
+                self._logger.log(f"... [text of length {len(system_prompt)}] ...")
+            self._logger.close_message_section()
+            messages.append(SystemMessage(content=system_prompt))
 
         last_chat_message: ChatMessage | None = None
         for i, (role, message) in enumerate(conversation):
@@ -100,16 +106,25 @@ class LangChainLLM(LLM):
             self._logger.new_message_section(role, i)
             self._logger.log(f"**{role} >>> said**:\n")
             if log_request:
-                self._logger.log(message, demote_h1=True)
+                content_to_be_logged: str = message
+                for key, collapsible in collapse_contents.items():
+                    if collapsible in content_to_be_logged:
+                        if collapsible in self.collapsed_contents:
+                            content_to_be_logged = content_to_be_logged.replace(
+                                collapsible,f"[..{key}:{len(collapsible)}..]")
+                        self.collapsed_contents.add(collapsible)
+                        break
+                self._logger.log(content_to_be_logged, demote_h1=True)
             else:
                 self._logger.log(f"... [text of length {len(message)}] ...")
+            context_len += len(message)
             self._logger.close_message_section()
             chat_message = ChatMessage(role=effective_role, content=message)
             if last_chat_message is None:
                 last_chat_message = chat_message
                 messages.append(chat_message)
             elif chat_message.role == last_chat_message.role:
-                # last message is already appended, just nedd to update it
+                # last message is already appended, just need to update it
                 last_content = last_chat_message.content.strip() # ensure no trailing newlines
                 last_chat_message.content = last_content + '\n\n' + chat_message.content # then add newlines
             else:
@@ -120,51 +135,15 @@ class LangChainLLM(LLM):
             reply = self.llm.predict_messages(messages)
             self._logger.log(f"Reply: **{type(reply)}**\n")
             self._logger.log(reply.content, demote_h1=True)
+            reply_len = len(reply.content)
+            total_len = context_len + reply_len
+            factor = 4 # estimate according to https://platform.openai.com/tokenizer; will use tiktoken later
+            self._logger.log(f"**Text lengths**: context={context_len} + reply:{reply_len}={total_len}"
+                             f" **Tokens**: context={context_len//factor} "
+                             f"+ reply:{reply_len//factor}={total_len//factor}\n")
+            self._total_tokens += total_len // factor
             return reply.content
         except Exception as e:
             print(e)
             _time.sleep(3)
             raise e
-
-
-@_dc.dataclass
-class PromptSet:
-    system_step_expansion: str # main system prompt
-    tao_templates: str
-    tao_templates_examples: str
-    orchestrator_ask_init_analysis: str
-    orchestrator_eval_strategy_choices: str
-    orchestrator_next_step: str
-    orchestrator_proceed: str
-    orchestrator_proceed2: str
-    orchestrator_expand_parse_error: str
-    orchestrator_next_step_parse_error: str
-    orchestrator_critics: str
-    sage: str
-    sage_check_dead_end: str
-    sage_final_check: str
-
-    @staticmethod
-    def load_defaults():
-        path = _path.Path(__file__).parent / 'prompts'
-
-        def _read(path):
-            with open(path, 'r') as f:
-                return f.read()
-
-        return PromptSet(
-            system_step_expansion=_read(path / 'tao.md'),
-            tao_templates=_read(path / 'tao_templates.md'),
-            tao_templates_examples=_read(path / 'tao_templates_examples.md'),
-            orchestrator_ask_init_analysis=_read(path / 'orchestrator_ask_init_analysis.md'),
-            orchestrator_eval_strategy_choices=_read(path / 'rank_choices.md'),
-            orchestrator_next_step=_read(path / 'next_step.md'),
-            orchestrator_proceed=_read(path / 'proceed.md'),
-            orchestrator_proceed2=_read(path / 'proceed2.md'),
-            orchestrator_expand_parse_error=_read(path / 'orchestrator_expand_parse_error.md'),
-            orchestrator_next_step_parse_error=_read(path / 'orchestrator_next_step_parse_error.md'),
-            orchestrator_critics=_read(path / 'orchestrator_critics.md'),
-            sage=_read(path / 'sage.md'),
-            sage_check_dead_end=_read(path / 'sage_dead_end_detect.md'),
-            sage_final_check=_read(path / 'sage_final_check.md'),
-        )
