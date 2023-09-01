@@ -19,7 +19,6 @@ class PromptSet:
     orchestrator_next_step_parse_error: str
     orchestrator_critics: str
     sage: str
-    sage_check_dead_end: str
     sage_final_check: str
 
     @staticmethod
@@ -45,6 +44,5 @@ class PromptSet:
             orchestrator_next_step_parse_error=_read(path / 'orchestrator_next_step_parse_error.md'),
             orchestrator_critics=_read(path / 'orchestrator_critics.md'),
             sage=_read(path / 'sage.md'),
-            sage_check_dead_end=_read(path / 'sage_dead_end_detect.md'),
             sage_final_check=_read(path / 'sage_final_check.md'),
         )

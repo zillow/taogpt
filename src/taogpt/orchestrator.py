@@ -109,8 +109,6 @@ class Orchestrator(Executor):
             while new_step is not None:
                 new_invocation = Invocation(new_step, _executor=self)
                 self._chain.append(new_invocation) # note: we don't necessary eval the new resulting step
-                if new_step.need_to_check_dead_end(new_invocation):
-                    self.check_dead_end(self._chain[-1])
                 new_step = new_step.eval(new_invocation)
             new_step = self.next_step()
             assert new_step is not None and isinstance(new_step, (ProceedStep, FinalAnswerStep))
@@ -145,15 +143,6 @@ class Orchestrator(Executor):
         work_prompt = self.prompts.orchestrator_proceed.format(description=decision)
         work_next_step = ProceedStep(step, step.step_id + 1, work_prompt, role=ROLE_ORCHESTRATOR)
         return work_next_step
-
-    def check_dead_end(self, invocation: Invocation):
-        system_prompt = self.prompts.sage
-        prompts = self.show_conversation_thread()
-        sage_prompt = self.prompts.sage_check_dead_end
-        prompts.append((ROLE_SAGE, sage_prompt))
-        self.check_execution_state(system_prompt, prompts, invocation, parse_dead_end_check_response,
-                                   reason='check_dead_end',
-                                   collapse_contents={'check_dead_end': sage_prompt})
 
     def check_final_solution(self, invocation: Invocation):
         system_prompt = self.prompts.sage
