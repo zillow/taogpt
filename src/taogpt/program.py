@@ -181,6 +181,7 @@ class DirectAnswerStep(TaoReplyStep):
     def __post_init__(self):
         sections = parse_sections(self.description)
         self.description = sections[FREE_TEXT]
+        self.next_step = sections.get(NEXT_I_WANT_TO_WORK_AT, None)
 
 
 @_dc.dataclass(repr=False)
