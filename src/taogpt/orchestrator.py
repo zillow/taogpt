@@ -109,6 +109,11 @@ class Orchestrator(Executor):
             while new_step is not None:
                 new_invocation = Invocation(new_step, _executor=self)
                 self._chain.append(new_invocation) # note: we don't necessary eval the new resulting step
+                if isinstance(new_step, FinalAnswerStep):
+                    self.check_final_solution(self._chain[-1])
+                    return True
+                if 0 < self.max_tokens <= self.llm.total_tokens:
+                    raise RuntimeError(f"Used {self.llm.total_tokens}, exceeded token allowance of {self.max_tokens}")
                 new_step = new_step.eval(new_invocation)
             new_step = self.next_step()
             assert new_step is not None and isinstance(new_step, (ProceedStep, FinalAnswerStep))
@@ -117,7 +122,7 @@ class Orchestrator(Executor):
             if isinstance(new_step, FinalAnswerStep):
                 self.check_final_solution(self._chain[-1])
                 return True
-            if self.max_tokens > 0 and self.llm.total_tokens >= self.max_tokens:
+            if 0 < self.max_tokens <= self.llm.total_tokens:
                 raise RuntimeError(f"Used {self.llm.total_tokens}, exceeded token allowance of {self.max_tokens}")
         return done or len(self._chain) == 0
 

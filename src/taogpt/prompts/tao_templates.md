@@ -4,7 +4,7 @@ quotes and blockquotes properly. Don't repeat the current state or answer withou
 
 ---
 
-##### 1. **Unsolvable, Given up**:
+##### 1. **Unsolvable, I give up**:
 If there are fundamental **errors** or **contradictions** with the problem/task definition or the solving path thus
 far, explain what issues are there and why the issues cannot be removed.
 
@@ -50,10 +50,11 @@ following template **strictly** so the orchestrator can parse it and show the qu
 ...
 ```
 
-##### 4. **Direct Answer**:
-Go with this strategy if the step is simple and you know the correct answer.
+##### 4. **Direct Answer for This Step**:
+Go with this strategy if the step is simple and you know the correct answer. If you're ready to give the final 
+answer, then go with the "Final Answer" strategy below.
 
-**After the answer**, you should also tell the Orchetrator which step you want to work at next.
+**After the answer**, you should also tell the Orchestrator which step you want to work at next.
 
 Follow this template:
 
@@ -65,6 +66,17 @@ Follow this template:
 <description of the next step>
 ```
 
+##### 5. **Final Answer**:
+
+If you're done and want to provide your solution, double check your solutions and make sure following the task's output
+requirements. If and only if the task asks for step-by-step solution, summarize your steps in the final answer. If
+you use any files previous written without changes, you can assume the files are been kept by the orchestrator and
+need not be re-written in the final answer.
+
+```markdown
+# MY_FINAL_ANSWER
+<your final full answer to the task>
+```
 ---
 
 {examples}

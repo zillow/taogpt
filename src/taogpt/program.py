@@ -224,6 +224,7 @@ class PlanStep(TaoReplyStep):
 
 @_dc.dataclass(repr=False)
 class FinalAnswerStep(TaoReplyStep):
+    TYPE_SPEC = MY_FINAL_ANSWER
 
     @property
     def step_title(self) -> str:
@@ -266,6 +267,8 @@ def parse_to_step(step: Step, response: str) -> Step:
         step_type, step_def = type_and_def
         if step_type == DirectAnswerStep.TYPE_SPEC:
             step_class = DirectAnswerStep
+        elif step_type == FinalAnswerStep.TYPE_SPEC:
+            step_class = FinalAnswerStep
         elif step_type == AskQuestionStep.TYPE_SPEC:
             step_class = AskQuestionStep
         elif step_type == GiveUpStep.TYPE_SPEC:
