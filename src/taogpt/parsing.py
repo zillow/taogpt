@@ -11,7 +11,7 @@ _all_step_types = '|'.join([
 ])
 _step_type_re = re.compile(
     r"^#\s*(I_WILL_ANSWER_THIS_STEP_DIRECTLY"
-    r"|THIS_CANNOT_BE_SOLVED"
+    r"|UNSOLVABLE_I_GIVE_UP"
     r"|I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED"
     r"|HERE_IS_MY_STEP_BY_STEP_PLAN).*\n((.|\n)+)"
 )

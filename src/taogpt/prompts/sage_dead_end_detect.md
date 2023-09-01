@@ -12,7 +12,7 @@ Other critics claim everything is fine.
 
 Given problem definition and the current state of execution, are we still on good track to solve the task problem? 
 
-Note: a `THIS_CANNOT_BE_SOLVED` answer is acceptable if it is indeed true.
+Note: a `UNSOLVABLE_I_GIVE_UP` answer is acceptable if it is indeed true.
 
 Respond using the following template including newlines and put explanation inside the brackets:
 

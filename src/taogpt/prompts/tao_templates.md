@@ -11,7 +11,7 @@ far, explain what issues are there and why the issues cannot be removed.
 Follow this template:
 
 ```markdown
-# THIS_CANNOT_BE_SOLVED
+# UNSOLVABLE_I_GIVE_UP
 <explanation>
 ```
 
@@ -32,7 +32,7 @@ For each step, provide a brief description and a brief explanation. Do not work 
 prompt you to work at each step later. The explanation text should go inside the brackets "[]".
 
 **Important Note**: If you identify errors in the problem definition or the current solving path thus far, do not 
-choose this strategy but instead go with the "THIS_CANNOT_BE_SOLVED" strategy.
+choose this strategy but instead go with the "UNSOLVABLE_I_GIVE_UP" strategy.
 
 ##### 3. **Ask Questions**:
 Many problems requires clarifications. Use this strategy to ask questions, but avoid asking obvious, trivial, or
