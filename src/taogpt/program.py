@@ -121,23 +121,16 @@ class AskForAnalysisStep(Step):
 @_dc.dataclass(repr=False)
 class TaoReplyStep(Step):
 
-    def __repr_local__(self) -> str:
-        p = super().__repr_local__()
-        s = safe_subn(self.scratchpad)
-        return f"{p},scratchpad={s}..."
-
     def __post_init__(self):
         sections = parse_sections(self.description)
-        self.scratchpad = sections.get(SCRATCHPAD, None)
         self.description = sections[FREE_TEXT]
 
     @property
     def description_with_extras(self):
-        desc = _utils.str_or_blank(self.description)
-        return f"{desc}\n\n## {SCRATCHPAD}\n{self.scratchpad}" if self.scratchpad is not None else desc
+        return _utils.str_or_blank(self.description)
 
     def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
-        return not (_utils.is_blank(self.description) and _utils.is_blank(self.scratchpad))
+        return not _utils.is_blank(self.description)
 
 
 @_dc.dataclass(repr=False)
@@ -149,9 +142,6 @@ class TaoAnalysisStep(TaoReplyStep):
     def __repr_local__(self) -> str:
         p = super().__repr_local__()
         return f"{p},{safe_subn(self.description)}"
-
-    def __post_init__(self):
-        self.scratchpad = None
 
     @property
     def description_with_extras(self):
@@ -188,19 +178,9 @@ class DirectAnswerStep(TaoReplyStep):
     def step_title(self) -> str:
         return DirectAnswerStep.TYPE_SPEC
 
-    def __repr_local__(self) -> str:
-        p = super().__repr_local__()
-        a, s = safe_subn(self.description), safe_subn(self.scratchpad)
-        return f"{p},answer={a},scratchpad={s}"
-
     def __post_init__(self):
         sections = parse_sections(self.description)
         self.description = sections[FREE_TEXT]
-        self.scratchpad = sections.get(SCRATCHPAD, None)
-
-    def eval_only(self, my_invocation: Invocation) -> Step | None:
-        my_invocation.scratchpad = self.scratchpad
-        return None
 
 
 @_dc.dataclass(repr=False)
@@ -216,7 +196,6 @@ class GiveUpStep(TaoReplyStep):
         return f"{p}, {safe_subn(self.description)}"
 
     def __post_init__(self):
-        self.scratchpad = None
         sections = parse_sections(self.description)
         self.description = _utils.str_or_blank(sections[FREE_TEXT])
         if len(self.description) == 0:
@@ -241,9 +220,6 @@ class PlanStep(TaoReplyStep):
         p = super().__repr_local__()
         return f"{p}, {safe_subn(self.description)}"
 
-    def eval_only(self, my_invocation: Invocation) -> Step | None:
-        return None
-
 
 @_dc.dataclass(repr=False)
 class FinalAnswerStep(TaoReplyStep):
@@ -251,13 +227,6 @@ class FinalAnswerStep(TaoReplyStep):
     @property
     def step_title(self) -> str:
         return "Tao's final answer"
-
-    def __post_init__(self):
-        self.scratchpad = None
-
-    @property
-    def description_with_extras(self):
-        return self.description # no scratchpad
 
 
 @_dc.dataclass(repr=False)
@@ -273,14 +242,9 @@ class AskQuestionStep(TaoReplyStep):
         p = super().__repr_local__()
         return f"{p},questions={_utils.safe_subn(self.description)[:10]}..."
 
-    @property
-    def description_with_extras(self):
-        return self.description # no scratchpad
-
     def __post_init__(self):
         sections = parse_sections(self.description)
         self.description = f"My dear user, I have some questions before I can proceed:\n\n{sections[MY_QUESTIONS]}"
-        self.scratchpad = None
 
     def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
         return False
@@ -350,8 +314,7 @@ class ExpandableStep(Step):
         tao_templates = prompt_db.tao_templates.format(examples=prompt_db.tao_templates_examples)
         prompts: _t.List[(str, str)] = my_invocation.executor.show_conversation_thread()
         prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
-        scratchpad = my_invocation.executor.find_scratchpad()
-        work_prompt = self.get_expansion_prompt(prompt_db, scratchpad)
+        work_prompt = self.get_expansion_prompt(prompt_db)
         if work_prompt is not None:
             work_prompt = prompt_db.orchestrator_proceed2.format(expansion_prompt=work_prompt)
             prompts.append((ROLE_ORCHESTRATOR, work_prompt))
@@ -394,7 +357,7 @@ class ExpandableStep(Step):
                 self.prepared = f"# {WILL_ANSWER_DIRECTLY}\n{self.prepared}"
             self.choices.append(parse_to_step(self, self.prepared))
 
-    def get_expansion_prompt(self, prompt_db, scratchpad) -> str | None:
+    def get_expansion_prompt(self, _: PromptSet) -> str | None:
         return None
 
     def rank_choices(self, my_invocation: Invocation):
@@ -490,16 +453,12 @@ class ProceedStep(ExpandableStep):
         super().__post_init__()
         sections = parse_sections(self.description)
         self.description = sections[FREE_TEXT]
-        self.scratchpad = sections.get(SCRATCHPAD, None)
 
     def _expansion_reason(self) -> str:
         return "proceed_to_next"
 
     def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
         return False
-
-    def get_expansion_prompt(self, prompt_db, scratchpad) -> str | None:
-        return f"## {SCRATCHPAD_AT_THIS_POINT}:\n{scratchpad}" if _utils.is_blank(self.scratchpad) else ''
 
 
 @_dc.dataclass(repr=False)

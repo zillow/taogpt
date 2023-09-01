@@ -23,7 +23,7 @@ We want to rank them according to how good they fit the following criteria:
 * The original task definition should not have any fundamental issues; else it's unsolvable and all approaches get a 
   score of 0.
 * The approach must conform to the templates for Tao and parsable; else it should get a score of 0.
-* Direct answers and/or scratchpad contents that are incorrect should get a score of 0.
+* Direct answers that are incorrect should get a score of 0.
 * The approaches which lead to incorrect results should get a score of 0.
 * The assumption implied/used should be correct.
 * The questions asked by Tao should be relevant and non-redundant.

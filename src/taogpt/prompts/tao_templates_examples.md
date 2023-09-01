@@ -5,18 +5,12 @@ I like to be lucky.
 
 13
 
-### UPDATE_SCRATCHPAD_TO:
-x = 12345
+### NEXT_I_WANT_TO_WORK_AT:
 
-### UPDATE_SCRATCHPAD_TO:
-y = 'roll your dice'
-
-I want to add to my answer. Number 8 is also a lucky number.
 ```
 Template violations:
 * missing heading "I_WILL_ANSWER_THIS_STEP_DIRECTLY".
-* multiple scratchpad sections.
-* free contents after scratchpad content.
+* missing description of the next step.
 
 ```markdown
 I need to ask some questions.
@@ -35,11 +29,10 @@ Template violations:
 ### Good response examples ###
 ```markdown
 # I_WILL_ANSWER_THIS_STEP_DIRECTLY
-It is the lucky number.
-13
+It is the lucky number: 13
 
-### UPDATE_SCRATCHPAD_TO:
-x = 12345
+### NEXT_I_WANT_TO_WORK_AT:
+roll the dice again.
 ```
 
 ```markdown

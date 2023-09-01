@@ -108,8 +108,6 @@ class Orchestrator(Executor):
             invocation.execution_count += 1
             while new_step is not None:
                 new_invocation = Invocation(new_step, _executor=self)
-                if isinstance(new_step, TaoReplyStep):
-                    new_invocation.scratchpad = new_step.scratchpad
                 self._chain.append(new_invocation) # note: we don't necessary eval the new resulting step
                 if new_step.need_to_check_dead_end(new_invocation):
                     self.check_dead_end(self._chain[-1])
@@ -133,32 +131,18 @@ class Orchestrator(Executor):
                 conversation.extend(invocation.step.show_in_thread(invocation, with_extras=with_extras))
         return conversation
 
-    def find_scratchpad(self) -> str:
-        for i in range(len(self._chain)-1, -1, -1):
-            invocation = self._chain[i]
-            scratchpad = _utils.str_or_blank(invocation.scratchpad)
-            if scratchpad != '':
-                return scratchpad
-        return ''
-
     def next_step(self) -> ProceedStep | FinalAnswerStep:
         step = self._chain[-1].step
         system_prompt = self.prompts.system_step_expansion
         prompts = self.show_conversation_thread()
         work_prompt = self.prompts.orchestrator_next_step
         prompts.append((ROLE_ORCHESTRATOR, work_prompt))
-        scratchpad = self.find_scratchpad()
-        if len(_utils.str_or_blank(scratchpad)) > 0:
-            prompts.append((ROLE_ORCHESTRATOR, f"### {SCRATCHPAD_AT_THIS_POINT}\n{scratchpad}\n"))
         decision, next = self.vote(system_prompt, prompts, lambda reply: parse_next_step_reply(reply),
                                    reason='next_step', step_id=step.step_id,
                                    collapse_contents={'next_step': work_prompt})
         if decision == DONE:
             return FinalAnswerStep(step, step.step_id+1, next, role=ROLE_SOLVER)
-        work_prompt = self.prompts.orchestrator_proceed.format(
-            description=decision,
-            scratchpad=self.find_scratchpad()
-        )
+        work_prompt = self.prompts.orchestrator_proceed.format(description=decision)
         work_next_step = ProceedStep(step, step.step_id + 1, work_prompt, role=ROLE_ORCHESTRATOR)
         return work_next_step
 

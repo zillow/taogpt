@@ -16,10 +16,6 @@ class Executor(_abc.ABC):
     def show_conversation_thread(self) -> [(str, str)]:
         pass
 
-    @_abc.abstractmethod
-    def find_scratchpad(self) -> str:
-        pass
-
     def ask_user(self, questions: str) -> str:
         raise NotImplementedError('No user agent feature in the base')
 
@@ -39,7 +35,6 @@ class Invocation:
     step: StepABC
     current_choice: int = 0
     execution_count: int = 0
-    scratchpad: _t.Optional[str] = None
     _executor: Executor | None = None
 
     def __repr__(self) -> str:

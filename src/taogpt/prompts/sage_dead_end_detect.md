@@ -6,7 +6,7 @@ Some critics claim there are these issues:
 
 * there are fundamental errors in the original task problem preventing it from being solved.
 * Tao's solving path steps or answer so far likely lead to a dead-end or an infinite loop.
-* Tai's partial answers or scratchpad contents contain errors or in invalid states.
+* Tao's partial answers contain errors or in invalid states.
 
 Other critics claim everything is fine.
 
