@@ -105,20 +105,25 @@ def parse_dead_end_check_response(text: str) -> (bool, str):
     return 'true' in prediction or 'yes' in prediction, _utils.remove_brackets(match.group(1))
 
 
-def parse_ranking_response(text: str, expected_number: int) -> {int: float}:
+def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:
     rankings = parse_ordered_list(text)
     if len(rankings) == 0:
         raise ParseError(f"No rankings found in response: {text[:20]}...")
 
-    pattern = re.compile(r'\s*score:? +(-?\d+(\.\d+)?)\s*(\[.*])?')
-    results = dict()
+    pattern = re.compile(r'\s*(score:?|duplicate of:?) +(-?\d+(\.\d+)?)\s*(\[.*])?')
+    results: {int: float} = dict()
+    dupes: {int: int} = dict()
     for i, item in enumerate(rankings):
         match: re.Match = pattern.match(item)
         if match:
-            results[i+1] = float(match.group(1))
-    if len(results) != expected_number:
+            if 'duplicate' in match.group(1).lower():
+                dupes[i+1] = int(match.group(2))
+            else:
+                results[i+1] = float(match.group(2))
+    if len(results) + len(dupes) != expected_number:
         assert ParseError(f"Expecting {expected_number} rankings, received {len(results)}")
-    return results
+    assert len(results.keys() & dupes.keys()) == 0
+    return results, dupes
 
 
 def parse_next_step_reply(text: str) -> (str, str|None):

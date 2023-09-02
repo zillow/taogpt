@@ -3,6 +3,7 @@ import dataclasses as _dc
 import time
 import typing as _t
 from _collections import defaultdict
+import math as _math
 
 import taogpt.tao_model
 from .runtime_env import Invocation, Backtrack, StepABC
@@ -381,7 +382,8 @@ class ExpandableStep(Step):
             ])
         )
         prompts.append((ROLE_ORCHESTRATOR, work_prompt))
-        rankings = defaultdict(lambda: 0.0)
+        rankings: _t.Dict[int, float] = defaultdict(lambda: 0.0)
+        ranking_types = {i+1: plan.step_title for i, plan in enumerate(self.choices)}
         n_success = 0
         while n_success < MAX_VOTING_FACTOR:
             n_retries = 0
@@ -390,17 +392,14 @@ class ExpandableStep(Step):
                 response = my_invocation.executor.llm.ask(
                     system_prompt, prompts,
                     reason='rank_choices',
-                                                          step_id=f"{self.step_id}/{n_success}",
-                                                          temperature=0.0 if n_success == 0 else 0.1,
-                                                          log_request=(n_success == 0 and n_retries == 0),
-                                                          collapse_contents={'tao_templates': tao_templates,
-                                                                             'rank_choices': rank_choice_instruction})
-                scores = parse_ranking_response(response, len(self.choices))
-                if isinstance(scores, str):
-                    assert scores == 'backtrack'
-                    raise Backtrack(f"On the wrong path", my_invocation)
+                    step_id=f"{self.step_id}/{n_success}",
+                    temperature=0.0 if n_success == 0 else 0.1,
+                    log_request=(n_success == 0 and n_retries == 0),
+                    collapse_contents={'tao_templates': tao_templates, 'rank_choices': rank_choice_instruction})
+                scores, dupes = parse_ranking_response(response, len(self.choices))
                 for plan, score in scores.items():
                     rankings[plan] += score
+                self.check_duplicates(dupes, scores, ranking_types)
                 n_success += 1
                 log_debug(f"===> received ranking {n_success}: {response[:20]}...", level=2)
             except Exception as e:
@@ -419,6 +418,16 @@ class ExpandableStep(Step):
         self.choices = [self.choices[i] for i in indices if self.rankings[i] > 0]
         if len(self.choices) == 0:
             raise Backtrack(f"No valid plans found for this step", my_invocation)
+
+    @staticmethod
+    def check_duplicates(dupes, scores, ranking_types):
+        for dupe, original in dupes.items():
+            if ranking_types[dupe] != ranking_types[original]:
+                raise ParseError(f"Approach#{dupe} is of type \"{ranking_types[dupe]}\" but "
+                                 f"Approach#{original} is of type \"{ranking_types[original]}\". "
+                                 f"They cannot be duplicates of each other.")
+            else:
+                scores[dupe] = -_math.fabs(scores[original])
 
     def retryable(self, invocation: Invocation):
         return self.choices is not None and invocation.current_choice < len(self.choices)
