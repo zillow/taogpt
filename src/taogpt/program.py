@@ -184,6 +184,10 @@ class DirectAnswerStep(TaoReplyStep):
         self.description = sections[FREE_TEXT]
         self.next_step = sections.get(NEXT_I_WANT_TO_WORK_AT, None)
 
+    def eval_only(self, my_invocation: Invocation) -> Step | None:
+        return ProceedStep(self, self.step_id+1, self.next_step, ROLE_ORCHESTRATOR) \
+            if not _utils.is_blank(self.next_step) else None
+
 
 @_dc.dataclass(repr=False)
 class GiveUpStep(TaoReplyStep):
