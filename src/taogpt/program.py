@@ -17,7 +17,6 @@ from taogpt.prompts import PromptSet
 @_dc.dataclass(repr=False)
 class Step(StepABC):
     previous: Step | None
-    step_local_id: int
     description: str
     role: str
 
@@ -35,7 +34,7 @@ class Step(StepABC):
 
     @property
     def step_id(self) -> int:
-        return self.step_local_id
+        return self._step_local_id
 
     @property
     def description_with_extras(self):
@@ -66,11 +65,8 @@ class Step(StepABC):
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         return None
 
-    def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
-        return False
-
     def __post_init__(self):
-        pass
+        self._step_local_id = self.previous.step_id + 1 if self.step_id is not None else 0
 
 
 @_dc.dataclass(repr=False)
@@ -83,9 +79,6 @@ class UserReplyStep(Step):
     def __repr_local__(self) -> str:
         p = super().__repr_local__()
         return f"{p},reply={_utils.safe_subn(self.description)}..."
-
-    def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
-        return False
 
     def retryable(self, invocation: Invocation):
         return False # maybe we can ask the user again but Tao will do so by generating new questions.
@@ -112,7 +105,7 @@ class AskForAnalysisStep(Step):
                                                       temperature=0.0,
                                                       step_id=f"{self.step_id}/{n_retries}",
                                                       log_request=n_retries == 0)
-                return TaoAnalysisStep(self, self.step_id + 1, desc, ROLE_SOLVER)
+                return TaoAnalysisStep(self, desc, ROLE_SOLVER)
             except Exception as e:
                 n_retries += 1
                 if n_retries >= MAX_RETRIES:
@@ -123,15 +116,13 @@ class AskForAnalysisStep(Step):
 class TaoReplyStep(Step):
 
     def __post_init__(self):
+        super().__post_init__()
         sections = parse_sections(self.description)
         self.description = sections[FREE_TEXT]
 
     @property
     def description_with_extras(self):
         return _utils.str_or_blank(self.description)
-
-    def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
-        return not _utils.is_blank(self.description)
 
 
 @_dc.dataclass(repr=False)
@@ -164,11 +155,8 @@ class TaoAnalysisStep(TaoReplyStep):
                 time.sleep(n_retries)
                 if n_retries >= MAX_RETRIES:
                     raise e
-        return ProceedStep(self, self.step_id+1, "How do you want to proceed?", ROLE_ORCHESTRATOR,
+        return ProceedStep(self, "How do you want to proceed?", ROLE_ORCHESTRATOR,
                            prepared=intuition)
-
-    def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
-        return False
 
 
 @_dc.dataclass(repr=False)
@@ -180,12 +168,12 @@ class DirectAnswerStep(TaoReplyStep):
         return DirectAnswerStep.TYPE_SPEC
 
     def __post_init__(self):
+        super().__post_init__()
         sections = parse_sections(self.description)
-        self.description = sections[FREE_TEXT]
         self.next_step = sections.get(NEXT_I_WANT_TO_WORK_AT, None)
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        return ProceedStep(self, self.step_id+1, self.next_step, ROLE_ORCHESTRATOR) \
+        return ProceedStep(self, self.next_step, ROLE_ORCHESTRATOR) \
             if not _utils.is_blank(self.next_step) else None
 
 
@@ -202,13 +190,9 @@ class GiveUpStep(TaoReplyStep):
         return f"{p}, {safe_subn(self.description)}"
 
     def __post_init__(self):
-        sections = parse_sections(self.description)
-        self.description = _utils.str_or_blank(sections[FREE_TEXT])
+        super().__post_init__()
         if len(self.description) == 0:
             raise ParseError("Must provide explanation why you gave up.")
-
-    def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
-        return False
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         raise Backtrack(f"Problem or step is unsolvable. I gave up.", my_invocation)
@@ -232,7 +216,7 @@ class PlanStep(TaoReplyStep):
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         # when evaluating this node, we are always at the first step
-        return ProceedStep(self, self.step_id + 1, self.first_step, ROLE_ORCHESTRATOR)
+        return ProceedStep(self, self.first_step, ROLE_ORCHESTRATOR)
 
 
 @_dc.dataclass(repr=False)
@@ -257,19 +241,13 @@ class AskQuestionStep(TaoReplyStep):
         p = super().__repr_local__()
         return f"{p},questions={_utils.safe_subn(self.description)[:10]}..."
 
-    def __post_init__(self):
-        sections = parse_sections(self.description)
-        self.description = f"My dear user, I have some questions before I can proceed:\n\n{sections[MY_QUESTIONS]}"
-
-    def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
-        return False
-
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        reply = my_invocation.executor.ask_user(self.description)
+        questions = parse_ordered_list(self.description)
+        reply = my_invocation.executor.ask_user(questions)
         reply = _utils.str_or_blank(reply)
         if reply == '':
             return None
-        return UserReplyStep(self, self.step_id+1, reply, ROLE_USER)
+        return UserReplyStep(self, reply, ROLE_USER)
 
 
 def parse_to_step(step: Step, response: str) -> Step:
@@ -290,7 +268,7 @@ def parse_to_step(step: Step, response: str) -> Step:
             step_class = PlanStep
         if step_def is None:
             raise ParseError(f"Missing details.")
-    return step_class(step, step_local_id=step.step_id + 1, description=step_def, role=ROLE_SOLVER)
+    return step_class(step, description=step_def, role=ROLE_SOLVER)
 
 
 @_dc.dataclass(repr=False)
@@ -318,9 +296,6 @@ class ExpandableStep(Step):
 
     def record_criticism(self, additional_criticisms: [str]):
         self._all_criticisms.update(additional_criticisms)
-
-    def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
-        return False  # the ranking will also check for dead-end
 
     def _expansion_reason(self) -> str:
         return 'expand_choices'
@@ -474,16 +449,8 @@ class ProceedStep(ExpandableStep):
     def step_title(self) -> str:
         return "Tao will proceed"
 
-    def __post_init__(self):
-        super().__post_init__()
-        sections = parse_sections(self.description)
-        self.description = sections[FREE_TEXT]
-
     def _expansion_reason(self) -> str:
         return "proceed_to_next"
-
-    def need_to_check_dead_end(self, my_invocation: Invocation) -> bool:
-        return False
 
 
 @_dc.dataclass(repr=False)
@@ -493,11 +460,6 @@ class InitialStep(Step):
     def step_title(self) -> str:
         return "task problem"
 
-    def __post_init__(self):
-        super().__post_init__()
-        sections = parse_sections(self.description)
-        self.description = sections[FREE_TEXT]
-
 
 @_dc.dataclass(repr=False)
 class SageReplyStep(Step):
@@ -505,9 +467,6 @@ class SageReplyStep(Step):
     @property
     def step_title(self) -> str:
         return "Sage replied"
-
-    def __post_init__(self):
-        pass
 
     def _expansion_reason(self) -> str:
         return "respond_to_criticism"

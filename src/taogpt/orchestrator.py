@@ -27,7 +27,7 @@ class Orchestrator(Executor):
 
     def start(self, task: str | Step, try_intuition=False):
         if isinstance(task, str):
-            root_step = InitialStep(None, 0, task, role=ROLE_USER)
+            root_step = InitialStep(None, task, role=ROLE_USER)
         elif isinstance(task, InitialStep):
             root_step = task
         else:
@@ -35,7 +35,7 @@ class Orchestrator(Executor):
         self.reset()
         self._chain.append(Invocation(root_step, _executor=self))
         if try_intuition:
-            init_analysis_step = AskForAnalysisStep(root_step, root_step.step_id+1, '', ROLE_ORCHESTRATOR)
+            init_analysis_step = AskForAnalysisStep(root_step, '', ROLE_ORCHESTRATOR)
             self._chain.append(Invocation(init_analysis_step, _executor=self))
         self._execute_with_backtracking()
 
@@ -58,7 +58,7 @@ class Orchestrator(Executor):
         except UnsolvableError as e:
             prev: Invocation|None = self._chain[-1] if len(self._chain) > 0 else None
             final_inv = Invocation(
-                FinalAnswerStep(prev, prev.step.step_id + 1 if prev is not None else 0, str(e), ROLE_ORCHESTRATOR),
+                FinalAnswerStep(prev, str(e), ROLE_ORCHESTRATOR),
                 _executor=self
             )
             self._chain.append(final_inv)
@@ -140,13 +140,16 @@ class Orchestrator(Executor):
         prompts = self.show_conversation_thread()
         work_prompt = self.prompts.orchestrator_next_step
         prompts.append((ROLE_ORCHESTRATOR, work_prompt))
-        decision, next = self.vote(system_prompt, prompts, lambda reply: parse_next_step_reply(reply),
-                                   reason='next_step', step_id=step.step_id,
+        decision, next = self.vote(system_prompt,
+                                   prompts,
+                                   lambda reply: parse_next_step_reply(reply),
+                                   reason='next_step',
+                                   step_id=step.step_id,
                                    collapse_contents={'next_step': work_prompt})
         if decision == DONE:
-            return FinalAnswerStep(step, step.step_id+1, next, role=ROLE_SOLVER)
+            return FinalAnswerStep(step, next, role=ROLE_SOLVER)
         work_prompt = self.prompts.orchestrator_proceed.format(description=decision)
-        work_next_step = ProceedStep(step, step.step_id + 1, work_prompt, role=ROLE_ORCHESTRATOR)
+        work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR)
         return work_next_step
 
     def check_final_solution(self, invocation: Invocation):
@@ -214,14 +217,9 @@ class Orchestrator(Executor):
             if isinstance(invocation.step, ExpandableStep):
                 invocation.step.record_criticism(criticisms)
 
-    def ask_user(self, questions: str) -> str:
+    def ask_user(self, questions: [str], input_fn=input) -> str:
         # for now just use the console input
-        print("Tao, the problem tackler, asks you a few questions for clarification. Please reply all questions.")
-        print(questions)
-        reply = input(f"{questions}\nPlease reply to Tao:")
-        if reply.lower().strip() == 'cancel!':
-            raise KeyboardInterrupt(reply)
-        return reply
+        return ask_questions(input_fn, questions)
 
     def find_last_criticisms(self, invocation: Invocation) -> {set}:
         criticism: {str} = set()
@@ -285,3 +283,20 @@ class Orchestrator(Executor):
         if n_retries >= MAX_RETRIES:
             print(f"failed after {n_retries}")
             raise e
+
+def ask_questions(input_fn, questions):
+    reply = ""
+    for i in range(len(questions)):
+        reply_text = questions[i]
+        if reply_text.strip() == 'cancel':
+            raise KeyboardInterrupt("User cancelled request.")
+        user_prompt = f'{questions[i]} (Reply "cancel" to cancel.)'
+        reply_lines = input_fn(questions[i]).split('\n')
+        bullet = f"{i + 1}. "
+        indent = ' ' * len(bullet)
+        reply_text = f"{bullet}{reply_lines[0]}"
+        for i in range(1, len(reply_lines)):
+            reply_text += '\n' + indent + reply_lines[i].strip()
+        reply += reply_text + '\n'
+    return reply
+

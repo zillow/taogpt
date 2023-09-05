@@ -28,11 +28,9 @@ template:
 ...
 ```
 
-For each step, provide a brief description and a brief explanation. Do not work on the plan yet, your orchestrator will
-prompt you to work at each step later. The explanation text should go inside the brackets "[]".
-
-**Important Note**: If you identify errors in the problem definition or the current solving path thus far, do not 
-choose this strategy but instead go with the "UNSOLVABLE_I_GIVE_UP" strategy.
+For each step, provide a brief description and a brief explanation. You decompose only one level at a time, so no 
+sub-list allowed. Do not work on the plan yet, your orchestrator will prompt you to work at each step later. The 
+explanation text should go inside the brackets "[]".
 
 ##### 3. **Ask Questions**:
 Many problems requires clarifications. Use this strategy to ask questions, but avoid asking obvious, trivial, or
@@ -44,7 +42,6 @@ following template **strictly** so the orchestrator can parse it and show the qu
 # I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED
 <optional introductory and analysis>
 
-## MY_QUESTIONS:
 1. <question> [<explanation>]
 2. <question> [<explanation>]
 ...

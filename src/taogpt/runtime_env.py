@@ -16,7 +16,7 @@ class Executor(_abc.ABC):
     def show_conversation_thread(self) -> [(str, str)]:
         pass
 
-    def ask_user(self, questions: str) -> str:
+    def ask_user(self, questions: [str]) -> str:
         raise NotImplementedError('No user agent feature in the base')
 
     @_abc.abstractmethod
