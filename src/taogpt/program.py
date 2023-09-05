@@ -226,6 +226,14 @@ class PlanStep(TaoReplyStep):
         p = super().__repr_local__()
         return f"{p}, {safe_subn(self.description)}"
 
+    def __post_init__(self):
+        super().__post_init__()
+        self.first_step = parse_ordered_list(self.description)[0]
+
+    def eval_only(self, my_invocation: Invocation) -> Step | None:
+        # when evaluating this node, we are always at the first step
+        return ProceedStep(self, self.step_id + 1, self.first_step, ROLE_ORCHESTRATOR)
+
 
 @_dc.dataclass(repr=False)
 class FinalAnswerStep(TaoReplyStep):
@@ -282,7 +290,7 @@ def parse_to_step(step: Step, response: str) -> Step:
             step_class = PlanStep
         if step_def is None:
             raise ParseError(f"Missing details.")
-    return step_class(step, step_local_id=step.step_local_id + 1, description=step_def, role=ROLE_SOLVER)
+    return step_class(step, step_local_id=step.step_id + 1, description=step_def, role=ROLE_SOLVER)
 
 
 @_dc.dataclass(repr=False)

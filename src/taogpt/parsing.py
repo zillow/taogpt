@@ -18,6 +18,8 @@ _step_type_re = re.compile(
 )
 _true_false_answer_re = re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
                                    flags=re.MULTILINE|re.DOTALL|re.IGNORECASE)
+_whitespace_re = re.compile(r"\s+", flags=re.DOTALL)
+
 # _all_look_good_answer_re = re.compile(r"^\s*(all look good)?\.?\s*(.+)$",
 #                                       flags=re.MULTILINE|re.DOTALL|re.IGNORECASE)
 
@@ -52,57 +54,27 @@ def parse_sections(text: str) -> {str: str|None}:
     return {k: (text.strip() if text is not None else None) for k, text in matched_sections.items()}
 
 
-def parse_ordered_list(text: str) -> [str]:
-    items = []
-    current_index: _t.Optional[int] = None
-    current_item = ''
-    for line in text.split('\n'):
-        match: re.Match = re.match(r"^(\d)+\.\s+(.+)$", line)
-        if match is not None:
-            ith = int(match.group(1))
-            if current_index is not None:
-                assert ith == (current_index + 1), f"expecting {current_index + 1}, got {ith}"
-                items.append(current_item.strip())
-                current_item = '' # reset
-            current_index = ith
-            current_item += match.group(2)
-        elif current_index is not None:
-            current_item += line + ' '
-    if current_index is not None:
-        items.append(current_item.strip())
-    return items
+_ordered_list_re = re.compile(r'\n?(\d+)\.\s+(.*?)(?=\n\d+\.|\n\n|\Z)', flags=re.DOTALL)
 
 
-def parse_step_unordered_list(text: str) -> [str]:
-    items = []
-    in_bullet = False
-    current_item = ''
-    for line in text.split('\n'):
-        match: re.Match = re.match(r"^(\*)+\s+(.+)$", line)
-        if match is not None:
-            assert match.group(1) == '*'
-            if in_bullet:
-                items.append(current_item.strip())
-                current_item = '' # reset
-            in_bullet = True
-            current_item += match.group(2).strip() + '\n'
-        elif in_bullet:
-            current_item += line.strip() + '\n'
-    if in_bullet:
-        items.append(current_item.strip())
-    return items
+def parse_ordered_list(md) -> [str]:
+    """
+    Parse a simplified markdown list without consideration to multi-line indentation.
+    :param md: markdown text
+    :return: a list of string
+    """
+    expected_number = 1
+    matches = []
+    for m in _ordered_list_re.finditer(md):
+        bullet = m.group(1)
+        assert int(bullet) == expected_number
+        expected_number += 1
+        matches.append(_whitespace_re.sub(' ', m.group(2)).strip())
+    return matches
 
 
 def parse_final_response(text: str) -> (bool, str):
     return 'the answer is correct' in text.lower(), _utils.str_or_blank(text)
-
-
-def parse_dead_end_check_response(text: str) -> (bool, str):
-    match: re.Match = _true_false_answer_re.match(text)
-    if match is None:
-        raise ParseError("No true/false answer at the end")
-    prediction = match.group(2)
-    return 'true' in prediction or 'yes' in prediction, _utils.remove_brackets(match.group(1))
 
 
 def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:
