@@ -156,7 +156,8 @@ class TaoAnalysisStep(TaoReplyStep):
                 if n_retries >= MAX_RETRIES:
                     raise e
         return ProceedStep(self, "How do you want to proceed?", ROLE_ORCHESTRATOR,
-                           prepared=intuition)
+                           prepared=intuition,
+                           initial_expansion=my_invocation.executor.max_search_branching_factor)
 
 
 @_dc.dataclass(repr=False)
@@ -274,20 +275,19 @@ def parse_to_step(step: Step, response: str) -> Step:
 @_dc.dataclass(repr=False)
 class ExpandableStep(Step):
     choices: _t.List[Step] | None = None
-    rankings: _t.Dict[int, float] = None
-    prepared: str|None=None
+    prepared: str|None = None
+    initial_expansion: int = 1
 
     @property
     def step_title(self) -> str:
         return "A step-by-step plan"
 
     def __repr_local__(self) -> str:
-        p = super().__repr_local__()
-        choices, rankings = repr(self.choices), repr(self.rankings)
-        return f"{p},choices={choices},rankings={rankings}"
+        return repr(self.choices)
 
     def __post_init__(self):
         super().__post_init__()
+        self._prepared_inserted: bool = False
         self._all_criticisms: {str} = set()
 
     @property
@@ -300,7 +300,8 @@ class ExpandableStep(Step):
     def _expansion_reason(self) -> str:
         return 'expand_choices'
 
-    def expand_choices(self, my_invocation: Invocation, branch_factor = MAX_BRANCHING_FACTOR):
+    def expand_choices(self, my_invocation: Invocation, upto_branches: int):
+        upto_branches = min(upto_branches, my_invocation.executor.max_search_branching_factor)
         prompt_db: PromptSet  = my_invocation.executor.prompts
         system_prompt = prompt_db.system_step_expansion
         tao_templates = prompt_db.tao_templates.format(examples=prompt_db.tao_templates_examples)
@@ -314,8 +315,9 @@ class ExpandableStep(Step):
         if len(last_criticisms) > 0:
             criticism = prompt_db.orchestrator_critics.format(criticisms='\n\n---\n'.join(last_criticisms))
             prompts.append((ROLE_ORCHESTRATOR, criticism))
-        self.choices = []
-        while len(self.choices) < branch_factor:
+        if self.choices is None:
+            self.choices = []
+        while len(self.choices) < upto_branches:
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
             plan: str|None = None
@@ -343,16 +345,17 @@ class ExpandableStep(Step):
                     if n_retries >= MAX_RETRIES:
                         print(f"failed after {n_retries}")
                         raise e
-        if len(_utils.str_or_blank(self.prepared)) > 0:
+        if len(_utils.str_or_blank(self.prepared)) > 0 and not self._prepared_inserted:
             self.prepared = _utils.str_or_blank(self.prepared)
             if UNSOLVABLE not in self.prepared:
-                self.prepared = f"# {WILL_ANSWER_DIRECTLY}\n{self.prepared}"
+                self.prepared = f"# {MY_FINAL_ANSWER}\n{self.prepared}"
             self.choices.append(parse_to_step(self, self.prepared))
+            self._prepared_inserted = True
 
     def get_expansion_prompt(self, _: PromptSet) -> str | None:
         return None
 
-    def rank_choices(self, my_invocation: Invocation):
+    def rank_choices(self, my_invocation: Invocation, n_existing_choices: int=None):
         prompt_db: PromptSet  = my_invocation.executor.prompts
         system_prompt = prompt_db.sage
         tao_templates = prompt_db.tao_templates.format(examples='')
@@ -369,7 +372,7 @@ class ExpandableStep(Step):
             ])
         )
         prompts.append((ROLE_ORCHESTRATOR, work_prompt))
-        rankings: _t.Dict[int, float] = defaultdict(lambda: 0.0)
+        rankings_one_based: _t.Dict[int, float] = defaultdict(lambda: 0.0)
         ranking_types = {i+1: plan.step_title for i, plan in enumerate(self.choices)}
         n_success = 0
         while n_success < MAX_VOTING_FACTOR:
@@ -385,7 +388,7 @@ class ExpandableStep(Step):
                     collapse_contents={'tao_templates': tao_templates, 'rank_choices': rank_choice_instruction})
                 scores, dupes = parse_ranking_response(response, len(self.choices))
                 for plan, score in scores.items():
-                    rankings[plan] += score
+                    rankings_one_based[plan] += score
                 self.check_duplicates(dupes, scores, ranking_types)
                 n_success += 1
                 log_debug(f"===> received ranking {n_success}: {response[:20]}...", level=2)
@@ -394,17 +397,22 @@ class ExpandableStep(Step):
                 if n_retries >= MAX_RETRIES:
                     raise e
                 pass
-        final_score_repr = '\n'.join([f"{k}. score {v}" for k, v in rankings.items()])
+        final_score_repr = '\n'.join([f"{k}. score {v}" for k, v in rankings_one_based.items()])
         my_invocation.executor.logger.log(f"\n### Final scores:\n{final_score_repr}\n\n")
-        self.rankings = {k-1: v for k, v in rankings.items()}
-        if len(self.rankings) == 0:
+        indices = self.sort_rankings(rankings_one_based, n_existing_choices)
+        if len(indices) == 0:
             raise Backtrack(f"No valid plan found for this step.", my_invocation)
-        indices = sorted(self.rankings.keys(), key=lambda i: self.rankings[i], reverse=True)
-        _debug_info = {i: self.rankings[i] for i in indices}
-        log_debug(f"===> rankings: {_debug_info}", level=2)
-        self.choices = [self.choices[i] for i in indices if self.rankings[i] > 0]
-        if len(self.choices) == 0:
-            raise Backtrack(f"No valid plans found for this step", my_invocation)
+        if n_existing_choices is not None and n_existing_choices > 0:
+            indices = list(range(n_existing_choices)) + indices
+        self.choices = [self.choices[i] for i in indices]
+
+    @staticmethod
+    def sort_rankings(rankings_one_based, n_existing_choices):
+        # rank only new choices
+        rankings = {k - 1: score for k, score in rankings_one_based.items()
+                    if score > 0 and (n_existing_choices is None or k - 1 >= n_existing_choices)}
+        indices = sorted(rankings.keys(), key=lambda i: rankings[i], reverse=True)
+        return indices
 
     @staticmethod
     def check_duplicates(dupes, scores, ranking_types):
@@ -417,23 +425,29 @@ class ExpandableStep(Step):
                 scores[dupe] = -_math.fabs(scores[original])
 
     def retryable(self, invocation: Invocation):
-        return self.choices is not None and invocation.current_choice < len(self.choices)
+        assert self.choices is not None
+        return len(self.choices) <= len(invocation.executor.max_search_branching_factor) \
+            or invocation.current_choice < len(self.choices)
 
     def backtrack(self, my_invocation: Invocation, backtrack: Backtrack|None):
-        if my_invocation.current_choice >= len(self.choices): # shouldn't reach here due to the `retryable` check
+        if my_invocation.current_choice < len(self.choices):
+            my_invocation.current_choice += 1
+            return
+        current_branches = len(self.choices)
+        max_branches = my_invocation.executor.max_search_branching_factor
+        if current_branches < max_branches:
+            self.expand_choices(my_invocation, max_branches)
+            if len(self.choices) - current_branches > 1:
+                self.rank_choices(my_invocation, n_existing_choices=current_branches)
+        else: # shouldn't reach here due to the `retryable` check
             raise RuntimeError("No more alternative", my_invocation) # this is just defensive
         my_invocation.current_choice += 1
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         if self.choices is None:
-            self.expand_choices(my_invocation)
-            self.rank_choices(my_invocation)
-            # todo: use dynamic expansion later
-            # attempts = 0
-            # while attempts < MAX_RETRIES and (self.choices is None or len(self.choices) < MAX_BRANCHING_FACTOR):
-            #     self.expand_choices(my_invocation)
-            #     self.rank_choices(my_invocation)
-            #     attempts += 1
+            self.expand_choices(my_invocation, upto_branches=self.initial_expansion)
+            if self.choices is not None and len(self.choices) > 1:
+                self.rank_choices(my_invocation)
         if self.choices is None or len(self.choices) == 0:
             raise Backtrack('No viable options.', blame=my_invocation)
         if my_invocation.current_choice < len(self.choices):
@@ -454,7 +468,7 @@ class ProceedStep(ExpandableStep):
 
 
 @_dc.dataclass(repr=False)
-class InitialStep(Step):
+class PresentTaskStep(Step):
 
     @property
     def step_title(self) -> str:

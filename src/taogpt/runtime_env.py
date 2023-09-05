@@ -23,6 +23,10 @@ class Executor(_abc.ABC):
     def find_last_criticisms(self, invocation: Invocation) -> [str]:
         pass
 
+    @property
+    def max_search_branching_factor(self) -> int:
+        return 4
+
 class StepABC(_abc.ABC):
     @property
     @_abc.abstractmethod

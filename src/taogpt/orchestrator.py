@@ -16,6 +16,7 @@ class Orchestrator(Executor):
     prompts: PromptSet = _utils.Frozen()
     markdown_logger: _utils.MarkdownLogger = _utils.Frozen()
     max_tokens: int = 100000
+    max_tree_branches: int = 4
 
     def __post_init__(self):
         self._chain: [Invocation] = []
@@ -25,13 +26,18 @@ class Orchestrator(Executor):
     def logger(self) -> MarkdownLogger:
         return self.markdown_logger
 
+    @property
+    def max_search_branching_factor(self) -> int:
+        return self.max_tree_branches
+
     def start(self, task: str | Step, try_intuition=False):
         if isinstance(task, str):
-            root_step = InitialStep(None, task, role=ROLE_USER)
-        elif isinstance(task, InitialStep):
+            root_step = PresentTaskStep(None, task, role=ROLE_USER)
+        elif isinstance(task, PresentTaskStep):
             root_step = task
         else:
-            raise ValueError(f"Expecting string description of task or a Step object, got {type(task)}")
+            raise ValueError(f"Expecting string description of task "
+                             f"or a PresentTaskStep object, got {type(task)}")
         self.reset()
         self._chain.append(Invocation(root_step, _executor=self))
         if try_intuition:
@@ -46,6 +52,7 @@ class Orchestrator(Executor):
                 self.max_tokens += additional_token_allowance
             print(f"extend token allowance by {additional_token_allowance} to {self.max_tokens}")
             self._execute_with_backtracking()
+
     def _execute_with_backtracking(self):
         done = False
         try:
@@ -96,7 +103,7 @@ class Orchestrator(Executor):
             raise UnsolvableError('Fail to solve! No more viable options')
 
     def _halt_on_initial_steps(self, last: Invocation):
-        if isinstance(last.step, (InitialStep, TaoAnalysisStep)):
+        if isinstance(last.step, (PresentTaskStep, TaoAnalysisStep)):
             self._chain.append(last)
             raise UnsolvableError('Tao cannot solve the problem.')
 
@@ -157,7 +164,7 @@ class Orchestrator(Executor):
 
         def select_for_final(i, invc: Invocation):
             step = invc.step
-            return isinstance(step, (InitialStep, AskQuestionStep, UserReplyStep, FinalAnswerStep))
+            return isinstance(step, (PresentTaskStep, AskQuestionStep, UserReplyStep, FinalAnswerStep))
 
         prompts = self.show_conversation_thread(selector=select_for_final)
         sage_prompt = self.prompts.sage_final_check
