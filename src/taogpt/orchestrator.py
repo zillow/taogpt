@@ -291,7 +291,7 @@ def ask_questions(input_fn, questions):
         if reply_text.strip() == 'cancel':
             raise KeyboardInterrupt("User cancelled request.")
         user_prompt = f'{questions[i]} (Reply "cancel" to cancel.)'
-        reply_lines = input_fn(questions[i]).split('\n')
+        reply_lines = input_fn(user_prompt).split('\n')
         bullet = f"{i + 1}. "
         indent = ' ' * len(bullet)
         reply_text = f"{bullet}{reply_lines[0]}"
