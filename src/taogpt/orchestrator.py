@@ -147,16 +147,25 @@ class Orchestrator(Executor):
         prompts = self.show_conversation_thread()
         work_prompt = self.prompts.orchestrator_next_step
         prompts.append((ROLE_ORCHESTRATOR, work_prompt))
-        decision, next = self.vote(system_prompt,
+        decision, next_or_final = self.vote(system_prompt,
                                    prompts,
                                    lambda reply: parse_next_step_reply(reply),
                                    reason='next_step',
                                    step_id=step.step_id,
                                    collapse_contents={'next_step': work_prompt})
         if decision == DONE:
-            return FinalAnswerStep(step, next, role=ROLE_SOLVER)
-        work_prompt = self.prompts.orchestrator_proceed.format(description=decision)
-        work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR)
+            if next_or_final is None:
+                next_or_final = ''
+            return FinalAnswerStep(step, next_or_final, role=ROLE_SOLVER)
+        first_expansion = True
+        for s in self._chain:
+            if isinstance(s, ExpandableStep):
+                first_expansion = False
+                break
+        work_prompt = self.prompts.orchestrator_proceed.format(step=decision)
+        work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
+                                     initial_expansion=self.max_search_branching_factor if first_expansion else 1,
+                                     first_problem_solving_step=first_expansion)
         return work_next_step
 
     def check_final_solution(self, invocation: Invocation):

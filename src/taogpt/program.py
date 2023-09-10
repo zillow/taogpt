@@ -66,7 +66,7 @@ class Step(StepABC):
         return None
 
     def __post_init__(self):
-        self._step_local_id = self.previous.step_id + 1 if self.step_id is not None else 0
+        self._step_local_id = self.previous.step_id + 1 if self.previous is not None else 0
 
 
 @_dc.dataclass(repr=False)
@@ -157,7 +157,8 @@ class TaoAnalysisStep(TaoReplyStep):
                     raise e
         return ProceedStep(self, "How do you want to proceed?", ROLE_ORCHESTRATOR,
                            prepared=intuition,
-                           initial_expansion=my_invocation.executor.max_search_branching_factor)
+                           initial_expansion=my_invocation.executor.max_search_branching_factor,
+                           first_problem_solving_step=True)
 
 
 @_dc.dataclass(repr=False)
@@ -169,13 +170,16 @@ class DirectAnswerStep(TaoReplyStep):
         return DirectAnswerStep.TYPE_SPEC
 
     def __post_init__(self):
-        super().__post_init__()
         sections = parse_sections(self.description)
         self.next_step = sections.get(NEXT_I_WANT_TO_WORK_AT, None)
+        super().__post_init__()
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        return ProceedStep(self, self.next_step, ROLE_ORCHESTRATOR) \
-            if not _utils.is_blank(self.next_step) else None
+        if not _utils.is_blank(self.next_step):
+            prompt_db: PromptSet  = my_invocation.executor.prompts
+            work_prompt = prompt_db.orchestrator_proceed.format(step=self.next_step)
+            return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
+        return None
 
 
 @_dc.dataclass(repr=False)
@@ -217,7 +221,9 @@ class PlanStep(TaoReplyStep):
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         # when evaluating this node, we are always at the first step
-        return ProceedStep(self, self.first_step, ROLE_ORCHESTRATOR)
+        prompt_db: PromptSet  = my_invocation.executor.prompts
+        work_prompt = prompt_db.orchestrator_proceed.format(step=self.first_step)
+        return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
 
 
 @_dc.dataclass(repr=False)
@@ -277,6 +283,7 @@ class ExpandableStep(Step):
     choices: _t.List[Step] | None = None
     prepared: str|None = None
     initial_expansion: int = 1
+    first_problem_solving_step: bool = False
 
     @property
     def step_title(self) -> str:
@@ -289,6 +296,9 @@ class ExpandableStep(Step):
         super().__post_init__()
         self._prepared_inserted: bool = False
         self._all_criticisms: {str} = set()
+
+    def is_first_problem_solving_step(self) -> bool:
+        return self.first_problem_solving_step
 
     @property
     def collected_criticisms(self):
@@ -304,13 +314,12 @@ class ExpandableStep(Step):
         upto_branches = min(upto_branches, my_invocation.executor.max_search_branching_factor)
         prompt_db: PromptSet  = my_invocation.executor.prompts
         system_prompt = prompt_db.system_step_expansion
-        tao_templates = prompt_db.tao_templates.format(examples=prompt_db.tao_templates_examples)
+        direct_answer = prompt_db.tao_template_intuitive_answer if self.is_first_problem_solving_step() \
+            else prompt_db.tao_template_direct_step_answer
+        examples = '' if self.is_first_problem_solving_step() else prompt_db.tao_templates_examples
+        tao_templates = prompt_db.tao_templates.format(examples=examples, direct_answer_template=direct_answer)
         prompts: _t.List[(str, str)] = my_invocation.executor.show_conversation_thread()
         prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
-        work_prompt = self.get_expansion_prompt(prompt_db)
-        if work_prompt is not None:
-            work_prompt = prompt_db.orchestrator_proceed2.format(expansion_prompt=work_prompt)
-            prompts.append((ROLE_ORCHESTRATOR, work_prompt))
         last_criticisms = my_invocation.executor.find_last_criticisms(my_invocation)
         if len(last_criticisms) > 0:
             criticism = prompt_db.orchestrator_critics.format(criticisms='\n\n---\n'.join(last_criticisms))
@@ -351,9 +360,6 @@ class ExpandableStep(Step):
                 self.prepared = f"# {MY_FINAL_ANSWER}\n{self.prepared}"
             self.choices.append(parse_to_step(self, self.prepared))
             self._prepared_inserted = True
-
-    def get_expansion_prompt(self, _: PromptSet) -> str | None:
-        return None
 
     def rank_choices(self, my_invocation: Invocation, n_existing_choices: int=None):
         prompt_db: PromptSet  = my_invocation.executor.prompts
@@ -426,7 +432,7 @@ class ExpandableStep(Step):
 
     def retryable(self, invocation: Invocation):
         assert self.choices is not None
-        return len(self.choices) <= len(invocation.executor.max_search_branching_factor) \
+        return len(self.choices) <= invocation.executor.max_search_branching_factor \
             or invocation.current_choice < len(self.choices)
 
     def backtrack(self, my_invocation: Invocation, backtrack: Backtrack|None):
@@ -473,6 +479,12 @@ class PresentTaskStep(Step):
     @property
     def step_title(self) -> str:
         return "task problem"
+
+    def eval_only(self, my_invocation: Invocation) -> Step | None:
+        work_next_step = ProceedStep(self, '', role=ROLE_ORCHESTRATOR)
+        work_next_step.first_problem_solving_step = True
+        return work_next_step
+
 
 
 @_dc.dataclass(repr=False)

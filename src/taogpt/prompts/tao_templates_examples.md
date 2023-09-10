@@ -1,45 +1,50 @@
-### Bad response examples ###
-```markdown
-Let'me try to answer this.
-I like to be lucky.
-
-13
-
-### NEXT_I_WANT_TO_WORK_AT:
-
-```
-Template violations:
-* missing heading "I_WILL_ANSWER_THIS_STEP_DIRECTLY".
-* missing description of the next step.
+### Bad example 1: ###
 
 ```markdown
-I need to ask some questions.
+I will answer this step directly.
+The lucky number is 13.
 
-## MY_QUESTIONS:
-1. What did you eat for dinner?
-
-## MY_QUESTIONS:
-1. do you have a dog?
+next, I will proceed to work at roll the dice again.
 ```
-Template violations:
-* looks like a "ask question" response but missing heading "I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED".
-* free text outside of sections.
-* multiple questions sections.
 
-### Good response examples ###
+Issues:
+1. Missing heading `# I_WILL_ANSWER_THIS_STEP_DIRECTLY`.
+2. Declare next step outside of `### NEXT_I_WANT_TO_WORK_AT:` section.
+
+### Bad example 2: ###
+
 ```markdown
 # I_WILL_ANSWER_THIS_STEP_DIRECTLY
-It is the lucky number: 13
+The final answer is 13.
 
 ### NEXT_I_WANT_TO_WORK_AT:
-roll the dice again.
+None. This is the final answer to the problem.
 ```
+
+Issues:
+1. Wrong strategy used. Must use `# MY_FINAL_ANSWER` for final summary answer.
+2. No need for `NEXT_I_WANT_TO_WORK_AT` section in a final answer.
+
+### Bad example 3: ###
 
 ```markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
-This will be fun!
 
-1. Initialize v = n [initial setup]
-2. Update v = v * (v - 1) and n = n - 1.
-3. Repeat until n = 0
+1. Find a random number.
+2. Roll the dice again. [Because it is fun.]
+
+Now, I will proceed to work at the first step.
+```
+
+Issues:
+1. Unnecessary declaration of next step.
+
+### Good example: ###
+
+```markdown
+# I_WILL_ANSWER_THIS_STEP_DIRECTLY
+The lucky number is 13.
+
+### NEXT_I_WANT_TO_WORK_AT:
+roll the dice again
 ```

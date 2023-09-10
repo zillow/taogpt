@@ -141,3 +141,8 @@ class MarkdownLogger:
 
     def close_message_section(self):
         self.log('\n</div>\n</div>')
+
+
+def test():
+    print('a')
+    print('b')

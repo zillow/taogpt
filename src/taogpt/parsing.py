@@ -45,7 +45,7 @@ def parse_sections(text: str) -> {str: str|None}:
     matched_sections = {FREE_TEXT: ''}
     section = FREE_TEXT
     for line in text.split('\n'):
-        match: re.Match = re.match(r"^##\s+([^:]+):?\s*", line)
+        match: re.Match = re.match(r"^##+\s+([^:]+):?\s*", line)
         if match is not None:
             section = match.group(1)
             matched_sections[section] = ''
@@ -73,8 +73,15 @@ def parse_ordered_list(md) -> [str]:
     return matches
 
 
+_final_solution_check_re = re.compile(r"^\s*(yes|no)[.,]?\s+(.+)$", flags=re.DOTALL|re.IGNORECASE)
+
+
 def parse_final_response(text: str) -> (bool, str):
-    return 'the answer is correct' in text.lower(), _utils.str_or_blank(text)
+    match = _final_solution_check_re.match(text)
+    if match:
+        return 'yes' == match.group(1).lower(), match.group(2)
+    raise ParseError("Response must start with 'yes' or 'no'.")
+    # return 'the answer is correct' in text.lower(), _utils.str_or_blank(text)
 
 
 def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:

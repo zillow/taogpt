@@ -1,11 +1,16 @@
 from __future__ import annotations
 import abc as _abc
 import dataclasses as _dc
-import typing as _t
 from .utils import MarkdownLogger
+from taogpt.prompts import PromptSet
 
 
 class Executor(_abc.ABC):
+
+    @property
+    @_abc.abstractmethod
+    def prompts(self) -> PromptSet:
+        pass
 
     @property
     @_abc.abstractmethod
@@ -48,7 +53,7 @@ class Invocation:
         return f"{c}(step={sc}#{step},ptr={self.current_choice},exec={self.execution_count})"
 
     @property
-    def executor(self):
+    def executor(self) -> Executor:
         return self._executor
 
 

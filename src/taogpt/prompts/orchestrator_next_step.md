@@ -9,7 +9,7 @@ or
 ```markdown
 I'm done.
 
-## MY_ANSWER
+## MY_FINAL_ANSWER
 <your final full answer to the task>
 ```
 
