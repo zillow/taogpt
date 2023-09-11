@@ -43,3 +43,47 @@ step so need more explanation as well""",
         for i in range(len(expected_steps)):
             assert results[i] == expected_steps[i], \
                 f"mismatched: expected step[{i}]='{expected_steps[i]}', results[{i}]='{results[i]}'"
+
+    def test_allowing_one_list(self):
+        text = """To calculate x mod y, we need to find the remainder when x is divided by y.
+
+1. Divide x by y using integer division to get the quotient.
+2. Multiply the quotient by y.
+3. Subtract the result from step 2 from x to get the remainder.
+
+Now, let's calculate x mod y using this plan.
+
+1. Divide x by y using integer division to get the quotient.
+
+I will now perform this step.
+"""
+        try:
+            parsing.parse_ordered_list(text)
+            assert False, "expecting ParseError"
+        except parsing.ParseError as e:
+            pass
+
+    def test_list_bullet_contiguous(self):
+        text = """To calculate x mod y, we need to find the remainder when x is divided by y.
+
+1. Divide x by y using integer division to get the quotient.
+3. Multiply the quotient by y.
+4. Subtract the result from step 2 from x to get the remainder.
+"""
+        try:
+            parsing.parse_ordered_list(text)
+            assert False, "expecting ParseError"
+        except parsing.ParseError as e:
+            pass
+
+    def test_msut_have_one_bullet_list(self):
+        text = """To calculate x mod y, we need to find the remainder when x is divided by y.
+        
+Divide x by y using integer division to get the quotient.
+Multiply the quotient by y.
+"""
+        try:
+            parsing.parse_ordered_list(text)
+            assert False, "expecting ParseError"
+        except parsing.ParseError as e:
+            pass

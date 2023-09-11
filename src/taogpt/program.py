@@ -165,6 +165,8 @@ class TaoAnalysisStep(TaoReplyStep):
 class DirectAnswerStep(TaoReplyStep):
     TYPE_SPEC = WILL_ANSWER_DIRECTLY
 
+    is_final_step: bool = False
+
     @property
     def step_title(self) -> str:
         return DirectAnswerStep.TYPE_SPEC
@@ -172,10 +174,11 @@ class DirectAnswerStep(TaoReplyStep):
     def __post_init__(self):
         sections = parse_sections(self.description)
         self.next_step = sections.get(NEXT_I_WANT_TO_WORK_AT, None)
+        self.is_final_step = is_final_answer(self.next_step)
         super().__post_init__()
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        if not _utils.is_blank(self.next_step):
+        if not _utils.is_blank(self.next_step) and not self.is_final_step:
             prompt_db: PromptSet  = my_invocation.executor.prompts
             work_prompt = prompt_db.orchestrator_proceed.format(step=self.next_step)
             return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
@@ -228,7 +231,6 @@ class PlanStep(TaoReplyStep):
 
 @_dc.dataclass(repr=False)
 class FinalAnswerStep(TaoReplyStep):
-    TYPE_SPEC = MY_FINAL_ANSWER
 
     @property
     def step_title(self) -> str:
@@ -265,8 +267,6 @@ def parse_to_step(step: Step, response: str) -> Step:
         step_type, step_def = type_and_def
         if step_type == DirectAnswerStep.TYPE_SPEC:
             step_class = DirectAnswerStep
-        elif step_type == FinalAnswerStep.TYPE_SPEC:
-            step_class = FinalAnswerStep
         elif step_type == AskQuestionStep.TYPE_SPEC:
             step_class = AskQuestionStep
         elif step_type == GiveUpStep.TYPE_SPEC:
@@ -317,6 +317,7 @@ class ExpandableStep(Step):
         direct_answer = prompt_db.tao_template_intuitive_answer if self.is_first_problem_solving_step() \
             else prompt_db.tao_template_direct_step_answer
         examples = '' if self.is_first_problem_solving_step() else prompt_db.tao_templates_examples
+        examples = ''
         tao_templates = prompt_db.tao_templates.format(examples=examples, direct_answer_template=direct_answer)
         prompts: _t.List[(str, str)] = my_invocation.executor.show_conversation_thread()
         prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
@@ -357,21 +358,24 @@ class ExpandableStep(Step):
         if len(_utils.str_or_blank(self.prepared)) > 0 and not self._prepared_inserted:
             self.prepared = _utils.str_or_blank(self.prepared)
             if UNSOLVABLE not in self.prepared:
-                self.prepared = f"# {MY_FINAL_ANSWER}\n{self.prepared}"
+                self.prepared = prompt_db.intuitive_answer.format(self.prepared)
             self.choices.append(parse_to_step(self, self.prepared))
             self._prepared_inserted = True
 
     def rank_choices(self, my_invocation: Invocation, n_existing_choices: int=None):
         prompt_db: PromptSet  = my_invocation.executor.prompts
         system_prompt = prompt_db.sage
-        tao_templates = prompt_db.tao_templates.format(examples='')
+        direct_answer = prompt_db.tao_template_intuitive_answer if self.is_first_problem_solving_step() \
+            else prompt_db.tao_template_direct_step_answer
+        tao_templates = prompt_db.tao_templates.format(
+            examples='', direct_answer_template=direct_answer)
         prompts = my_invocation.executor.show_conversation_thread()
         last_criticisms = my_invocation.executor.find_last_criticisms(my_invocation)
         if len(last_criticisms) > 0:
             criticism = prompt_db.orchestrator_critics.format(criticisms='\n\n---\n'.join(last_criticisms))
             prompts.append((ROLE_ORCHESTRATOR, criticism))
         work_prompt = prompt_db.orchestrator_eval_strategy_choices.format(
-            tao_templates=tao_templates,
+            tao_templates='', # skip template
             approaches='\n\n---\n\n'.join([
                 f"# [Approach {i+1}] {plan.step_title}\n\n{plan.description_with_extras}"
                 for i, plan in enumerate(self.choices)
@@ -481,9 +485,11 @@ class PresentTaskStep(Step):
         return "task problem"
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        work_next_step = ProceedStep(self, '', role=ROLE_ORCHESTRATOR)
-        work_next_step.first_problem_solving_step = True
-        return work_next_step
+        return ProceedStep(self,
+                           '',
+                           role=ROLE_ORCHESTRATOR,
+                           initial_expansion=my_invocation.executor.max_search_branching_factor,
+                           first_problem_solving_step=True)
 
 
 

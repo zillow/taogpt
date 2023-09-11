@@ -8,22 +8,26 @@ next, I will proceed to work at roll the dice again.
 ```
 
 Issues:
-1. Missing heading `# I_WILL_ANSWER_THIS_STEP_DIRECTLY`.
+1. Missing heading `# I_WILL_ANSWER_DIRECTLY`.
 2. Declare next step outside of `### NEXT_I_WANT_TO_WORK_AT:` section.
 
 ### Bad example 2: ###
 
 ```markdown
-# I_WILL_ANSWER_THIS_STEP_DIRECTLY
+# I_WILL_ANSWER_DIRECTLY
 The final answer is 13.
+
+FILE: my_module/setting.json
+{"number_of_widgets": 3}
 
 ### NEXT_I_WANT_TO_WORK_AT:
 None. This is the final answer to the problem.
 ```
 
 Issues:
-1. Wrong strategy used. Must use `# MY_FINAL_ANSWER` for final summary answer.
-2. No need for `NEXT_I_WANT_TO_WORK_AT` section in a final answer.
+1. For a final answer, must put "None. This is the final step." in the `NEXT_I_WANT_TO_WORK_AT` section.
+2. File content heading must be level-three markdown section, i.e. `### FILE: my_module/setting.json`
+3. File content must be in a markdown fenced code block.
 
 ### Bad example 3: ###
 
@@ -42,7 +46,7 @@ Issues:
 ### Good example: ###
 
 ```markdown
-# I_WILL_ANSWER_THIS_STEP_DIRECTLY
+# I_WILL_ANSWER_DIRECTLY
 The lucky number is 13.
 
 ### NEXT_I_WANT_TO_WORK_AT:

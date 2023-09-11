@@ -1,26 +1,35 @@
-##### Strategy: **I_WILL_ANSWER_THIS_STEP_DIRECTLY**:
-Go with this strategy if the step is simple and you know the correct answer. You should also tell the Orchestrator 
-which step you want to work at next in the `NEXT_I_WANT_TO_WORK_AT` section.
+##### Strategy: **I_WILL_ANSWER_DIRECTLY**:
 
-Important Note: if this is the **final answer** to the whole problem, then go with the "MY_FINAL_ANSWER" strategy 
-below instead of this strategy.
+Go with this strategy if the step is simple and you know the correct answer. You should also tell the Orchestrator 
+which step you want to work at next in the `NEXT_I_WANT_TO_WORK_AT` section. If you need to write out any file
+contents, write out the content in markdown fenced code block under its own file section.
+
+Important Note: if this is the **final** step, then put "None. This is the final step." in the
+`NEXT_I_WANT_TO_WORK_AT` section.
 
 Follow this template:
 
 ```markdown
-# I_WILL_ANSWER_THIS_STEP_DIRECTLY
+# I_WILL_ANSWER_DIRECTLY
+<answer and explanation>
+
+### FILE: <file_path_name>
+<file content in markdown fenced code block>
+
+### NEXT_I_WANT_TO_WORK_AT:
+<next step>
+```
+
+
+Important Note: if this is the **final** step, then put "None. This is the final step." in the 
+`NEXT_I_WANT_TO_WORK_AT` section.
+
+Response template:
+
+```markdown
+# I_WILL_ANSWER_DIRECTLY
 <answer and explanation>
 
 ### NEXT_I_WANT_TO_WORK_AT:
-<description of the next step>
-```
-
-##### Strategy: **MY_FINAL_ANSWER**:
-
-If you're done and able to summarize and provide your solution for the **whole problem**, double check your solutions 
-and make sure following the task's output requirements.
-
-```markdown
-# MY_FINAL_ANSWER
-<your final full answer to the task>
+<next step>
 ```

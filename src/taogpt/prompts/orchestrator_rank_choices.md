@@ -1,5 +1,3 @@
-Given the following instructions for Tao:
-
 {tao_templates}
 
 ---

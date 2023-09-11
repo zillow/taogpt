@@ -1,9 +1,21 @@
-##### Strategy: **MY_FINAL_ANSWER**:
+##### Strategy: **I_WILL_ANSWER_DIRECTLY**:
 
-If you know the answer and want to provide your solution for the **whole problem**, double check your solutions and 
-make sure following the task's output requirements.
+If task rpoblem is simple and you know the correct answer to the whole problem, you 
+can answer it directly. If you need to write out any file contents, write out the content in markdown fenced code 
+block under its own file section.
+
+Important Note: if this is the **final** step, then put "None. This is the final step." in the
+`NEXT_I_WANT_TO_WORK_AT` section.
+
+Follow this template:
 
 ```markdown
-# MY_FINAL_ANSWER
-<your final full answer to the task>
+# I_WILL_ANSWER_DIRECTLY
+<answer and explanation>
+
+### FILE: <file_path_name>
+<file content in markdown fenced code block>
+
+### NEXT_I_WANT_TO_WORK_AT:
+<next step>
 ```

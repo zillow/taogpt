@@ -17,6 +17,7 @@ class Orchestrator(Executor):
     markdown_logger: _utils.MarkdownLogger = _utils.Frozen()
     max_tokens: int = 100000
     max_tree_branches: int = 4
+    check_final: bool = False
 
     def __post_init__(self):
         self._chain: [Invocation] = []
@@ -54,18 +55,18 @@ class Orchestrator(Executor):
             self._execute_with_backtracking()
 
     def _execute_with_backtracking(self):
-        done = False
         try:
-            while not done and len(self._chain) > 0:
+            while len(self._chain) > 0:
                 try:
-                    done = self._loop()
+                    self._loop()
                     self._frozen_chain = _FrozenList(self._chain)
+                    break
                 except Backtrack as backtrack:
                     self.backtrack(backtrack)
         except UnsolvableError as e:
             prev: Invocation|None = self._chain[-1] if len(self._chain) > 0 else None
             final_inv = Invocation(
-                FinalAnswerStep(prev, str(e), ROLE_ORCHESTRATOR),
+                FinalAnswerStep(prev.step if prev is not None else None, str(e), ROLE_SOLVER),
                 _executor=self
             )
             self._chain.append(final_inv)
@@ -107,31 +108,29 @@ class Orchestrator(Executor):
             self._chain.append(last)
             raise UnsolvableError('Tao cannot solve the problem.')
 
-    def _loop(self) -> bool:
-        done = False
-        while not done and len(self._chain) > 0:
+    def _loop(self):
+        while True:
             invocation = self._chain[-1]
             new_step = invocation.step.eval(invocation)
             invocation.execution_count += 1
             while new_step is not None:
                 new_invocation = Invocation(new_step, _executor=self)
                 self._chain.append(new_invocation) # note: we don't necessary eval the new resulting step
-                if isinstance(new_step, FinalAnswerStep):
-                    self.check_final_solution(self._chain[-1])
-                    return True
+                if isinstance(new_step, DirectAnswerStep) and new_step.is_final_step:
+                    self.summarize_final_answer()
+                    return
                 if 0 < self.max_tokens <= self.llm.total_tokens:
                     raise RuntimeError(f"Used {self.llm.total_tokens}, exceeded token allowance of {self.max_tokens}")
                 new_step = new_step.eval(new_invocation)
             new_step = self.next_step()
-            assert new_step is not None and isinstance(new_step, (ProceedStep, FinalAnswerStep))
+            assert new_step is not None and isinstance(new_step, (ProceedStep, DirectAnswerStep))
             new_invocation = Invocation(new_step, _executor=self)
             self._chain.append(new_invocation)
-            if isinstance(new_step, FinalAnswerStep):
-                self.check_final_solution(self._chain[-1])
-                return True
+            if isinstance(new_step, DirectAnswerStep) and new_step.is_final_step:
+                self.summarize_final_answer()
+                return
             if 0 < self.max_tokens <= self.llm.total_tokens:
                 raise RuntimeError(f"Used {self.llm.total_tokens}, exceeded token allowance of {self.max_tokens}")
-        return done or len(self._chain) == 0
 
     def show_conversation_thread(self, with_extras=False, selector: _t.Callable[[int, Invocation], bool]|None=None) \
             -> [(str, str)]:
@@ -141,7 +140,7 @@ class Orchestrator(Executor):
                 conversation.extend(invocation.step.show_in_thread(invocation, with_extras=with_extras))
         return conversation
 
-    def next_step(self) -> ProceedStep | FinalAnswerStep:
+    def next_step(self) -> ProceedStep | DirectAnswerStep:
         step = self._chain[-1].step
         system_prompt = self.prompts.system_step_expansion
         prompts = self.show_conversation_thread()
@@ -156,7 +155,7 @@ class Orchestrator(Executor):
         if decision == DONE:
             if next_or_final is None:
                 next_or_final = ''
-            return FinalAnswerStep(step, next_or_final, role=ROLE_SOLVER)
+            return DirectAnswerStep(step, next_or_final, role=ROLE_SOLVER, is_final_step=True)
         first_expansion = True
         for s in self._chain:
             if isinstance(s, ExpandableStep):
@@ -167,6 +166,33 @@ class Orchestrator(Executor):
                                      initial_expansion=self.max_search_branching_factor if first_expansion else 1,
                                      first_problem_solving_step=first_expansion)
         return work_next_step
+
+    def summarize_final_answer(self) -> FinalAnswerStep:
+        system_prompt = self.prompts.sage
+
+        prompts = self.show_conversation_thread()
+        summarize_prompt = self.prompts.orchestrator_summarize
+        prompts.append((ROLE_SAGE, summarize_prompt))
+        n_retries= 0
+        ex: Exception|None = None
+        while n_retries < MAX_RETRIES:
+            try:
+                response = self.llm.ask(system_prompt, prompts,
+                                        reason='summarize',
+                                        step_id=f"summarize/{n_retries}",
+                                        temperature=0.0,
+                                        collapse_contents=dict(),
+                                        log_request=n_retries == 0)
+                final_answer_step = FinalAnswerStep(self._chain[-1].step, response, ROLE_SOLVER)
+                if self.check_final:
+                    self.check_final_solution(self._chain[-1])
+                new_invocation = Invocation(final_answer_step, _executor=self)
+                self._chain.append(new_invocation)
+                return final_answer_step
+            except Exception as e:
+                ex = e
+                n_retries += 1
+        raise ex
 
     def check_final_solution(self, invocation: Invocation):
         system_prompt = self.prompts.sage

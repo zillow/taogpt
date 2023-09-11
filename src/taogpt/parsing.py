@@ -10,8 +10,7 @@ _all_step_types = '|'.join([
     WILL_ASK_QUESTIONS
 ])
 _step_type_re = re.compile(
-    r"^#\s*(I_WILL_ANSWER_THIS_STEP_DIRECTLY"
-    r"|MY_FINAL_ANSWER"
+    r"^#\s*(I_WILL_ANSWER_DIRECTLY"
     r"|UNSOLVABLE_I_GIVE_UP"
     r"|I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED"
     r"|HERE_IS_MY_STEP_BY_STEP_PLAN).*\n((.|\n)+)"
@@ -67,9 +66,12 @@ def parse_ordered_list(md) -> [str]:
     matches = []
     for m in _ordered_list_re.finditer(md):
         bullet = m.group(1)
-        assert int(bullet) == expected_number
+        if int(bullet) != expected_number:
+            raise ParseError("Unexpected bullet number or multiple lists presented.")
         expected_number += 1
         matches.append(_whitespace_re.sub(' ', m.group(2)).strip())
+    if len(matches) == 0:
+        raise ParseError("No list presented.")
     return matches
 
 
@@ -115,3 +117,8 @@ def parse_next_step_reply(text: str) -> (str, str|None):
     if match:
         return match.group(1).strip(), None
     raise ParseError(f'Unexpected next step reply')
+
+
+def is_final_answer(next_step) -> bool:
+    next_step = _utils.str_or_blank(next_step).lower()
+    return 'none' in next_step or 'this is the final step' in next_step

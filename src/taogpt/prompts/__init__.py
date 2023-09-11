@@ -19,8 +19,10 @@ class PromptSet:
     orchestrator_parse_error: str
     orchestrator_next_step_parse_error: str
     orchestrator_critics: str
+    orchestrator_summarize: str
     sage: str
     sage_final_check: str
+    intuitive_answer: str
 
     @staticmethod
     def load_defaults():
@@ -45,6 +47,8 @@ class PromptSet:
             orchestrator_parse_error=_read(path / 'orchestrator_parse_error.md'),
             orchestrator_next_step_parse_error=_read(path / 'orchestrator_next_step_parse_error.md'),
             orchestrator_critics=_read(path / 'orchestrator_critics.md'),
+            orchestrator_summarize=_read(path / 'orchestrator_summarize.md'),
             sage=_read(path / 'sage.md'),
             sage_final_check=_read(path / 'sage_final_check.md'),
+            intuitive_answer=_read(path / 'intuitive_answer.md'),
         )
