@@ -123,12 +123,12 @@ class Orchestrator(Executor):
                     raise RuntimeError(f"Used {self.llm.total_tokens}, exceeded token allowance of {self.max_tokens}")
                 new_step = new_step.eval(new_invocation)
             new_step = self.next_step()
-            assert new_step is not None and isinstance(new_step, (ProceedStep, DirectAnswerStep))
-            new_invocation = Invocation(new_step, _executor=self)
-            self._chain.append(new_invocation)
-            if isinstance(new_step, DirectAnswerStep) and new_step.is_final_step:
+            if new_step is None:
                 self.summarize_final_answer()
                 return
+            assert isinstance(new_step, (ProceedStep, DirectAnswerStep))
+            new_invocation = Invocation(new_step, _executor=self)
+            self._chain.append(new_invocation)
             if 0 < self.max_tokens <= self.llm.total_tokens:
                 raise RuntimeError(f"Used {self.llm.total_tokens}, exceeded token allowance of {self.max_tokens}")
 
@@ -140,7 +140,7 @@ class Orchestrator(Executor):
                 conversation.extend(invocation.step.show_in_thread(invocation, with_extras=with_extras))
         return conversation
 
-    def next_step(self) -> ProceedStep | DirectAnswerStep:
+    def next_step(self) -> ProceedStep | DirectAnswerStep | None:
         step = self._chain[-1].step
         system_prompt = self.prompts.system_step_expansion
         prompts = self.show_conversation_thread()
@@ -153,9 +153,7 @@ class Orchestrator(Executor):
                                    step_id=step.step_id,
                                    collapse_contents={'next_step': work_prompt})
         if decision == DONE:
-            if next_or_final is None:
-                next_or_final = ''
-            return DirectAnswerStep(step, next_or_final, role=ROLE_SOLVER, is_final_step=True)
+            return None
         first_expansion = True
         for s in self._chain:
             if isinstance(s, ExpandableStep):

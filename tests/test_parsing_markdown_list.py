@@ -76,7 +76,7 @@ I will now perform this step.
         except parsing.ParseError as e:
             pass
 
-    def test_msut_have_one_bullet_list(self):
+    def test_must_have_one_bullet_list(self):
         text = """To calculate x mod y, we need to find the remainder when x is divided by y.
         
 Divide x by y using integer division to get the quotient.

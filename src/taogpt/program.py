@@ -174,7 +174,7 @@ class DirectAnswerStep(TaoReplyStep):
     def __post_init__(self):
         sections = parse_sections(self.description)
         self.next_step = sections.get(NEXT_I_WANT_TO_WORK_AT, None)
-        self.is_final_step = is_final_answer(self.next_step)
+        self.is_final_step = self.is_final_step or is_final_answer(self.next_step)
         super().__post_init__()
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
@@ -347,11 +347,9 @@ class ExpandableStep(Step):
                     break
                 except Exception as e:
                     n_retries += 1
-                    if isinstance(e, ParseError) and len(prompts_to_be_sent) <= len(prompts):
-                        prompts_to_be_sent.append((ROLE_SOLVER, plan))
-                        message = prompt_db.orchestrator_expand_parse_error.format(error=str(e))
-                        prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
-                        my_invocation.executor.logger.log(f"\n***RETRY***\n{message}")
+                    self.retry_on_parse_error(e, prompt_db.orchestrator_expand_parse_error,
+                                              plan, prompts,
+                                              prompts_to_be_sent, my_invocation)
                     if n_retries >= MAX_RETRIES:
                         print(f"failed after {n_retries}")
                         raise e
@@ -361,6 +359,13 @@ class ExpandableStep(Step):
                 self.prepared = prompt_db.intuitive_answer.format(self.prepared)
             self.choices.append(parse_to_step(self, self.prepared))
             self._prepared_inserted = True
+
+    def retry_on_parse_error(self, e, error_report_prompt, response, prompts, prompts_to_be_sent, my_invocation):
+        if isinstance(e, ParseError) and len(prompts_to_be_sent) <= len(prompts):
+            prompts_to_be_sent.append((ROLE_SOLVER, response))
+            message = error_report_prompt.format(error=str(e))
+            prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
+            my_invocation.executor.logger.log(f"\n***RETRY***\n{message}")
 
     def rank_choices(self, my_invocation: Invocation, n_existing_choices: int=None):
         prompt_db: PromptSet  = my_invocation.executor.prompts
@@ -385,28 +390,34 @@ class ExpandableStep(Step):
         rankings_one_based: _t.Dict[int, float] = defaultdict(lambda: 0.0)
         ranking_types = {i+1: plan.step_title for i, plan in enumerate(self.choices)}
         n_success = 0
+        response: str|None = None
         while n_success < MAX_VOTING_FACTOR:
             n_retries = 0
-            try:
-                rank_choice_instruction = prompt_db.orchestrator_eval_strategy_choices.split('---')[-1].strip()
-                response = my_invocation.executor.llm.ask(
-                    system_prompt, prompts,
-                    reason='rank_choices',
-                    step_id=f"{self.step_id}/{n_success}",
-                    temperature=0.0 if n_success == 0 else 0.1,
-                    log_request=(n_success == 0 and n_retries == 0),
-                    collapse_contents={'tao_templates': tao_templates, 'rank_choices': rank_choice_instruction})
-                scores, dupes = parse_ranking_response(response, len(self.choices))
-                for plan, score in scores.items():
-                    rankings_one_based[plan] += score
-                self.check_duplicates(dupes, scores, ranking_types)
-                n_success += 1
-                log_debug(f"===> received ranking {n_success}: {response[:20]}...", level=2)
-            except Exception as e:
-                n_retries += 1
-                if n_retries >= MAX_RETRIES:
-                    raise e
-                pass
+            prompts_to_be_sent = prompts.copy()
+            while n_retries < MAX_RETRIES:
+                try:
+                    rank_choice_instruction = prompt_db.orchestrator_eval_strategy_choices.split('---')[-1].strip()
+                    response = my_invocation.executor.llm.ask(
+                        system_prompt, prompts_to_be_sent,
+                        reason='rank_choices',
+                        step_id=f"{self.step_id}/{n_success}",
+                        temperature=0.0 if n_success == 0 else 0.1,
+                        log_request=(n_success == 0 and n_retries == 0),
+                        collapse_contents={'tao_templates': tao_templates, 'rank_choices': rank_choice_instruction})
+                    scores, dupes = parse_ranking_response(response, len(self.choices))
+                    for plan, score in scores.items():
+                        rankings_one_based[plan] += score
+                    self.check_duplicates(dupes, scores, ranking_types)
+                    n_success += 1
+                    log_debug(f"===> received ranking {n_success}: {response[:20]}...", level=2)
+                    break
+                except Exception as e:
+                    n_retries += 1
+                    if n_retries >= MAX_RETRIES:
+                        raise e
+                    self.retry_on_parse_error(e, prompt_db.orchestrator_parse_error,
+                                              response, prompts,
+                                              prompts_to_be_sent, my_invocation)
         final_score_repr = '\n'.join([f"{k}. score {v}" for k, v in rankings_one_based.items()])
         my_invocation.executor.logger.log(f"\n### Final scores:\n{final_score_repr}\n\n")
         indices = self.sort_rankings(rankings_one_based, n_existing_choices)

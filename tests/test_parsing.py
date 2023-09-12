@@ -1,24 +1,35 @@
 from taogpt import parsing
 from taogpt.program import ExpandableStep
 from taogpt.constants import *
+from taogpt.prompts import PromptSet
+
 
 _REGULAR_RANKINGS = """This is what I think:
-
-1. score 5.1 [It looks acceptable but not too good]
-2. score 0 [This is incorrect]
-3. score 10 [This is superb.]
+```json
+{
+  "1": {"score": 5.1, "reason": "It looks acceptable but not too good."},
+  "2": {"score": 0.0, "reason": "This is incorrect."},
+  "3": {"score": 10, "reason": "This is superb"}
+}
+```
+and other extra text
 """
 
-_RANKINGS_WITH_DUPES = """This is what I think:
-
-1. score 5.1 [It looks acceptable but not too good]
-2. duplicate of 3 [This looks like the same as 3]
-3. score 10 [This is superb.]
-4. duplicate of 1 [This looks like the same as 1]
+_RANKINGS_WITH_DUPES = """{
+  "1": {"score": 5.1, "reason": "It looks acceptable but not too good."},
+  "2": {"score": 10, "reason": "This looks like duplicate of 3.", "duplicate_of": 3},
+  "3": {"score": 10, "reason": "This is superb"},
+  "4": {"score": 5.1, "reason": "This looks like duplicate of 1.", "duplicate_of": 1}
+}
 """
 
 
 class TestParsingRankings:
+
+    def test_ranking_prompt_format(self):
+        prompts: PromptSet = PromptSet.load_defaults()
+        prompts.orchestrator_eval_strategy_choices.format(approaches='\n\n'.join(
+            [f"[Approach # {i+1}]" for i in range(4)]))
 
     def test_parsing_regular_rankings(self):
         results, dupes = parsing.parse_ranking_response(_REGULAR_RANKINGS, 3)
@@ -27,15 +38,8 @@ class TestParsingRankings:
         assert results[3] == 10.0
         assert len(dupes) == 0
 
-
-    def test_parsing_rankings_with_dupes(self):
-        self._help_test_parsing_rankings_with_dupes(_RANKINGS_WITH_DUPES)
-
-    def test_parsing_rankings_with_dupes_colon(self):
-        self._help_test_parsing_rankings_with_dupes(_RANKINGS_WITH_DUPES.replace('of', 'of:'))
-
     def test_checking_rankings_with_valid_dupes(self):
-        results, dupes = parsing.parse_ranking_response(_RANKINGS_WITH_DUPES, 3)
+        results, dupes = parsing.parse_ranking_response(_RANKINGS_WITH_DUPES, 4)
         ranking_types = {
             1: WILL_ANSWER_DIRECTLY,
             2: HERE_IS_MY_STEP_BY_STEP_PLAN,
@@ -50,7 +54,7 @@ class TestParsingRankings:
         assert results[4] == -5.1
 
     def test_checking_rankings_with_invalid_dupes(self):
-        results, dupes = parsing.parse_ranking_response(_RANKINGS_WITH_DUPES, 3)
+        results, dupes = parsing.parse_ranking_response(_RANKINGS_WITH_DUPES, 4)
         ranking_types = {
             1: WILL_ANSWER_DIRECTLY,
             2: HERE_IS_MY_STEP_BY_STEP_PLAN,
@@ -67,9 +71,8 @@ class TestParsingRankings:
         assert results[2] == -10.0
         assert results[3] == 10.0
 
-    @staticmethod
-    def _help_test_parsing_rankings_with_dupes(text):
-        results, dupes = parsing.parse_ranking_response(text, 3)
+    def test_parsing_rankings_with_dupes(self):
+        results, dupes = parsing.parse_ranking_response(_RANKINGS_WITH_DUPES, 4)
         assert len(results) == 2
         assert results[1] == 5.1
         assert results[3] == 10.0

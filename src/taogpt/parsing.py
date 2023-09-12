@@ -1,5 +1,6 @@
 from __future__ import annotations
 import re
+import json
 import typing as _t
 import taogpt.utils as _utils
 from taogpt.constants import WILL_ASK_QUESTIONS, WILL_ANSWER_DIRECTLY, \
@@ -86,23 +87,46 @@ def parse_final_response(text: str) -> (bool, str):
     # return 'the answer is correct' in text.lower(), _utils.str_or_blank(text)
 
 
-def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:
-    rankings = parse_ordered_list(text)
-    if len(rankings) == 0:
-        raise ParseError(f"No rankings found in response: {text[:20]}...")
+_ranking_response_json_re = re.compile(r"^.*(```(json)?\n+)(.+)(```).*$|^\s*(\{.+})\s*$", flags=re.DOTALL|re.IGNORECASE)
 
-    pattern = re.compile(r'\s*(score:?|duplicate of:?) +(-?\d+(\.\d+)?)\s*(\[.*])?')
+def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:
+    match = _ranking_response_json_re.match(text)
+    if match is None:
+        raise ParseError("no JSON hash found")
+    json_text = match.group(3) if match.group(3) is not None else match.group(5)
+    try:
+        rankings: _t.Dict[_t.Any] = json.loads(json_text)
+    except json.JSONDecodeError as e:
+        raise ParseError("JSON parse error")
+    if not isinstance(rankings, dict) or not all([isinstance(x, dict) for x in rankings.values()]):
+        raise ParseError("The response must be a JSON hash of hashes")
+    if len(rankings) != expected_number:
+        raise ParseError(f"Expecting {expected_number} score rankings but found {len(rankings)}.")
     results: {int: float} = dict()
     dupes: {int: int} = dict()
-    for i, item in enumerate(rankings):
-        match: re.Match = pattern.match(item)
-        if match:
-            if 'duplicate' in match.group(1).lower():
-                dupes[i+1] = int(match.group(2))
-            else:
-                results[i+1] = float(match.group(2))
+    for i, item in rankings.items():
+        if not re.match(r"^\d+$", i):
+            raise ParseError(f"JSON hash key '{i}' is not an integer")
+        i = int(i)
+        if i < 1 or i > expected_number:
+            raise ParseError(f"Key {i} is not in range [1,{expected_number}]")
+        if i in results:
+            raise ParseError(f"Approach {i} has multiple scores.")
+        if 'score' not in item:
+            raise ParseError(f"No 'score' for item {i}")
+        score = item['score']
+        if not isinstance(score, (int, float)):
+            raise ParseError(f"Score value '{score}' is not a number.")
+        results[i] = float(score)
+    for i, item in rankings.items():
+        i = int(i)
+        if 'duplicate_of' in item:
+            duplicate_of = item['duplicate_of']
+            if duplicate_of is not None:
+                dupes[i] = duplicate_of
+                del results[i]
     if len(results) + len(dupes) != expected_number:
-        assert ParseError(f"Expecting {expected_number} rankings, received {len(results)}")
+        raise ParseError(f"Expecting {expected_number} rankings, received {len(results)}")
     assert len(results.keys() & dupes.keys()) == 0
     return results, dupes
 
