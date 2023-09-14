@@ -4,8 +4,8 @@ import typing as _t
 import math as _math
 from frozenlist import FrozenList as _FrozenList
 
-from .runtime_env import *
-from .tao_model import *
+from . import Executor, UnsolvableError, MarkdownLogger, LLM
+from .llm_model import *
 from .program import *
 import taogpt.utils as _utils
 
@@ -13,7 +13,7 @@ import taogpt.utils as _utils
 @_dc.dataclass
 class Orchestrator(Executor):
     llm: LLM = _utils.Frozen()
-    prompts: PromptSet = _utils.Frozen()
+    prompts: PromptDb = _utils.Frozen()
     markdown_logger: _utils.MarkdownLogger = _utils.Frozen()
     max_tokens: int = 100000
     max_tree_branches: int = 4
@@ -281,7 +281,7 @@ class Orchestrator(Executor):
              reason: str=None, step_id:str=None, min_threshold=0.0, majority=1,
              collapse_contents: {str: str}=None) -> (_t.Any, int|float):
         assert majority == 1 # todo: can't handle multiple votes yet
-        prompt_db: PromptSet = self.prompts
+        prompt_db: PromptDb = self.prompts
         min_threshold = min_threshold * majority
         rankings = dict()
         i = 0

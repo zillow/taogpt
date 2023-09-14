@@ -4,7 +4,7 @@ import pathlib as _path
 
 
 @_dc.dataclass
-class PromptSet:
+class PromptDb:
     system_step_expansion: str # main system prompt
     tao_templates: str
     tao_template_direct_step_answer: str
@@ -32,7 +32,7 @@ class PromptSet:
             with open(path, 'r') as f:
                 return f.read()
 
-        return PromptSet(
+        return PromptDb(
             system_step_expansion=_read(path / 'tao.md'),
             tao_templates=_read(path / 'tao_templates.md'),
             tao_template_direct_step_answer=_read(path / 'tao_template_direct_step_answer.md'),

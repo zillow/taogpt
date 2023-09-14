@@ -5,13 +5,15 @@ import typing as _t
 from _collections import defaultdict
 import math as _math
 
-import taogpt.tao_model
-from .runtime_env import Invocation, Backtrack, StepABC
+import taogpt
+import taogpt.runtime_env
+import taogpt.llm_model
+from . import StepABC, Invocation, Backtrack
 from .parsing import *
 from .constants import *
 import taogpt.utils as _utils
 from .utils import log_debug, safe_subn
-from taogpt.prompts import PromptSet
+from taogpt.prompts import PromptDb
 
 
 @_dc.dataclass(repr=False)
@@ -92,7 +94,7 @@ class AskForAnalysisStep(Step):
         return 'ask for analysis'
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        prompt_db: PromptSet  = my_invocation.executor.prompts
+        prompt_db: PromptDb  = my_invocation.executor.prompts
         if self.description is None or len(_utils.str_or_blank(self.description)) == 0:
             self.description = prompt_db.orchestrator_ask_init_analysis
         system_prompt = prompt_db.system_step_expansion
@@ -140,10 +142,10 @@ class TaoAnalysisStep(TaoReplyStep):
         return _utils.str_or_blank(self.description)
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        prompt_db: PromptSet  = my_invocation.executor.prompts
+        prompt_db: PromptDb  = my_invocation.executor.prompts
         prompts: _t.List[(str, str)] = my_invocation.executor.show_conversation_thread()
         prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_direct_solve))
-        llm: taogpt.tao_model.LLM = my_invocation.executor.llm
+        llm: taogpt.LLM = my_invocation.executor.llm
         intuition: str | None = None
         n_retries = 0
         while True:
@@ -179,7 +181,7 @@ class DirectAnswerStep(TaoReplyStep):
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         if not _utils.is_blank(self.next_step) and not self.is_final_step:
-            prompt_db: PromptSet  = my_invocation.executor.prompts
+            prompt_db: PromptDb  = my_invocation.executor.prompts
             work_prompt = prompt_db.orchestrator_proceed.format(step=self.next_step)
             return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
         return None
@@ -224,7 +226,7 @@ class PlanStep(TaoReplyStep):
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         # when evaluating this node, we are always at the first step
-        prompt_db: PromptSet  = my_invocation.executor.prompts
+        prompt_db: PromptDb  = my_invocation.executor.prompts
         work_prompt = prompt_db.orchestrator_proceed.format(step=self.first_step)
         return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
 
@@ -312,7 +314,7 @@ class ExpandableStep(Step):
 
     def expand_choices(self, my_invocation: Invocation, upto_branches: int):
         upto_branches = min(upto_branches, my_invocation.executor.max_search_branching_factor)
-        prompt_db: PromptSet  = my_invocation.executor.prompts
+        prompt_db: PromptDb  = my_invocation.executor.prompts
         system_prompt = prompt_db.system_step_expansion
         direct_answer = prompt_db.tao_template_intuitive_answer if self.is_first_problem_solving_step() \
             else prompt_db.tao_template_direct_step_answer
@@ -368,7 +370,7 @@ class ExpandableStep(Step):
             my_invocation.executor.logger.log(f"\n***RETRY***\n{message}")
 
     def rank_choices(self, my_invocation: Invocation, n_existing_choices: int=None):
-        prompt_db: PromptSet  = my_invocation.executor.prompts
+        prompt_db: PromptDb  = my_invocation.executor.prompts
         system_prompt = prompt_db.sage
         direct_answer = prompt_db.tao_template_intuitive_answer if self.is_first_problem_solving_step() \
             else prompt_db.tao_template_direct_step_answer

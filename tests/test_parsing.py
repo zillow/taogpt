@@ -1,7 +1,7 @@
 from taogpt import parsing
 from taogpt.program import ExpandableStep
 from taogpt.constants import *
-from taogpt.prompts import PromptSet
+from taogpt.prompts import PromptDb
 
 
 _REGULAR_RANKINGS = """This is what I think:
@@ -27,7 +27,7 @@ _RANKINGS_WITH_DUPES = """{
 class TestParsingRankings:
 
     def test_ranking_prompt_format(self):
-        prompts: PromptSet = PromptSet.load_defaults()
+        prompts: PromptDb = PromptDb.load_defaults()
         prompts.orchestrator_eval_strategy_choices.format(approaches='\n\n'.join(
             [f"[Approach # {i+1}]" for i in range(4)]))
 

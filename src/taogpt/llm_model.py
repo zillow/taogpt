@@ -4,22 +4,7 @@ import time as _time
 from langchain.chat_models import ChatOpenAI as _ChatOpenAI
 from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_SOLVER, ROLE_SYSTEM, ROLE_SAGE
 import taogpt.utils as _utils
-
-
-class LLM:
-
-    @property
-    def total_tokens(self):
-        return 0
-
-    def ask(self, system_prompt: str, conversation: _t.List[_t.Tuple[str, str]], reason=None,
-            temperature: float|None=None,
-            log_request=True, collapse_contents: {str: str}=None,**_):
-        pass
-
-    def reset(self):
-        pass
-
+from . import LLM
 
 _last_conversation: _t.List|None = None
 
