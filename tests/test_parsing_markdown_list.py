@@ -87,3 +87,18 @@ Multiply the quotient by y.
             assert False, "expecting ParseError"
         except parsing.ParseError as e:
             pass
+
+    def test_parse_indented_bullet_list(self):
+        text = """# HERE_IS_MY_STEP_BY_STEP_PLAN
+
+To solve this problem, we need to find a way to use the four numbers (7, 6, 2, 1) with the operations of addition, subtraction, multiplication, and division to get the result of 24.
+
+  1. Try to multiply the numbers together. [Multiplication is a good starting point because it can quickly increase the 
+      value.]
+  2. If multiplication doesn't work, try to use a combination of multiplication and addition or subtraction. [
+     Sometimes, we need to use a combination of operations to reach the target number.]
+  3. If the above steps don't work, try to use division along with other operations. [Division can help to decrease the 
+     value if it's too high.]
+"""
+        results: [str] = parsing.parse_ordered_list(text)
+        assert len(results) == 3

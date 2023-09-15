@@ -6,7 +6,6 @@ from _collections import defaultdict
 import math as _math
 
 import taogpt
-import taogpt.runtime_env
 import taogpt.llm_model
 from . import StepABC, Invocation, Backtrack
 from .parsing import *
@@ -399,7 +398,7 @@ class ExpandableStep(Step):
             while n_retries < MAX_RETRIES:
                 try:
                     rank_choice_instruction = prompt_db.orchestrator_eval_strategy_choices.split('---')[-1].strip()
-                    response = my_invocation.executor.llm.ask(
+                    response = my_invocation.executor.sage_llm.ask(
                         system_prompt, prompts_to_be_sent,
                         reason='rank_choices',
                         step_id=f"{self.step_id}/{n_success}",

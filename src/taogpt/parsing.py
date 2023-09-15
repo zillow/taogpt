@@ -54,18 +54,19 @@ def parse_sections(text: str) -> {str: str|None}:
     return {k: (text.strip() if text is not None else None) for k, text in matched_sections.items()}
 
 
-_ordered_list_re = re.compile(r'\n?(\d+)\.\s+(.*?)(?=\n\d+\.|\n\n|\Z)', flags=re.DOTALL)
+_ordered_list_re = re.compile(r'\n\s*(\d+)\.\s+(.*?)(?=\n\s*(\d+)|\n\n|\Z)', flags=re.DOTALL)
 
 
-def parse_ordered_list(md) -> [str]:
+def parse_ordered_list(markdown_text) -> [str]:
     """
     Parse a simplified markdown list without consideration to multi-line indentation.
-    :param md: markdown text
+    :param markdown_text: markdown text
     :return: a list of string
     """
+    markdown_text = '\n' + _utils.str_or_blank(markdown_text)
     expected_number = 1
     matches = []
-    for m in _ordered_list_re.finditer(md):
+    for m in _ordered_list_re.finditer(markdown_text):
         bullet = m.group(1)
         if int(bullet) != expected_number:
             raise ParseError("Unexpected bullet number or multiple lists presented.")

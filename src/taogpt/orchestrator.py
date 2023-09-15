@@ -15,17 +15,32 @@ class Orchestrator(Executor):
     llm: LLM = _utils.Frozen()
     prompts: PromptDb = _utils.Frozen()
     markdown_logger: _utils.MarkdownLogger = _utils.Frozen()
-    max_tokens: int = 100000
+    max_tokens: int = 10000
     max_tree_branches: int = 4
     check_final: bool = False
+    smarter_llm: LLM | None = None
+    max_tokens_for_smarter_llm: int | None = None
 
     def __post_init__(self):
         self._chain: [Invocation] = []
         self._frozen_chain: _FrozenList | None = None
+        if self.max_tokens_for_smarter_llm is None:
+            if self.sage_llm is None or id(self.llm) != id(self.sage_llm):
+                self.max_tokens_for_smarter_llm = self.max_tokens // 3
+            else:
+                self.max_tokens_for_smarter_llm = self.max_tokens
+
+    @property
+    def sage_llm(self) -> LLM:
+        return self.smarter_llm or self.llm
 
     @property
     def logger(self) -> MarkdownLogger:
         return self.markdown_logger
+
+    @property
+    def chain(self) -> _t.List[Invocation]:
+        return self._chain
 
     @property
     def max_search_branching_factor(self) -> int:
@@ -46,13 +61,15 @@ class Orchestrator(Executor):
             self._chain.append(Invocation(init_analysis_step, _executor=self))
         self._execute_with_backtracking()
 
-    def resume(self, additional_token_allowance: int|None=None):
-        if self.llm.total_tokens >= self.max_tokens:
-            additional_token_allowance = (additional_token_allowance or self.max_tokens)
-            if self.max_tokens > 0:
-                self.max_tokens += additional_token_allowance
-            print(f"extend token allowance by {additional_token_allowance} to {self.max_tokens}")
-            self._execute_with_backtracking()
+    def resume(self, additional_tokens: int=None, additional_tokens_for_smarter_llm: int=None):
+        if additional_tokens is not None:
+            self.max_tokens += additional_tokens
+            print(f"extend token allowance by {additional_tokens} to {self.max_tokens}")
+        if additional_tokens_for_smarter_llm is not None:
+            self.max_tokens_for_smarter_llm += additional_tokens_for_smarter_llm
+            print(f"extend token allowance for smarter LLM by {additional_tokens_for_smarter_llm} "
+                  f"to {self.max_tokens_for_smarter_llm}")
+        self._execute_with_backtracking()
 
     def _execute_with_backtracking(self):
         try:
@@ -119,8 +136,7 @@ class Orchestrator(Executor):
                 if isinstance(new_step, DirectAnswerStep) and new_step.is_final_step:
                     self.summarize_final_answer()
                     return
-                if 0 < self.max_tokens <= self.llm.total_tokens:
-                    raise RuntimeError(f"Used {self.llm.total_tokens}, exceeded token allowance of {self.max_tokens}")
+                self.check_token_usages()
                 new_step = new_step.eval(new_invocation)
             new_step = self.next_step()
             if new_step is None:
@@ -129,8 +145,15 @@ class Orchestrator(Executor):
             assert isinstance(new_step, (ProceedStep, DirectAnswerStep))
             new_invocation = Invocation(new_step, _executor=self)
             self._chain.append(new_invocation)
-            if 0 < self.max_tokens <= self.llm.total_tokens:
-                raise RuntimeError(f"Used {self.llm.total_tokens}, exceeded token allowance of {self.max_tokens}")
+            self.check_token_usages()
+
+    def check_token_usages(self):
+        if 0 < self.max_tokens <= self.llm.total_tokens:
+            raise RuntimeError(f"Regular LLM consumed {self.llm.total_tokens} tokens, "
+                               f"exceeded allowance of {self.max_tokens}")
+        if 0 < self.max_tokens_for_smarter_llm <= self.sage_llm.total_tokens:
+            raise RuntimeError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
+                               f"exceeded allowance of {self.max_tokens_for_smarter_llm}")
 
     def show_conversation_thread(self, with_extras=False, selector: _t.Callable[[int, Invocation], bool]|None=None) \
             -> [(str, str)]:
@@ -166,8 +189,24 @@ class Orchestrator(Executor):
         return work_next_step
 
     def summarize_final_answer(self) -> FinalAnswerStep:
-        system_prompt = self.prompts.sage
+        is_direct_answer_only = False
+        if isinstance(self._chain[-1].step, DirectAnswerStep):
+            for i in range(len(self._chain) - 2, -1, -1):
+                if isinstance(self._chain[i].step, PresentTaskStep):
+                    is_direct_answer_only = True
+                    break
+                elif isinstance(self._chain[i].step, (DirectAnswerStep, PlanStep)):
+                    break
+            last_step = self._chain[-1].step
+            if is_direct_answer_only:
+                final_answer_step = FinalAnswerStep(last_step.previous, last_step.description, ROLE_SOLVER)
+                new_invocation = Invocation(final_answer_step, _executor=self)
+                self._chain[-1] = new_invocation
+                if self.check_final:
+                    self.check_final_solution(self._chain[-1])
+                return final_answer_step
 
+        system_prompt = self.prompts.sage
         prompts = self.show_conversation_thread()
         summarize_prompt = self.prompts.orchestrator_summarize
         prompts.append((ROLE_SAGE, summarize_prompt))
@@ -182,10 +221,10 @@ class Orchestrator(Executor):
                                         collapse_contents=dict(),
                                         log_request=n_retries == 0)
                 final_answer_step = FinalAnswerStep(self._chain[-1].step, response, ROLE_SOLVER)
-                if self.check_final:
-                    self.check_final_solution(self._chain[-1])
                 new_invocation = Invocation(final_answer_step, _executor=self)
                 self._chain.append(new_invocation)
+                if self.check_final:
+                    self.check_final_solution(self._chain[-1])
                 return final_answer_step
             except Exception as e:
                 ex = e
@@ -223,19 +262,20 @@ class Orchestrator(Executor):
             response: str = ''
             while n_retries < MAX_RETRIES:
                 try:
-                    response = self.llm.ask(system_prompt, prompts_to_be_sent,
-                                            reason=reason,
-                                            step_id=f"{invocation.step.step_id}/{i}",
-                                            temperature=0.0 if n_success == 0 else 0.1,
-                                            collapse_contents=collapse_contents,
-                                            log_request=i == 0)
+                    response = self.sage_llm.ask(
+                        system_prompt,
+                        prompts_to_be_sent,
+                        reason=reason,
+                        step_id=f"{invocation.step.step_id}/{i}",
+                        temperature=0.0 if n_success == 0 else 0.1,
+                        collapse_contents=collapse_contents,
+                        log_request=i == 0)
                     result, text = response_parser(response)
                     n_success += 1
                     if result:
                         n_true += 1
                     elif text is not None and len(text.strip()) > 0:
                         all_criticism.append(text.strip())
-                    log_debug(f"===> received dead-end check reply {i}: {result} ({n_true}/{n_success})")
                     if n_true >= min_yes_needed:
                         break
                     if (n_success - n_true) >= max_no_allowed:

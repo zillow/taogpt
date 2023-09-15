@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import typing as _t
 import re as _re
+from pathlib import Path as _Path
 from dataclasses import  MISSING as _MISSING
 from typing import Generic, TypeVar
 
@@ -83,8 +84,8 @@ class MarkdownLogger:
         'sage': 'lightcyan',
     }
 
-    def __init__(self, log_path: str):
-        self._log_path = log_path
+    def __init__(self, log_path: str|_Path):
+        self._log_path = _Path(log_path)
         self._log = open(self._log_path, 'w')
 
     def close(self):
