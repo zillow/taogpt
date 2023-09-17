@@ -10,33 +10,56 @@ from .program import *
 import taogpt.utils as _utils
 
 
-@_dc.dataclass
 class Orchestrator(Executor):
-    llm: LLM = _utils.Frozen()
-    prompts: PromptDb = _utils.Frozen()
-    markdown_logger: _utils.MarkdownLogger = _utils.Frozen()
-    max_tokens: int = 10000
-    max_tree_branches: int = 4
-    check_final: bool = False
-    smarter_llm: LLM | None = None
-    max_tokens_for_smarter_llm: int | None = None
 
-    def __post_init__(self):
+    def __init__(self, *,
+                 llm: LLM,
+                 prompts: PromptDb,
+                 markdown_logger: _utils.MarkdownLogger,
+                 max_tokens: int = 10000,
+                 max_tree_branches: int = 4,
+                 check_final: bool = False,
+                 sage_llm: LLM | None = None,
+                 max_tokens_for_sage_llm: int | None = None):
+        self._llm = llm
+        self._prompts = prompts
+        self._markdown_logger = markdown_logger
+        self._max_tokens = max_tokens
+        self._max_tree_branches = max_tree_branches
+        self._check_final = check_final
+        self._sage_llm = sage_llm
+
         self._chain: [Invocation] = []
         self._frozen_chain: _FrozenList | None = None
-        if self.max_tokens_for_smarter_llm is None:
-            if self.sage_llm is None or id(self.llm) != id(self.sage_llm):
-                self.max_tokens_for_smarter_llm = self.max_tokens // 3
+        if max_tokens_for_sage_llm is None:
+            if self._sage_llm is None or id(self._llm) != id(self._sage_llm):
+                self._max_tokens_for_sage_llm = self._max_tokens // 3
             else:
-                self.max_tokens_for_smarter_llm = self.max_tokens
+                self._max_tokens_for_sage_llm = self._max_tokens
+        else:
+            self._max_tokens_for_sage_llm = max_tokens_for_sage_llm
+
+    def __repr__(self) -> str:
+        llm_repr = repr(self.llm)
+        sage_llm_repr = repr(self.sage_llm)
+        n = len(self._chain)
+        return f"{self.__class__.__name__}(LLMs={llm_repr}/{sage_llm_repr},invocations={n})"
+
+    @property
+    def llm(self) -> LLM:
+        return self._llm
+
+    @property
+    def prompts(self) -> PromptDb:
+        return self._prompts
 
     @property
     def sage_llm(self) -> LLM:
-        return self.smarter_llm or self.llm
+        return self._sage_llm or self.llm
 
     @property
     def logger(self) -> MarkdownLogger:
-        return self.markdown_logger
+        return self._markdown_logger
 
     @property
     def chain(self) -> _t.List[Invocation]:
@@ -44,7 +67,7 @@ class Orchestrator(Executor):
 
     @property
     def max_search_branching_factor(self) -> int:
-        return self.max_tree_branches
+        return self._max_tree_branches
 
     def start(self, task: str | Step, try_intuition=False):
         if isinstance(task, str):
@@ -63,12 +86,12 @@ class Orchestrator(Executor):
 
     def resume(self, additional_tokens: int=None, additional_tokens_for_smarter_llm: int=None):
         if additional_tokens is not None:
-            self.max_tokens += additional_tokens
-            print(f"extend token allowance by {additional_tokens} to {self.max_tokens}")
+            self._max_tokens += additional_tokens
+            print(f"extend token allowance by {additional_tokens} to {self._max_tokens}")
         if additional_tokens_for_smarter_llm is not None:
-            self.max_tokens_for_smarter_llm += additional_tokens_for_smarter_llm
+            self._max_tokens_for_sage_llm += additional_tokens_for_smarter_llm
             print(f"extend token allowance for smarter LLM by {additional_tokens_for_smarter_llm} "
-                  f"to {self.max_tokens_for_smarter_llm}")
+                  f"to {self._max_tokens_for_sage_llm}")
         self._execute_with_backtracking()
 
     def _execute_with_backtracking(self):
@@ -148,12 +171,12 @@ class Orchestrator(Executor):
             self.check_token_usages()
 
     def check_token_usages(self):
-        if 0 < self.max_tokens <= self.llm.total_tokens:
+        if 0 < self._max_tokens <= self.llm.total_tokens:
             raise RuntimeError(f"Regular LLM consumed {self.llm.total_tokens} tokens, "
-                               f"exceeded allowance of {self.max_tokens}")
-        if 0 < self.max_tokens_for_smarter_llm <= self.sage_llm.total_tokens:
+                               f"exceeded allowance of {self._max_tokens}")
+        if 0 < self._max_tokens_for_sage_llm <= self.sage_llm.total_tokens:
             raise RuntimeError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
-                               f"exceeded allowance of {self.max_tokens_for_smarter_llm}")
+                               f"exceeded allowance of {self._max_tokens_for_sage_llm}")
 
     def show_conversation_thread(self, with_extras=False, selector: _t.Callable[[int, Invocation], bool]|None=None) \
             -> [(str, str)]:
@@ -177,16 +200,19 @@ class Orchestrator(Executor):
                                    collapse_contents={'next_step': work_prompt})
         if decision == DONE:
             return None
-        first_expansion = True
-        for s in self._chain:
-            if isinstance(s, ExpandableStep):
-                first_expansion = False
-                break
+        full_expansion = self.need_search_expansion_at_next_step()
         work_prompt = self.prompts.orchestrator_proceed.format(step=decision)
         work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
-                                     initial_expansion=self.max_search_branching_factor if first_expansion else 1,
-                                     first_problem_solving_step=first_expansion)
+                                     initial_expansion=self.max_search_branching_factor if full_expansion else 1,
+                                     first_problem_solving_step=full_expansion)
         return work_next_step
+
+    def need_search_expansion_at_next_step(self):
+        for i, invocation in enumerate(self.chain):
+            if isinstance(invocation.step, ExpandableStep) \
+                    and i < len(self.chain) - 1 and not isinstance(self.chain[i + 1].step, AskQuestionStep):
+                return False
+        return True
 
     def summarize_final_answer(self) -> FinalAnswerStep:
         is_direct_answer_only = False
@@ -202,7 +228,7 @@ class Orchestrator(Executor):
                 final_answer_step = FinalAnswerStep(last_step.previous, last_step.description, ROLE_SOLVER)
                 new_invocation = Invocation(final_answer_step, _executor=self)
                 self._chain[-1] = new_invocation
-                if self.check_final:
+                if self._check_final:
                     self.check_final_solution(self._chain[-1])
                 return final_answer_step
 
@@ -223,7 +249,7 @@ class Orchestrator(Executor):
                 final_answer_step = FinalAnswerStep(self._chain[-1].step, response, ROLE_SOLVER)
                 new_invocation = Invocation(final_answer_step, _executor=self)
                 self._chain.append(new_invocation)
-                if self.check_final:
+                if self._check_final:
                     self.check_final_solution(self._chain[-1])
                 return final_answer_step
             except Exception as e:
