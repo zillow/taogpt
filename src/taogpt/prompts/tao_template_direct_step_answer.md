@@ -1,4 +1,4 @@
-##### Strategy: **I_WILL_ANSWER_DIRECTLY**:
+## Strategy: Direct Answer
 
 Go with this strategy if the step is simple and you know the correct answer. You should also tell the Orchestrator 
 which step you want to work at next in the `NEXT_I_WANT_TO_WORK_AT` section. If you need to write out any file

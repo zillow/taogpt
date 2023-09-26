@@ -1,8 +1,10 @@
 import typing as _t
 
+import pytest
 import tiktoken
 
-from taogpt import LLM, MarkdownLogger
+from taogpt import LLM, MarkdownLogger, PromptDb
+from taogpt.orchestrator import Orchestrator
 from taogpt.utils import str_or_blank
 
 
@@ -52,3 +54,17 @@ class MockLLM(LLM):
         self._n_requests = 0
         self._total_tokens = 0
         self.conversation_sequence.clear()
+
+
+@pytest.fixture
+def logger():
+    return MarkdownLogger('/tmp/taogpt_test_log.md')
+
+
+def create_orchestrator(llm: MockLLM, logger: MarkdownLogger, check_final=True):
+    return Orchestrator(
+        llm=llm,
+        markdown_logger=logger,
+        prompts=PromptDb.load_defaults(),
+        check_final=check_final
+    )

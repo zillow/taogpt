@@ -134,11 +134,11 @@ class LangChainLLM(LLM):
 
     def count_tokens(self, text: str) -> int:
         text = _utils.str_or_blank(text)
+        if self._approx_token_factor is not None:
+            return int(_math.ceil(len(text) * self._approx_token_factor))
         if isinstance(self.llm, _ChatOpenAI):
             enc = _tiktoken.encoding_for_model(self.llm.model_name)
-            tokens = enc.encode(text)
-            return len(tokens)
-        elif self._approx_token_factor is not None:
-            return int(_math.ceil(len(text) * self._approx_token_factor))
         else:
-            raise NotImplementedError(f"Unsupported LLM type {type(self.llm)}")
+            enc = _tiktoken.encoding_for_model('gpt-4')
+        tokens = enc.encode(text)
+        return len(tokens)

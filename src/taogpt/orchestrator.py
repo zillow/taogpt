@@ -17,6 +17,7 @@ class Orchestrator(Executor):
                  prompts: PromptDb,
                  markdown_logger: _utils.MarkdownLogger,
                  max_tokens: int = 10000,
+                 initial_expansion: int = 1,
                  max_tree_branches: int = 4,
                  check_final: bool = False,
                  sage_llm: LLM | None = None,
@@ -25,6 +26,7 @@ class Orchestrator(Executor):
         self._prompts = prompts
         self._markdown_logger = markdown_logger
         self._max_tokens = max_tokens
+        self._initial_expansion = initial_expansion
         self._max_tree_branches = max_tree_branches
         self._check_final = check_final
         self._sage_llm = sage_llm
@@ -32,7 +34,7 @@ class Orchestrator(Executor):
         self._chain: [Invocation] = []
         self._frozen_chain: _FrozenList | None = None
         if max_tokens_for_sage_llm is None:
-            if self._sage_llm is None or id(self._llm) != id(self._sage_llm):
+            if self._sage_llm is not None and id(self._llm) != id(self._sage_llm):
                 self._max_tokens_for_sage_llm = self._max_tokens // 3
             else:
                 self._max_tokens_for_sage_llm = self._max_tokens
@@ -66,10 +68,14 @@ class Orchestrator(Executor):
         return self._chain
 
     @property
-    def max_search_branching_factor(self) -> int:
+    def initial_search_expansion(self) -> int:
+        return self._initial_expansion
+
+    @property
+    def max_search_expansion(self) -> int:
         return self._max_tree_branches
 
-    def start(self, task: str | Step, try_intuition=False):
+    def start(self, task: str | Step, analyze_first=False):
         if isinstance(task, str):
             root_step = PresentTaskStep(None, task, role=ROLE_USER)
         elif isinstance(task, PresentTaskStep):
@@ -79,7 +85,7 @@ class Orchestrator(Executor):
                              f"or a PresentTaskStep object, got {type(task)}")
         self.reset()
         self._chain.append(Invocation(root_step, _executor=self))
-        if try_intuition:
+        if analyze_first:
             init_analysis_step = AskForAnalysisStep(root_step, '', ROLE_ORCHESTRATOR)
             self._chain.append(Invocation(init_analysis_step, _executor=self))
         self._execute_with_backtracking()
@@ -165,16 +171,17 @@ class Orchestrator(Executor):
             if new_step is None:
                 self.summarize_final_answer()
                 return
-            assert isinstance(new_step, (ProceedStep, DirectAnswerStep))
             new_invocation = Invocation(new_step, _executor=self)
             self._chain.append(new_invocation)
+            if isinstance(new_step, FinalAnswerStep):
+                return
             self.check_token_usages()
 
     def check_token_usages(self):
         if 0 < self._max_tokens <= self.llm.total_tokens:
             raise RuntimeError(f"Regular LLM consumed {self.llm.total_tokens} tokens, "
                                f"exceeded allowance of {self._max_tokens}")
-        if 0 < self._max_tokens_for_sage_llm <= self.sage_llm.total_tokens:
+        if id(self.llm) != id(self.sage_llm) and 0 < self._max_tokens_for_sage_llm <= self.sage_llm.total_tokens:
             raise RuntimeError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
                                f"exceeded allowance of {self._max_tokens_for_sage_llm}")
 
@@ -186,24 +193,33 @@ class Orchestrator(Executor):
                 conversation.extend(invocation.step.show_in_thread(invocation, with_extras=with_extras))
         return conversation
 
-    def next_step(self) -> ProceedStep | DirectAnswerStep | None:
+    def next_step(self) -> Step | None:
+        full_expansion = self.need_search_expansion_at_next_step()
         step = self._chain[-1].step
         system_prompt = self.prompts.system_step_expansion
-        prompts = self.show_conversation_thread()
-        work_prompt = self.prompts.orchestrator_next_step
-        prompts.append((ROLE_ORCHESTRATOR, work_prompt))
-        decision, next_or_final = self.vote(system_prompt,
-                                   prompts,
-                                   lambda reply: parse_next_step_reply(reply),
-                                   reason='next_step',
-                                   step_id=step.step_id,
-                                   collapse_contents={'next_step': work_prompt})
-        if decision == DONE:
-            return None
-        full_expansion = self.need_search_expansion_at_next_step()
-        work_prompt = self.prompts.orchestrator_proceed.format(step=decision)
+        direct_answer = self.prompts.tao_template_direct_step_answer
+        work_prompt = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
+        if not isinstance(step, UserReplyStep):
+            prompts = self.show_conversation_thread()
+            prompts.append((ROLE_ORCHESTRATOR, work_prompt))
+            prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_next_step))
+            decision, next_or_final = self.vote(system_prompt,
+                                       prompts,
+                                       lambda reply: parse_next_step_reply(reply),
+                                       reason='next_step',
+                                       step_id=f"{step.step_id}",
+                                       collapse_contents={'next_step': work_prompt})
+            if decision == DONE:
+                if UNSOLVABLE in next_or_final or FINAL_ANSWER in next_or_final:
+                    return parse_to_step(step, next_or_final)
+                return None
+            if next_or_final != '':
+                return parse_to_step(step, next_or_final)
+            else:
+                work_prompt = self.prompts.orchestrator_proceed.format(step=decision)
         work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
-                                     initial_expansion=self.max_search_branching_factor if full_expansion else 1,
+                                     initial_expansion=self._initial_expansion,
+                                     max_expansion=self.max_search_expansion,
                                      first_problem_solving_step=full_expansion)
         return work_next_step
 
@@ -226,8 +242,7 @@ class Orchestrator(Executor):
             last_step = self._chain[-1].step
             if is_direct_answer_only:
                 final_answer_step = FinalAnswerStep(last_step.previous, last_step.description, ROLE_SOLVER)
-                new_invocation = Invocation(final_answer_step, _executor=self)
-                self._chain[-1] = new_invocation
+                self._chain[-1].step = final_answer_step
                 if self._check_final:
                     self.check_final_solution(self._chain[-1])
                 return final_answer_step
@@ -327,8 +342,8 @@ class Orchestrator(Executor):
         # for now just use the console input
         return ask_questions(input_fn, questions)
 
-    def find_last_criticisms(self, invocation: Invocation) -> {set}:
-        criticism: {str} = set()
+    def find_last_criticisms(self, invocation: Invocation) -> {int: {str}}:
+        criticism: {int: {str}} = dict()
         for i in range(len(self._chain)):
             step = self._chain[i].step
             if isinstance(step, ExpandableStep):

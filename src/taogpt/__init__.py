@@ -75,7 +75,11 @@ class Executor(_abc.ABC):
         pass
 
     @property
-    def max_search_branching_factor(self) -> int:
+    def initial_search_expansion(self) -> int:
+        return 1
+
+    @property
+    def max_search_expansion(self) -> int:
         return 4
 
 
@@ -89,7 +93,6 @@ class StepABC(_abc.ABC):
 @_dc.dataclass(repr=False)
 class Invocation:
     step: StepABC
-    current_choice: int = 0
     execution_count: int = 0
     _executor: Executor | None = None
 
@@ -97,7 +100,7 @@ class Invocation:
         c = self.__class__.__name__
         step = self.step.step_id
         sc = self.step.__class__.__name__
-        return f"{c}(step={sc}#{step},ptr={self.current_choice},exec={self.execution_count})"
+        return f"{c}(step={sc}#{step},exec={self.execution_count})"
 
     @property
     def executor(self) -> Executor:

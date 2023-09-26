@@ -1,24 +1,8 @@
-from mocks import MockLLM
-from taogpt import MarkdownLogger
-from taogpt.orchestrator import Orchestrator
+from mocks import MockLLM, create_orchestrator, logger
 from taogpt.program import *
 from taogpt.parsing import ParseError
 
-import pytest
-
-
-@pytest.fixture
-def logger():
-    return MarkdownLogger('/tmp/taogpt_test_log.md')
-
-
-def create_orchestrator(llm: MockLLM, logger: MarkdownLogger, check_final=True):
-    return Orchestrator(
-        llm=llm,
-        markdown_logger=logger,
-        prompts=PromptDb.load_defaults(),
-        check_final=check_final
-    )
+_logger = logger
 
 
 def test_check_final_solution_success(logger):
@@ -63,9 +47,9 @@ def create_final_check_chain(reply, logger):
     orchestrator = create_orchestrator(llm, logger, check_final=True)
     step = PresentTaskStep(None, "This is a problem", ROLE_USER)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
-    step = DirectAnswerStep(step, "This is an answer", ROLE_USER)
+    step = DirectAnswerStep(step, "This is an answer", ROLE_SOLVER)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
-    step = FinalAnswerStep(step, "This is the final answer", ROLE_USER)
+    step = FinalAnswerStep(step, "This is the final answer", ROLE_SOLVER)
     invocation = Invocation(step, _executor=orchestrator)
     orchestrator.chain.append(invocation)
     return invocation, llm, orchestrator
@@ -113,3 +97,29 @@ def test_no_full_expansion_at_subsequent_expandable_steps(logger):
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
     assert not orchestrator.need_search_expansion_at_next_step()
+
+
+def test_record_criticism_to_expandable_steps(logger):
+    llm = MockLLM(logger)
+    orchestrator = create_orchestrator(llm, logger)
+    step = PresentTaskStep(None, "This is a problem", ROLE_USER)
+    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    expandable: ProceedStep = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
+    orchestrator.chain.append(Invocation(expandable, _executor=orchestrator))
+    plan_step: PlanStep = PlanStep(expandable, "This is my plan:\n1. Do X\n2. Do Y", ROLE_SOLVER)
+    expandable.choices = []
+    expandable.choices.append(plan_step)
+    orchestrator.chain.append(Invocation(plan_step, _executor=orchestrator))
+    errors = {'error 1', 'error 2'}
+    orchestrator.record_criticisms(errors)
+    assert len(expandable.collected_criticisms) == 1
+    assert expandable.collected_criticisms[0] == errors
+    expected = f"""[Prior approach 1] {plan_step.description}
+
+criticism:
+* error 1
+* error 2"""
+    gathered = expandable.gather_choices_with_criticisms()
+    assert len(gathered) == 1
+    gathered[0] = gathered[0].replace("* error 2\n* error 1", "* error 1\n* error 2")
+    assert gathered[0] == expected

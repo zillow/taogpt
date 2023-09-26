@@ -4,15 +4,16 @@ import json
 import typing as _t
 import taogpt.utils as _utils
 from taogpt.constants import WILL_ASK_QUESTIONS, WILL_ANSWER_DIRECTLY, \
-    DONE, FREE_TEXT, MY_ANSWER
+    DONE, FREE_TEXT, FINAL_ANSWER
 
 _all_step_types = '|'.join([
     WILL_ANSWER_DIRECTLY,
     WILL_ASK_QUESTIONS
 ])
 _step_type_re = re.compile(
-    r"^#\s*(I_WILL_ANSWER_DIRECTLY"
+    r"^#{1,2}\s*(I_WILL_ANSWER_DIRECTLY"
     r"|UNSOLVABLE_I_GIVE_UP"
+    r"|FINAL_ANSWER"
     r"|I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED"
     r"|HERE_IS_MY_STEP_BY_STEP_PLAN).*\n((.|\n)+)"
 )
@@ -133,14 +134,14 @@ def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[
 
 
 def parse_next_step_reply(text: str) -> (str, str|None):
-    sections = parse_sections(text)
-    free_text = sections.get(FREE_TEXT, '')
-    match: re.Match = re.match(r"^\s*I'm done", free_text, flags=re.IGNORECASE)
+    match: re.Match = re.match(r"^\s*I'm done\.?\s+(#+ .+)$",
+                               text, flags=re.IGNORECASE|re.DOTALL)
     if match:
-        return DONE, sections.get(MY_ANSWER, None)
-    match: re.Match = re.match(r"^\s*I want to work on:?\s+(.+)", free_text, flags=re.IGNORECASE)
+        return DONE, _utils.str_or_blank(match.group(1))
+    match: re.Match = re.match(r"^\s*I want to work on:?\s+(.+)\n\s*(#+ .+)$",
+                               text, flags=re.IGNORECASE|re.DOTALL)
     if match:
-        return match.group(1).strip(), None
+        return match.group(1).strip(), _utils.str_or_blank(match.group(2))
     raise ParseError(f'Unexpected next step reply')
 
 

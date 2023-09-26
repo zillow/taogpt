@@ -1,7 +1,7 @@
-These are criticisms received by trying other alternatives going down this step:
+These are previous proposals tried and criticisms received going down this step:
 
 {criticisms}
 
 ---
 
-You should avoid these mistakes if they are still valid.
+You should come up with a new proposal different from the ones you had tried and avoid these mistakes.

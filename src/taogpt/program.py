@@ -15,6 +15,14 @@ from .utils import log_debug, safe_subn
 from taogpt.prompts import PromptDb
 
 
+def retry_on_parse_error(e, error_report_prompt, response, original_prompts, prompts_to_be_sent, my_invocation):
+    if isinstance(e, ParseError) and len(prompts_to_be_sent) <= len(original_prompts):
+        prompts_to_be_sent.append((ROLE_SOLVER, response))
+        message = error_report_prompt.format(error=str(e))
+        prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
+        my_invocation.executor.logger.log(f"\n***RETRY***\n{message}")
+
+
 @_dc.dataclass(repr=False)
 class Step(StepABC):
     previous: Step | None
@@ -141,25 +149,7 @@ class TaoAnalysisStep(TaoReplyStep):
         return _utils.str_or_blank(self.description)
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        prompt_db: PromptDb  = my_invocation.executor.prompts
-        prompts: _t.List[(str, str)] = my_invocation.executor.show_conversation_thread()
-        prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_direct_solve))
-        llm: taogpt.LLM = my_invocation.executor.llm
-        intuition: str | None = None
-        n_retries = 0
-        while True:
-            try:
-                intuition = llm.ask('',prompts, reason='intuition', temperature=0.0)
-                break
-            except Exception as e:
-                n_retries += 1
-                time.sleep(n_retries)
-                if n_retries >= MAX_RETRIES:
-                    raise e
-        return ProceedStep(self, "How do you want to proceed?", ROLE_ORCHESTRATOR,
-                           prepared=intuition,
-                           initial_expansion=my_invocation.executor.max_search_branching_factor,
-                           first_problem_solving_step=True)
+        return None
 
 
 @_dc.dataclass(repr=False)
@@ -232,6 +222,7 @@ class PlanStep(TaoReplyStep):
 
 @_dc.dataclass(repr=False)
 class FinalAnswerStep(TaoReplyStep):
+    TYPE_SPEC = FINAL_ANSWER
 
     @property
     def step_title(self) -> str:
@@ -247,17 +238,52 @@ class AskQuestionStep(TaoReplyStep):
     def step_title(self) -> str:
         return AskQuestionStep.TYPE_SPEC
 
+    def __post_init__(self):
+        super().__post_init__()
+        self._need_consolidate = False
+
     def __repr_local__(self) -> str:
         p = super().__repr_local__()
         return f"{p},questions={_utils.safe_subn(self.description)[:10]}..."
 
+    @property
+    def need_consolidate(self) -> bool:
+        return self._need_consolidate
+
+    def need_consolidate_multiple_questions(self, true_or_false: bool):
+        self._need_consolidate = true_or_false
+
     def eval_only(self, my_invocation: Invocation) -> Step | None:
+        if self._need_consolidate:
+            prompts: _t.List[(str, str)] = my_invocation.executor.show_conversation_thread()[:-1]
+            self.description = self.consolidate_questions(
+                my_invocation.executor, prompts, self.description)
+            self._need_consolidate = False
         questions = parse_ordered_list(self.description)
         reply = my_invocation.executor.ask_user(questions)
         reply = _utils.str_or_blank(reply)
         if reply == '':
             return None
         return UserReplyStep(self, reply, ROLE_USER)
+
+    @staticmethod
+    def consolidate_questions(executor: taogpt.Executor,
+                              conversation_chain: _t.List[(str, str)],
+                              question_text: str) -> str:
+        conversation_chain.append((ROLE_SOLVER, question_text))
+        conversation_chain.append((ROLE_ORCHESTRATOR, executor.prompts.orchestrator_summarize_questions))
+        llm: taogpt.LLM = executor.llm
+        n_retries = 0
+        while True:
+            try:
+                reply = llm.ask(executor.prompts.system_step_expansion,
+                                conversation_chain, reason='consolidate_questions', temperature=0.0)
+                return reply
+            except Exception as e:
+                n_retries += 1
+                time.sleep(n_retries)
+                if n_retries >= MAX_RETRIES:
+                    raise e
 
 
 def parse_to_step(step: Step, response: str) -> Step:
@@ -268,6 +294,8 @@ def parse_to_step(step: Step, response: str) -> Step:
         step_type, step_def = type_and_def
         if step_type == DirectAnswerStep.TYPE_SPEC:
             step_class = DirectAnswerStep
+        elif step_type == FinalAnswerStep.TYPE_SPEC:
+            step_class = FinalAnswerStep
         elif step_type == AskQuestionStep.TYPE_SPEC:
             step_class = AskQuestionStep
         elif step_type == GiveUpStep.TYPE_SPEC:
@@ -282,8 +310,9 @@ def parse_to_step(step: Step, response: str) -> Step:
 @_dc.dataclass(repr=False)
 class ExpandableStep(Step):
     choices: _t.List[Step] | None = None
-    prepared: str|None = None
     initial_expansion: int = 1
+    incremental_expansion: int = 1
+    max_expansion: int = 4
     first_problem_solving_step: bool = False
 
     @property
@@ -291,12 +320,12 @@ class ExpandableStep(Step):
         return "A step-by-step plan"
 
     def __repr_local__(self) -> str:
-        return repr(self.choices)
+        return f"{repr(self.choices)},ptr={self._ptr}"
 
     def __post_init__(self):
         super().__post_init__()
-        self._prepared_inserted: bool = False
-        self._all_criticisms: {str} = set()
+        self._ptr = 0
+        self._all_criticisms: {int: {str}} = dict()
 
     def is_first_problem_solving_step(self) -> bool:
         return self.first_problem_solving_step
@@ -306,28 +335,30 @@ class ExpandableStep(Step):
         return self._all_criticisms
 
     def record_criticism(self, additional_criticisms: [str]):
-        self._all_criticisms.update(additional_criticisms)
+        assert self._ptr >= 0
+        if not self._ptr in self._all_criticisms:
+            self._all_criticisms[self._ptr] = set()
+        self._all_criticisms[self._ptr].update(additional_criticisms)
 
     def _expansion_reason(self) -> str:
         return 'expand_choices'
 
     def expand_choices(self, my_invocation: Invocation, upto_branches: int):
-        upto_branches = min(upto_branches, my_invocation.executor.max_search_branching_factor)
+        upto_branches = min(upto_branches, my_invocation.executor.max_search_expansion)
         prompt_db: PromptDb  = my_invocation.executor.prompts
         system_prompt = prompt_db.system_step_expansion
         direct_answer = prompt_db.tao_template_intuitive_answer if self.is_first_problem_solving_step() \
             else prompt_db.tao_template_direct_step_answer
-        examples = '' if self.is_first_problem_solving_step() else prompt_db.tao_templates_examples
         examples = ''
         tao_templates = prompt_db.tao_templates.format(examples=examples, direct_answer_template=direct_answer)
         prompts: _t.List[(str, str)] = my_invocation.executor.show_conversation_thread()
         prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
-        last_criticisms = my_invocation.executor.find_last_criticisms(my_invocation)
-        if len(last_criticisms) > 0:
-            criticism = prompt_db.orchestrator_critics.format(criticisms='\n\n---\n'.join(last_criticisms))
-            prompts.append((ROLE_ORCHESTRATOR, criticism))
         if self.choices is None:
             self.choices = []
+        if len(self.choices) > 0:
+            prior_plans_and_criticisms = self.gather_choices_with_criticisms()
+            criticism = prompt_db.orchestrator_critics.format(criticisms='\n\n---\n'.join(prior_plans_and_criticisms))
+            prompts.append((ROLE_ORCHESTRATOR, criticism))
         while len(self.choices) < upto_branches:
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
@@ -335,7 +366,7 @@ class ExpandableStep(Step):
             while n_retries < MAX_RETRIES:
                 try:
                     n = len(self.choices)
-                    temperature = 0.0 if len(self.choices) == 0 else None
+                    temperature = 0.3 if len(self.choices) == 0 else None # todo: configurable
                     plan = my_invocation.executor.llm.ask(system_prompt, prompts_to_be_sent,
                                                           reason=self._expansion_reason(),
                                                           step_id=f"{self.step_id}/{n}",
@@ -348,25 +379,22 @@ class ExpandableStep(Step):
                     break
                 except Exception as e:
                     n_retries += 1
-                    self.retry_on_parse_error(e, prompt_db.orchestrator_expand_parse_error,
-                                              plan, prompts,
-                                              prompts_to_be_sent, my_invocation)
+                    retry_on_parse_error(e, prompt_db.orchestrator_expand_parse_error,
+                                         plan, prompts, prompts_to_be_sent, my_invocation)
                     if n_retries >= MAX_RETRIES:
                         print(f"failed after {n_retries}")
                         raise e
-        if len(_utils.str_or_blank(self.prepared)) > 0 and not self._prepared_inserted:
-            self.prepared = _utils.str_or_blank(self.prepared)
-            if UNSOLVABLE not in self.prepared:
-                self.prepared = prompt_db.intuitive_answer.format(self.prepared)
-            self.choices.append(parse_to_step(self, self.prepared))
-            self._prepared_inserted = True
 
-    def retry_on_parse_error(self, e, error_report_prompt, response, prompts, prompts_to_be_sent, my_invocation):
-        if isinstance(e, ParseError) and len(prompts_to_be_sent) <= len(prompts):
-            prompts_to_be_sent.append((ROLE_SOLVER, response))
-            message = error_report_prompt.format(error=str(e))
-            prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
-            my_invocation.executor.logger.log(f"\n***RETRY***\n{message}")
+    def gather_choices_with_criticisms(self):
+        prior: Step
+        prior_plans_and_criticisms = []
+        for i, prior in enumerate(self.choices):
+            desc_with_criticism = f"[Prior approach {i + 1}] {prior.description}"
+            if i in self._all_criticisms:
+                desc_with_criticism += "\n\ncriticism:\n"
+                desc_with_criticism += '\n'.join([f"* {s.strip()}" for s in self._all_criticisms[i]])
+            prior_plans_and_criticisms.append(desc_with_criticism)
+        return prior_plans_and_criticisms
 
     def rank_choices(self, my_invocation: Invocation, n_existing_choices: int=None):
         prompt_db: PromptDb  = my_invocation.executor.prompts
@@ -376,10 +404,6 @@ class ExpandableStep(Step):
         tao_templates = prompt_db.tao_templates.format(
             examples='', direct_answer_template=direct_answer)
         prompts = my_invocation.executor.show_conversation_thread()
-        last_criticisms = my_invocation.executor.find_last_criticisms(my_invocation)
-        if len(last_criticisms) > 0:
-            criticism = prompt_db.orchestrator_critics.format(criticisms='\n\n---\n'.join(last_criticisms))
-            prompts.append((ROLE_ORCHESTRATOR, criticism))
         work_prompt = prompt_db.orchestrator_eval_strategy_choices.format(
             tao_templates='', # skip template
             approaches='\n\n---\n\n'.join([
@@ -410,23 +434,36 @@ class ExpandableStep(Step):
                         rankings_one_based[plan] += score
                     self.check_duplicates(dupes, scores, ranking_types)
                     n_success += 1
-                    log_debug(f"===> received ranking {n_success}: {response[:20]}...", level=2)
                     break
                 except Exception as e:
                     n_retries += 1
                     if n_retries >= MAX_RETRIES:
                         raise e
-                    self.retry_on_parse_error(e, prompt_db.orchestrator_parse_error,
-                                              response, prompts,
-                                              prompts_to_be_sent, my_invocation)
+                    retry_on_parse_error(e, prompt_db.orchestrator_parse_error,
+                                         response, prompts, prompts_to_be_sent, my_invocation)
         final_score_repr = '\n'.join([f"{k}. score {v}" for k, v in rankings_one_based.items()])
-        my_invocation.executor.logger.log(f"\n### Final scores:\n{final_score_repr}\n\n")
         indices = self.sort_rankings(rankings_one_based, n_existing_choices)
+        my_invocation.executor.logger.log(f"\n**Sorted indices**: {indices} **scores**:\n{final_score_repr}\n\n")
         if len(indices) == 0:
             raise Backtrack(f"No valid plan found for this step.", my_invocation)
+        if self.consolidate_questions(self.choices, indices):
+            my_invocation.executor.logger.log(f"\n**Questions consolidated, final indices**: {indices}\n\n")
         if n_existing_choices is not None and n_existing_choices > 0:
             indices = list(range(n_existing_choices)) + indices
         self.choices = [self.choices[i] for i in indices]
+
+    @staticmethod
+    def consolidate_questions(choices, indices) -> bool:
+        question_indices = [i for i in indices if isinstance(choices[i], AskQuestionStep)]
+        if len(question_indices) > 1:
+            merged_question: AskQuestionStep = choices[question_indices[0]]
+            for i in range(len(question_indices) - 1, 0, -1):  # all except first in reversed order
+                question_index = question_indices[i]
+                merged_question.description += '\n\n---\n\n' + choices[question_index].description
+                indices.remove(question_index)
+            merged_question.need_consolidate_multiple_questions(True)
+            return True
+        return False
 
     @staticmethod
     def sort_rankings(rankings_one_based, n_existing_choices):
@@ -448,32 +485,27 @@ class ExpandableStep(Step):
 
     def retryable(self, invocation: Invocation):
         assert self.choices is not None
-        return len(self.choices) <= invocation.executor.max_search_branching_factor \
-            or invocation.current_choice < len(self.choices)
+        return len(self.choices) <= invocation.executor.max_search_expansion \
+            or self._ptr < len(self.choices)
 
     def backtrack(self, my_invocation: Invocation, backtrack: Backtrack|None):
-        if my_invocation.current_choice < len(self.choices):
-            my_invocation.current_choice += 1
+        if self._ptr < self.max_expansion:
+            self._ptr += 1
             return
-        current_branches = len(self.choices)
-        max_branches = my_invocation.executor.max_search_branching_factor
-        if current_branches < max_branches:
-            self.expand_choices(my_invocation, max_branches)
-            if len(self.choices) - current_branches > 1:
-                self.rank_choices(my_invocation, n_existing_choices=current_branches)
-        else: # shouldn't reach here due to the `retryable` check
-            raise RuntimeError("No more alternative", my_invocation) # this is just defensive
-        my_invocation.current_choice += 1
+        # should not happen due to the retryable(), this is just defensive
+        raise Backtrack("No more alternative", blame=my_invocation)
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        if self.choices is None:
-            self.expand_choices(my_invocation, upto_branches=self.initial_expansion)
-            if self.choices is not None and len(self.choices) > 1:
-                self.rank_choices(my_invocation)
+        if self.choices is None or len(self.choices) < self.max_expansion:
+            old_length = len(self.choices) if self.choices is not None else 0
+            incr = self.initial_expansion if self.choices is None else self.incremental_expansion
+            self.expand_choices(my_invocation, upto_branches=self._ptr + incr)
+            if self.choices is not None and len(self.choices) - old_length > 1:
+                self.rank_choices(my_invocation, n_existing_choices=old_length)
         if self.choices is None or len(self.choices) == 0:
             raise Backtrack('No viable options.', blame=my_invocation)
-        if my_invocation.current_choice < len(self.choices):
-            return self.choices[my_invocation.current_choice]
+        if self._ptr < len(self.choices):
+            return self.choices[self._ptr]
         else:
             raise Backtrack('No more options', blame=my_invocation)
 
@@ -500,7 +532,8 @@ class PresentTaskStep(Step):
         return ProceedStep(self,
                            '',
                            role=ROLE_ORCHESTRATOR,
-                           initial_expansion=my_invocation.executor.max_search_branching_factor,
+                           initial_expansion=my_invocation.executor.initial_search_expansion,
+                           max_expansion=my_invocation.executor.max_search_expansion,
                            first_problem_solving_step=True)
 
 

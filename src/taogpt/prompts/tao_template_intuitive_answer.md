@@ -1,6 +1,6 @@
-##### Strategy: **I_WILL_ANSWER_DIRECTLY**:
+## Strategy: Direct Answer
 
-If task rpoblem is simple and you know the correct answer to the whole problem, you 
+Only if task problem is simple and you know the correct answer to the whole problem, you 
 can answer it directly. If you need to write out any file contents, write out the content in markdown fenced code 
 block under its own file section.
 
