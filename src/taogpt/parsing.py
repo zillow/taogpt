@@ -78,28 +78,50 @@ def parse_ordered_list(markdown_text) -> [str]:
     return matches
 
 
+_json_response_re = re.compile(r"^.*(```(json)?\n+)(.+)(```).*$|^\s*(\{.+})\s*$", flags=re.DOTALL | re.IGNORECASE)
 _final_solution_check_re = re.compile(r"^\s*(yes|no)[.,]?\s+(.+)$", flags=re.DOTALL|re.IGNORECASE)
 
 
 def parse_final_response(text: str) -> (bool, str):
-    match = _final_solution_check_re.match(text)
-    if match:
-        return 'yes' == match.group(1).lower(), match.group(2)
-    raise ParseError("Response must start with 'yes' or 'no'.")
-    # return 'the answer is correct' in text.lower(), _utils.str_or_blank(text)
-
-
-_ranking_response_json_re = re.compile(r"^.*(```(json)?\n+)(.+)(```).*$|^\s*(\{.+})\s*$", flags=re.DOTALL|re.IGNORECASE)
-
-def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:
-    match = _ranking_response_json_re.match(text)
+    match = _json_response_re.match(text)
     if match is None:
         raise ParseError("no JSON hash found")
     json_text = match.group(3) if match.group(3) is not None else match.group(5)
     try:
-        rankings: _t.Dict[_t.Any] = json.loads(json_text)
+        judgements: _t.Dict[str, _t.Dict[str, _t.Union[bool, str]]] = json.loads(json_text)
     except json.JSONDecodeError as e:
-        raise ParseError("JSON parse error")
+        raise ParseError(f"JSON parse error: {e}")
+    if not isinstance(judgements, dict) or not all([isinstance(x, dict) for x in judgements.values()]):
+        raise ParseError("The response must be a JSON hash of hashes")
+    concerns = []
+    overall_reason: str|None = None
+    overall_correctness: bool = True
+    for concern, judgement in judgements.items():
+        if 'correctness' not in judgement:
+            raise ParseError(f"{concern} does not have the 'correctness' field.")
+        item_correctness = judgement['correctness']
+        if type(item_correctness) != bool:
+            raise ParseError(f"the 'correctness' field of {concern} is not a JSON boolean.")
+        overall_correctness = (overall_correctness and item_correctness)
+        if 'reason' in judgement:
+            if 'overall' == concern:
+                overall_reason = f"* overall: {judgement['reason']}"
+            else:
+                concerns.append(f"* {concern}: {judgement['reason']}")
+    if overall_reason is not None:
+        concerns.append(overall_reason)
+    return overall_correctness, '\n'.join(concerns)
+
+
+def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:
+    match = _json_response_re.match(text)
+    if match is None:
+        raise ParseError("no JSON hash found")
+    json_text = match.group(3) if match.group(3) is not None else match.group(5)
+    try:
+        rankings: _t.Dict[str, _t.Any] = json.loads(json_text)
+    except json.JSONDecodeError as e:
+        raise ParseError(f"JSON parse error: {e}")
     if not isinstance(rankings, dict) or not all([isinstance(x, dict) for x in rankings.values()]):
         raise ParseError("The response must be a JSON hash of hashes")
     if len(rankings) != expected_number:

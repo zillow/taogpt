@@ -14,6 +14,8 @@ class PromptDb:
     orchestrator_eval_strategy_choices: str
     orchestrator_next_step: str
     orchestrator_proceed: str
+    orchestrator_proceed_to_step: str
+    orchestrator_proceed_to_first_step: str
     orchestrator_expand_parse_error: str
     orchestrator_parse_error: str
     orchestrator_next_step_parse_error: str
@@ -42,6 +44,8 @@ class PromptDb:
             orchestrator_eval_strategy_choices=_read(path / 'orchestrator_rank_choices.md'),
             orchestrator_next_step=_read(path / 'orchestrator_next_step.md'),
             orchestrator_proceed=_read(path / 'orchestrator_proceed.md'),
+            orchestrator_proceed_to_step=_read(path / 'orchestrator_proceed_to_step.md'),
+            orchestrator_proceed_to_first_step=_read(path / 'orchestrator_proceed_to_first_step.md'),
             orchestrator_expand_parse_error=_read(path / 'orchestrator_expand_parse_error.md'),
             orchestrator_parse_error=_read(path / 'orchestrator_parse_error.md'),
             orchestrator_next_step_parse_error=_read(path / 'orchestrator_next_step_parse_error.md'),

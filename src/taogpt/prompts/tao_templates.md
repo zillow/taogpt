@@ -32,7 +32,13 @@ following template **strictly** so the orchestrator can parse it and show the qu
 ## Strategy: Step-by-step Plan
 
 In this strategy, you decompose the problem task or the step you are working at into a list of two or 
-more sub-tasks. Follow this template **strictly**:
+more sub-tasks. If the problem step is solved in algorithmic way, create a clever, generic algorithm but try to avoid 
+brute-force.
+
+For each step, provide a brief description and a brief explanation. You decompose only one level at a time, so no
+sub-list allowed. Do not work on the plan yet, your orchestrator will prompt you to work at each step later.
+
+Follow this template **strictly**:
 
 ```markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
@@ -41,13 +47,6 @@ more sub-tasks. Follow this template **strictly**:
 1. <step 1 description> [<explanation>]
 2. <step 2 description> [<explanation>]
 ```
-
-For each step, provide a brief description and a brief explanation. You decompose only one level at a time, so no 
-sub-list allowed. Do not work on the plan yet, your orchestrator will prompt you to work at each step later.
-
-The explanation text should go inside the brackets "[]".
-
-You should NOT write anything underneath the bullet list. Do not say what you will be working on next.
 
 {direct_answer_template}
 

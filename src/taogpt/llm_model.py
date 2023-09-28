@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import json
 import typing as _t
 import time as _time
 import math as _math
@@ -117,8 +119,17 @@ class LangChainLLM(LLM):
             global _last_conversation
             _last_conversation = messages
             reply = self.llm.predict_messages(messages)
-            self._logger.log(f"Reply: **{type(reply)}**\n")
-            self._logger.log(reply.content, demote_h1=True)
+            reply_content_logged = reply.content
+            is_json = ''
+            try:
+                payload = json.loads(reply_content_logged)
+                reply_content_logged = json.dumps(payload, indent=2)
+                reply_content_logged = f"```json\n{reply_content_logged}\n```\n"
+                is_json = 'JSON '
+            except json.JSONDecodeError:
+                pass
+            self._logger.log(f"{is_json}Reply: **{type(reply)}** temperature={temperature}\n")
+            self._logger.log(reply_content_logged, demote_h1=True)
             reply_len = len(reply.content)
             total_len = context_len + reply_len
             total_tokens_for_this = context_tokens + self.count_tokens(reply.content)

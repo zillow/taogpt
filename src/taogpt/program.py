@@ -171,7 +171,7 @@ class DirectAnswerStep(TaoReplyStep):
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         if not _utils.is_blank(self.next_step) and not self.is_final_step:
             prompt_db: PromptDb  = my_invocation.executor.prompts
-            work_prompt = prompt_db.orchestrator_proceed.format(step=self.next_step)
+            work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.next_step)
             return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
         return None
 
@@ -198,25 +198,21 @@ class GiveUpStep(TaoReplyStep):
 
 
 @_dc.dataclass(repr=False)
-class PlanStep(TaoReplyStep):
+class StepByStepPlan(TaoReplyStep):
     TYPE_SPEC = HERE_IS_MY_STEP_BY_STEP_PLAN
 
     @property
     def step_title(self) -> str:
-        return PlanStep.TYPE_SPEC
+        return StepByStepPlan.TYPE_SPEC
 
     def __repr_local__(self) -> str:
         p = super().__repr_local__()
         return f"{p}, {safe_subn(self.description)}"
 
-    def __post_init__(self):
-        super().__post_init__()
-        self.first_step = parse_ordered_list(self.description)[0]
-
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         # when evaluating this node, we are always at the first step
         prompt_db: PromptDb  = my_invocation.executor.prompts
-        work_prompt = prompt_db.orchestrator_proceed.format(step=self.first_step)
+        work_prompt = prompt_db.orchestrator_proceed_to_first_step
         return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
 
 
@@ -301,7 +297,7 @@ def parse_to_step(step: Step, response: str) -> Step:
         elif step_type == GiveUpStep.TYPE_SPEC:
             step_class = GiveUpStep
         else:
-            step_class = PlanStep
+            step_class = StepByStepPlan
         if step_def is None:
             raise ParseError(f"Missing details.")
     return step_class(step, description=step_def, role=ROLE_SOLVER)

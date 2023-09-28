@@ -1,7 +1,13 @@
-Tao has presented the above final solution for the task problem.
+Tao has presented the above final solution for the task problem. Is the final answer presented correct? Please judge 
+on the overall correctness as well as the correctness of any individual concerns applicable.
 
-Is the final answer presented correct? Do not solve the task/problem, just check the answer.
+Response must be in valid JSON like this:
 
-Note: the answer must not change or violate the requirements of the problem statement.
-
-Respond with `yes` or `no` followed by any explanation you may have.
+```json
+{{
+  "overall": {{"correctness": false, "reason": "Multiple errors with this answer."}},
+  "calculation": {{"correctness": false, "reason": "(12 - 1) * 3 does not equal to 22."}},
+  "completeness": {{"correctness": false, "reason": "The answer is incomplete."}},
+  "syntax": {{"correctness": true, "reason": "The Python codes in the answer have correct syntax."}}
+}}
+```

@@ -1,14 +1,23 @@
 from mocks import MockLLM, create_orchestrator, logger
 from taogpt.program import *
-from taogpt.parsing import ParseError
+from taogpt.parsing import ParseError, parse_final_response
 
 _logger = logger
 
 
 def test_check_final_solution_success(logger):
+    text = """{
+    "overall": {"correctness": true, "reason": "All right!"},
+    "calculation": {"correctness": true, "reason": "Good math!"}
+    }
+    """
+    overall, concerns = parse_final_response(text)
+    assert overall
+    assert concerns == "* calculation: Good math!\n* overall: All right!"
+
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         assert reason == 'check_final_solution'
-        return "Yes. It is good."
+        return text
 
     invocation, llm, orchestrator = create_final_check_chain(reply, logger)
     orchestrator.check_final_solution(invocation)
@@ -17,9 +26,19 @@ def test_check_final_solution_success(logger):
 
 
 def test_check_final_solution_failed(logger):
+    text = """{
+    "overall": {"correctness": false, "reason": "The math is wrong."},
+    "calculation": {"correctness": false, "reason": "1 + 1 != 3"},
+    "etc": {"correctness": true, "reason": "Good"}
+    }
+    """
+    overall, concerns = parse_final_response(text)
+    assert not overall
+    assert concerns == "* calculation: 1 + 1 != 3\n* etc: Good\n* overall: The math is wrong."
+
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         assert reason == 'check_final_solution'
-        return "No. It is wrong."
+        return text
 
     invocation, llm, orchestrator = create_final_check_chain(reply, logger)
     try:
@@ -30,9 +49,20 @@ def test_check_final_solution_failed(logger):
 
 
 def test_check_final_solution_parse_error(logger):
+    text = """// missing {
+    "overall": {"correctness": true, "reason": "All right!"},
+    "calculation": {"correctness": true, "reason": "Good math!"}
+    }
+    """
+    try:
+        parse_final_response(text)
+        assert False, "expecting ParseError not raised"
+    except ParseError:
+        pass
+
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         assert reason == 'check_final_solution'
-        return "I don't know."
+        return text
 
     invocation, llm, orchestrator = create_final_check_chain(reply, logger)
     try:
@@ -88,7 +118,7 @@ def test_no_full_expansion_at_subsequent_expandable_steps(logger):
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
-    step = PlanStep(step, "This is my plan:\n1. Do X\n2. Do Y", ROLE_SOLVER)
+    step = StepByStepPlan(step, "This is my plan:\n1. Do X\n2. Do Y", ROLE_SOLVER)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
     step = AskQuestionStep(step, "I have a question", ROLE_SOLVER)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
@@ -106,7 +136,7 @@ def test_record_criticism_to_expandable_steps(logger):
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
     expandable: ProceedStep = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
     orchestrator.chain.append(Invocation(expandable, _executor=orchestrator))
-    plan_step: PlanStep = PlanStep(expandable, "This is my plan:\n1. Do X\n2. Do Y", ROLE_SOLVER)
+    plan_step: StepByStepPlan = StepByStepPlan(expandable, "This is my plan:\n1. Do X\n2. Do Y", ROLE_SOLVER)
     expandable.choices = []
     expandable.choices.append(plan_step)
     orchestrator.chain.append(Invocation(plan_step, _executor=orchestrator))

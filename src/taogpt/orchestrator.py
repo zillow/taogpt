@@ -194,13 +194,13 @@ class Orchestrator(Executor):
         return conversation
 
     def next_step(self) -> Step | None:
+        system_prompt = self.prompts.system_step_expansion
         full_expansion = self.need_search_expansion_at_next_step()
         step = self._chain[-1].step
-        system_prompt = self.prompts.system_step_expansion
-        direct_answer = self.prompts.tao_template_direct_step_answer
-        work_prompt = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
-        if not isinstance(step, UserReplyStep):
+        if not isinstance(step, (UserReplyStep, TaoAnalysisStep)):
             prompts = self.show_conversation_thread()
+            direct_answer = self.prompts.tao_template_direct_step_answer
+            work_prompt = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
             prompts.append((ROLE_ORCHESTRATOR, work_prompt))
             prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_next_step))
             decision, next_or_final = self.vote(system_prompt,
@@ -216,7 +216,9 @@ class Orchestrator(Executor):
             if next_or_final != '':
                 return parse_to_step(step, next_or_final)
             else:
-                work_prompt = self.prompts.orchestrator_proceed.format(step=decision)
+                work_prompt = self.prompts.orchestrator_proceed_to_step.format(step=decision)
+        else:
+            work_prompt = self.prompts.orchestrator_proceed
         work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
                                      initial_expansion=self._initial_expansion,
                                      max_expansion=self.max_search_expansion,
@@ -237,7 +239,7 @@ class Orchestrator(Executor):
                 if isinstance(self._chain[i].step, PresentTaskStep):
                     is_direct_answer_only = True
                     break
-                elif isinstance(self._chain[i].step, (DirectAnswerStep, PlanStep)):
+                elif isinstance(self._chain[i].step, (DirectAnswerStep, StepByStepPlan)):
                     break
             last_step = self._chain[-1].step
             if is_direct_answer_only:
@@ -250,7 +252,7 @@ class Orchestrator(Executor):
         system_prompt = self.prompts.sage
         prompts = self.show_conversation_thread()
         summarize_prompt = self.prompts.orchestrator_summarize
-        prompts.append((ROLE_SAGE, summarize_prompt))
+        prompts.append((ROLE_ORCHESTRATOR, summarize_prompt))
         n_retries= 0
         ex: Exception|None = None
         while n_retries < MAX_RETRIES:
@@ -267,6 +269,8 @@ class Orchestrator(Executor):
                 if self._check_final:
                     self.check_final_solution(self._chain[-1])
                 return final_answer_step
+            except Backtrack as e:
+                raise e
             except Exception as e:
                 ex = e
                 n_retries += 1
