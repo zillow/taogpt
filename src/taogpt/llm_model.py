@@ -6,7 +6,7 @@ import time as _time
 import math as _math
 import tiktoken as _tiktoken
 from langchain.chat_models import ChatOpenAI as _ChatOpenAI
-from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_SOLVER, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
+from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_TAO, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
 import taogpt.utils as _utils
 from . import LLM
 
@@ -26,7 +26,7 @@ def get_last_conversation() -> _t.List|None:
 
 class LangChainLLM(LLM):
     APP_ROLE_TO_OPENAI_ROLE = {
-        ROLE_SOLVER: 'assistant',
+        ROLE_TAO: 'assistant',
         ROLE_ORCHESTRATOR: 'system',
         ROLE_SAGE: 'system',
         ROLE_USER: 'user',

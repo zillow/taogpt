@@ -112,7 +112,7 @@ class Orchestrator(Executor):
         except UnsolvableError as e:
             prev: Invocation|None = self._chain[-1] if len(self._chain) > 0 else None
             final_inv = Invocation(
-                FinalAnswerStep(prev.step if prev is not None else None, str(e), ROLE_SOLVER),
+                FinalAnswerStep(prev.step if prev is not None else None, str(e), ROLE_TAO),
                 _executor=self
             )
             self._chain.append(final_inv)
@@ -246,7 +246,7 @@ class Orchestrator(Executor):
                     break
             last_step = self._chain[-1].step
             if is_direct_answer_only:
-                final_answer_step = FinalAnswerStep(last_step.previous, last_step.description, ROLE_SOLVER)
+                final_answer_step = FinalAnswerStep(last_step.previous, last_step.description, ROLE_TAO)
                 self._chain[-1].step = final_answer_step
                 return final_answer_step
 
@@ -264,7 +264,7 @@ class Orchestrator(Executor):
                                         temperature=0.0,
                                         collapse_contents=dict(),
                                         log_request=n_retries == 0)
-                final_answer_step = FinalAnswerStep(self._chain[-1].step, response, ROLE_SOLVER)
+                final_answer_step = FinalAnswerStep(self._chain[-1].step, response, ROLE_TAO)
                 new_invocation = Invocation(final_answer_step, _executor=self)
                 self._chain.append(new_invocation)
                 return final_answer_step
@@ -399,7 +399,7 @@ class Orchestrator(Executor):
 
     def _handle_parse_error(self, e: Exception, n_retries, prompts, prompts_to_be_sent, response: str, retry_req: str):
         if isinstance(e, ParseError) and len(prompts_to_be_sent) <= len(prompts):
-            prompts_to_be_sent.append((ROLE_SOLVER, response))
+            prompts_to_be_sent.append((ROLE_TAO, response))
             message = retry_req.format(error=str(e))
             prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
             self.logger.log(f"\n***RETRY***\n{message}")

@@ -14,7 +14,7 @@ from taogpt.constants import (
     ROLE_GENIE,
     ROLE_ORCHESTRATOR,
     ROLE_SAGE,
-    ROLE_SOLVER,
+    ROLE_TAO,
     ROLE_SYSTEM,
     ROLE_USER
 )
@@ -89,7 +89,7 @@ class MarkdownLogger:
     role_color_map = {
         'system': 'lightgrey',
         ROLE_USER: 'lightgreen',
-        ROLE_SOLVER: 'lightyellow',
+        ROLE_TAO: 'lightyellow',
         'assistant': 'lightyellow',
         ROLE_ORCHESTRATOR: 'lightcyan',
         ROLE_SAGE: 'lightcyan',

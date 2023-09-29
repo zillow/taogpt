@@ -6,11 +6,11 @@ _logger = logger
 
 def test_consolidate_multiple_questions():
     choices = [
-        DirectAnswerStep(None, "This is an answer", ROLE_SOLVER),
-        AskQuestionStep(None, "1. Question 1.1\n2. Question 1.2", ROLE_SOLVER),
-        AskQuestionStep(None, "1. Question 2.1\n2. Question 2.2", ROLE_SOLVER),
-        DirectAnswerStep(None, "This is another answer", ROLE_SOLVER),
-        AskQuestionStep(None, "1. Question 3.1\n2. Question 3.2", ROLE_SOLVER),
+        DirectAnswerStep(None, "This is an answer", ROLE_TAO),
+        AskQuestionStep(None, "1. Question 1.1\n2. Question 1.2", ROLE_TAO),
+        AskQuestionStep(None, "1. Question 2.1\n2. Question 2.2", ROLE_TAO),
+        DirectAnswerStep(None, "This is another answer", ROLE_TAO),
+        AskQuestionStep(None, "1. Question 3.1\n2. Question 3.2", ROLE_TAO),
     ]
     original_choices = choices.copy()
     expected_merged_questions = f"{choices[2].description}\n\n---\n\n" \
@@ -28,9 +28,9 @@ def test_consolidate_multiple_questions():
 
 def test_consolidate_do_nothing_if_one_question():
     choices = [
-        DirectAnswerStep(None, "This is an answer", ROLE_SOLVER),
-        AskQuestionStep(None, "1. Question 1.1\n2. Question 1.2", ROLE_SOLVER),
-        DirectAnswerStep(None, "This is another answer", ROLE_SOLVER),
+        DirectAnswerStep(None, "This is an answer", ROLE_TAO),
+        AskQuestionStep(None, "1. Question 1.1\n2. Question 1.2", ROLE_TAO),
+        DirectAnswerStep(None, "This is another answer", ROLE_TAO),
     ]
     original_choices = choices.copy()
     expected_merged_questions = choices[1].description
@@ -46,8 +46,8 @@ def test_consolidate_do_nothing_if_one_question():
 
 def test_consolidate_do_nothing_if_no_questions():
     choices = [
-        DirectAnswerStep(None, "This is an answer", ROLE_SOLVER),
-        DirectAnswerStep(None, "This is another answer", ROLE_SOLVER),
+        DirectAnswerStep(None, "This is an answer", ROLE_TAO),
+        DirectAnswerStep(None, "This is another answer", ROLE_TAO),
     ]
     original_choices = choices.copy()
     indices = [1, 0]
@@ -57,5 +57,5 @@ def test_consolidate_do_nothing_if_no_questions():
 
 
 def test_step_types():
-    step = ProceedStep(None, '1. do X\n2. do Y', ROLE_SOLVER)
+    step = ProceedStep(None, '1. do X\n2. do Y', ROLE_TAO)
     assert isinstance(step, ExpandableStep)

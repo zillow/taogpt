@@ -17,7 +17,7 @@ from taogpt.prompts import PromptDb
 
 def retry_on_parse_error(e, error_report_prompt, response, original_prompts, prompts_to_be_sent, my_invocation):
     if isinstance(e, ParseError) and len(prompts_to_be_sent) <= len(original_prompts):
-        prompts_to_be_sent.append((ROLE_SOLVER, response))
+        prompts_to_be_sent.append((ROLE_TAO, response))
         message = error_report_prompt.format(error=str(e))
         prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
         my_invocation.executor.logger.log(f"\n***RETRY***\n{message}")
@@ -135,7 +135,7 @@ class AnalysisStep(Step):
                                                       step_id=f"{self.step_id}/{n_retries}",
                                                       log_request=n_retries == 0)
                 self.description = desc
-                self.role = ROLE_SOLVER
+                self.role = ROLE_TAO
                 self._analyzed = True
                 return None
             except Exception as e:
@@ -317,7 +317,7 @@ class AskQuestionStep(TaoReplyStep):
     def consolidate_questions(executor: taogpt.Executor,
                               conversation_chain: _t.List[(str, str)],
                               question_text: str) -> str:
-        conversation_chain.append((ROLE_SOLVER, question_text))
+        conversation_chain.append((ROLE_TAO, question_text))
         conversation_chain.append((ROLE_ORCHESTRATOR, executor.prompts.orchestrator_summarize_questions))
         llm: taogpt.LLM = executor.llm
         n_retries = 0
@@ -353,7 +353,7 @@ def parse_to_step(step: Step, response: str) -> Step:
             step_class = StepByStepPlan
         if step_def is None:
             raise ParseError(f"Missing details.")
-    return step_class(step, description=step_def, role=ROLE_SOLVER)
+    return step_class(step, description=step_def, role=ROLE_TAO)
 
 
 @_dc.dataclass(repr=False)
