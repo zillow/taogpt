@@ -70,6 +70,9 @@ class Executor(_abc.ABC):
     def ask_user(self, questions: [str]) -> str:
         raise NotImplementedError('No user agent feature in the base')
 
+    def ask_genie(self, codes: [str]) -> [str]:
+        raise NotImplementedError('No ask genie agent feature in the base')
+
     @_abc.abstractmethod
     def find_last_criticisms(self, invocation: Invocation) -> [str]:
         pass

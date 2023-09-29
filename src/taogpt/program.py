@@ -63,7 +63,6 @@ class Step(StepABC):
         cls = self.__class__.__name__
         sid = self.step_id if self.step_id is not None else 'root'
         sig = f"{sid}@{id(self)}@{cls}"
-        log_debug(f">>>>>>>>>> EVAL: {sig:>25} {_utils.safe_subn(self.description)}... <<<<<<<<<<<<")
         assert id(self) == id(my_invocation.step)
         returned = self.eval_only(my_invocation)
         return returned
@@ -94,13 +93,34 @@ class UserReplyStep(Step):
 
 
 @_dc.dataclass(repr=False)
-class AskForAnalysisStep(Step):
+class PythonGenieReplyStep(Step):
+
+    @property
+    def step_title(self) -> str:
+        return 'The Python Genie replies'
+
+    def __repr_local__(self) -> str:
+        p = super().__repr_local__()
+        return f"{p},reply={_utils.safe_subn(self.description)}..."
+
+    def retryable(self, invocation: Invocation):
+        return False # maybe we can ask the user again but Tao will do so by generating new questions.
+
+
+@_dc.dataclass(repr=False)
+class AnalysisStep(Step):
 
     @property
     def step_title(self) -> str:
         return 'ask for analysis'
 
+    def __post_init__(self):
+        super().__post_init__()
+        self._analyzed = False
+
     def eval_only(self, my_invocation: Invocation) -> Step | None:
+        if self._analyzed:
+            return None
         prompt_db: PromptDb  = my_invocation.executor.prompts
         if self.description is None or len(_utils.str_or_blank(self.description)) == 0:
             self.description = prompt_db.orchestrator_ask_init_analysis
@@ -114,7 +134,10 @@ class AskForAnalysisStep(Step):
                                                       temperature=0.0,
                                                       step_id=f"{self.step_id}/{n_retries}",
                                                       log_request=n_retries == 0)
-                return TaoAnalysisStep(self, desc, ROLE_SOLVER)
+                self.description = desc
+                self.role = ROLE_SOLVER
+                self._analyzed = True
+                return None
             except Exception as e:
                 n_retries += 1
                 if n_retries >= MAX_RETRIES:
@@ -134,22 +157,22 @@ class TaoReplyStep(Step):
         return _utils.str_or_blank(self.description)
 
 
-@_dc.dataclass(repr=False)
-class TaoAnalysisStep(TaoReplyStep):
-    @property
-    def step_title(self) -> str:
-        return 'initial analysis'
-
-    def __repr_local__(self) -> str:
-        p = super().__repr_local__()
-        return f"{p},{safe_subn(self.description)}"
-
-    @property
-    def description_with_extras(self):
-        return _utils.str_or_blank(self.description)
-
-    def eval_only(self, my_invocation: Invocation) -> Step | None:
-        return None
+# @_dc.dataclass(repr=False)
+# class TaoAnalysisStep(TaoReplyStep):
+#     @property
+#     def step_title(self) -> str:
+#         return 'initial analysis'
+#
+#     def __repr_local__(self) -> str:
+#         p = super().__repr_local__()
+#         return f"{p},{safe_subn(self.description)}"
+#
+#     @property
+#     def description_with_extras(self):
+#         return _utils.str_or_blank(self.description)
+#
+#     def eval_only(self, my_invocation: Invocation) -> Step | None:
+#         return None
 
 
 @_dc.dataclass(repr=False)
@@ -226,6 +249,34 @@ class FinalAnswerStep(TaoReplyStep):
 
 
 @_dc.dataclass(repr=False)
+class AskPythonGenieStep(TaoReplyStep):
+
+    TYPE_SPEC = WILL_ASK_GENIE
+
+    @property
+    def step_title(self) -> str:
+        return AskPythonGenieStep.TYPE_SPEC
+
+    def __post_init__(self):
+        super().__post_init__()
+        self._code_snippets = parse_python_snippets(self.description)
+        if len(self._code_snippets) == 0:
+            raise ParseError("No python code snippet inside markdown fenced block.")
+        pitch = "Python Genie, Python Genie, run the Python snippet underneath"
+        if pitch not in self.description:
+            self.description = f"{pitch}:\n\n{self.description}"
+
+    def eval_only(self, my_invocation: Invocation) -> Step | None:
+        results = [
+            _utils.exec_code_and_collect_outputs("Tao wants to execute this snippet of python codes:", codes.strip())
+            for codes in self._code_snippets
+        ]
+        result_markdown = '\n\n'.join(f"""```text\n{r}\n```""" for r in results)
+        return PythonGenieReplyStep(
+            self, f"Python Genie replied:\n\n{result_markdown}", ROLE_GENIE)
+
+
+@_dc.dataclass(repr=False)
 class AskQuestionStep(TaoReplyStep):
 
     TYPE_SPEC = WILL_ASK_QUESTIONS
@@ -294,6 +345,8 @@ def parse_to_step(step: Step, response: str) -> Step:
             step_class = FinalAnswerStep
         elif step_type == AskQuestionStep.TYPE_SPEC:
             step_class = AskQuestionStep
+        elif step_type == AskPythonGenieStep.TYPE_SPEC:
+            step_class = AskPythonGenieStep
         elif step_type == GiveUpStep.TYPE_SPEC:
             step_class = GiveUpStep
         else:

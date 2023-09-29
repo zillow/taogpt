@@ -6,7 +6,7 @@ import time as _time
 import math as _math
 import tiktoken as _tiktoken
 from langchain.chat_models import ChatOpenAI as _ChatOpenAI
-from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_SOLVER, ROLE_SYSTEM, ROLE_SAGE
+from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_SOLVER, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
 import taogpt.utils as _utils
 from . import LLM
 
@@ -31,6 +31,7 @@ class LangChainLLM(LLM):
         ROLE_SAGE: 'system',
         ROLE_USER: 'user',
         ROLE_SYSTEM: 'system',
+        ROLE_GENIE: 'system',
     }
 
     def __init__(self, llm: _ChatOpenAI,logger: _utils.MarkdownLogger, approx_token_factor: float=None):

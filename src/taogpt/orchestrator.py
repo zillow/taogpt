@@ -86,7 +86,7 @@ class Orchestrator(Executor):
         self.reset()
         self._chain.append(Invocation(root_step, _executor=self))
         if analyze_first:
-            init_analysis_step = AskForAnalysisStep(root_step, '', ROLE_ORCHESTRATOR)
+            init_analysis_step = AnalysisStep(root_step, '', ROLE_ORCHESTRATOR)
             self._chain.append(Invocation(init_analysis_step, _executor=self))
         self._execute_with_backtracking()
 
@@ -150,7 +150,7 @@ class Orchestrator(Executor):
             raise UnsolvableError('Fail to solve! No more viable options')
 
     def _halt_on_initial_steps(self, last: Invocation):
-        if isinstance(last.step, (PresentTaskStep, TaoAnalysisStep)):
+        if isinstance(last.step, (PresentTaskStep, AnalysisStep)):
             self._chain.append(last)
             raise UnsolvableError('Tao cannot solve the problem.')
 
@@ -197,7 +197,7 @@ class Orchestrator(Executor):
         system_prompt = self.prompts.system_step_expansion
         full_expansion = self.need_search_expansion_at_next_step()
         step = self._chain[-1].step
-        if not isinstance(step, (UserReplyStep, TaoAnalysisStep)):
+        if not isinstance(step, (UserReplyStep, PythonGenieReplyStep, AnalysisStep)):
             prompts = self.show_conversation_thread()
             direct_answer = self.prompts.tao_template_direct_step_answer
             work_prompt = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
@@ -233,20 +233,21 @@ class Orchestrator(Executor):
         return True
 
     def summarize_final_answer(self) -> FinalAnswerStep:
+        if self._check_final:
+            self.check_final_solution(self._chain[-1])
+
         is_direct_answer_only = False
         if isinstance(self._chain[-1].step, DirectAnswerStep):
             for i in range(len(self._chain) - 2, -1, -1):
                 if isinstance(self._chain[i].step, PresentTaskStep):
                     is_direct_answer_only = True
                     break
-                elif isinstance(self._chain[i].step, (DirectAnswerStep, StepByStepPlan)):
+                elif isinstance(self._chain[i].step, (DirectAnswerStep, PythonGenieReplyStep, StepByStepPlan)):
                     break
             last_step = self._chain[-1].step
             if is_direct_answer_only:
                 final_answer_step = FinalAnswerStep(last_step.previous, last_step.description, ROLE_SOLVER)
                 self._chain[-1].step = final_answer_step
-                if self._check_final:
-                    self.check_final_solution(self._chain[-1])
                 return final_answer_step
 
         system_prompt = self.prompts.sage
@@ -266,8 +267,6 @@ class Orchestrator(Executor):
                 final_answer_step = FinalAnswerStep(self._chain[-1].step, response, ROLE_SOLVER)
                 new_invocation = Invocation(final_answer_step, _executor=self)
                 self._chain.append(new_invocation)
-                if self._check_final:
-                    self.check_final_solution(self._chain[-1])
                 return final_answer_step
             except Backtrack as e:
                 raise e
@@ -278,12 +277,7 @@ class Orchestrator(Executor):
 
     def check_final_solution(self, invocation: Invocation):
         system_prompt = self.prompts.sage
-
-        def select_for_final(i, invc: Invocation):
-            step = invc.step
-            return isinstance(step, (PresentTaskStep, AskQuestionStep, UserReplyStep, FinalAnswerStep))
-
-        prompts = self.show_conversation_thread(selector=select_for_final)
+        prompts = self.show_conversation_thread()
         sage_prompt = self.prompts.sage_final_check
         prompts.append((ROLE_SAGE, sage_prompt))
         self.check_execution_state(system_prompt, prompts, invocation, parse_final_response,
@@ -345,6 +339,10 @@ class Orchestrator(Executor):
     def ask_user(self, questions: [str], input_fn=input) -> str:
         # for now just use the console input
         return ask_questions(input_fn, questions)
+
+    def ask_genie(self, codes: [str]) -> [str]:
+        return [_utils.exec_code_and_collect_outputs("Tao asks to execute the following codes:", snippet)
+                for snippet in codes]
 
     def find_last_criticisms(self, invocation: Invocation) -> {int: {str}}:
         criticism: {int: {str}} = dict()

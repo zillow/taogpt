@@ -12,6 +12,7 @@ _all_step_types = '|'.join([
 ])
 _step_type_re = re.compile(
     r"^#{1,2}\s*(I_WILL_ANSWER_DIRECTLY"
+    r"|LET_ME_ASK_THE_PYTHON_GENIE"
     r"|UNSOLVABLE_I_GIVE_UP"
     r"|FINAL_ANSWER"
     r"|I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED"
@@ -170,3 +171,10 @@ def parse_next_step_reply(text: str) -> (str, str|None):
 def is_final_answer(next_step) -> bool:
     next_step = _utils.str_or_blank(next_step).lower()
     return 'none' in next_step or 'this is the final step' in next_step
+
+
+_python_response_re = re.compile(r"```python\n+(.+?)```", flags=re.DOTALL | re.IGNORECASE)
+
+
+def parse_python_snippets(text: str) -> [str]:
+    return [m.group(1) for m in _python_response_re.finditer(text)]

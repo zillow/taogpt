@@ -2,6 +2,7 @@ from taogpt import parsing
 from taogpt.program import ExpandableStep
 from taogpt.constants import *
 from taogpt.prompts import PromptDb
+from taogpt.utils import eval_and_collect
 
 
 _REGULAR_RANKINGS = """This is what I think:
@@ -126,3 +127,32 @@ def test_parse_next_step_next():
     decision, answer = parsing.parse_next_step_reply(text)
     assert decision == 'the_next_step'
     assert answer == next_plan.strip()
+
+
+def test_parse_python_code_snippets():
+    code_snippets = [
+        "1234",
+        """
+x = 5
+y = 4
+x * y
+"""
+    ]
+    text = f"""free text before
+
+```python
+{code_snippets[0]}
+```
+
+```python
+{code_snippets[1]}
+```
+
+free text after
+    """
+    parsed: [str] = parsing.parse_python_snippets(text)
+    assert len(parsed) == 2
+    assert parsed[0].strip() == code_snippets[0].strip()
+    assert parsed[1].strip() == code_snippets[1].strip()
+    assert eval_and_collect(parsed[0]) == '=> 1234'
+    assert eval_and_collect(parsed[1]) == '=> 20'

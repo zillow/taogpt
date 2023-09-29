@@ -3,9 +3,21 @@ from __future__ import annotations
 import re
 import typing as _t
 import re as _re
+from io import StringIO as _StringIO
+import sys as _sys
+import ast as _ast
+
 from pathlib import Path as _Path
 from dataclasses import  MISSING as _MISSING
 from typing import Generic, TypeVar
+from taogpt.constants import (
+    ROLE_GENIE,
+    ROLE_ORCHESTRATOR,
+    ROLE_SAGE,
+    ROLE_SOLVER,
+    ROLE_SYSTEM,
+    ROLE_USER
+)
 
 _T = TypeVar('_T')
 
@@ -76,12 +88,12 @@ class MarkdownLogger:
     H1_RE = _re.compile(r"^# +(.+)")
     role_color_map = {
         'system': 'lightgrey',
-        'user': 'lightgreen',
-        'Tao': 'lightyellow',
-        'tao': 'lightyellow',
+        ROLE_USER: 'lightgreen',
+        ROLE_SOLVER: 'lightyellow',
         'assistant': 'lightyellow',
-        'orchestrator': 'lightcyan',
-        'sage': 'lightcyan',
+        ROLE_ORCHESTRATOR: 'lightcyan',
+        ROLE_SAGE: 'lightcyan',
+        ROLE_GENIE: 'lightsteelblue'
     }
 
     def __init__(self, log_path: str|_Path):
@@ -144,6 +156,44 @@ class MarkdownLogger:
         self.log('\n</div>\n</div>')
 
 
-def test():
-    print('a')
-    print('b')
+# credit: https://stackoverflow.com/questions/39379331/python-exec-a-code-block-and-eval-the-last-line
+def exec_then_eval(code):
+    block = _ast.parse(code, mode='exec')
+    # assumes last node is an expression
+    last = _ast.Expression(block.body.pop().value)
+    _globals, _locals = {}, {}
+    exec(compile(block, '<string>', mode='exec'), _globals, _locals)
+    return eval(compile(last, '<string>', mode='eval'), _globals, _locals)
+
+
+# credit: https://stackoverflow.com/questions/64209815/python-how-can-i-save-the-output-of-eval-in-a-variable
+def eval_and_collect(codes: str, return_value_indicator='=> ') -> str:
+    old_stdout = _sys.stdout
+    try:
+        _sys.stdout = mystdout = _StringIO()
+        ret = exec_then_eval(codes)
+        _sys.stdout = old_stdout
+        output = mystdout.getvalue()
+        if len(output) > 0 and not output.endswith('\n'):
+            output += '\n'
+        if ret is not None:
+            output += return_value_indicator + str(ret)
+        return output
+    finally:
+        _sys.stdout = old_stdout
+
+
+def exec_code_and_collect_outputs(prompt: str, codes: str) -> str:
+    while True:
+        answer = input(f"""{prompt}
+    
+```python
+{codes}
+```
+Reply "yes" to execute this code snippet, or "no" to cancel.
+        """)
+        if answer.strip().lower() == 'yes':
+            break
+        elif answer.strip().lower() == 'no':
+            raise KeyboardInterrupt("User cancelled the request")
+    return eval_and_collect(codes)
