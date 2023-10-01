@@ -27,7 +27,7 @@ I need to ask some questions.
                 return answers[1]
             return "Don't know"
 
-        answer_text = ask_questions(_ask, question_list)
+        answer_text = ask_questions(_ask, question_list, False)
         assert answer_text == f"""1. Yes
 2. Lobsters,
    lots of them.\n"""

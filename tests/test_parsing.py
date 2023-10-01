@@ -159,3 +159,85 @@ free text after
     assert parsed[1].strip() == code_snippets[1].strip()
     assert eval_and_collect(parsed[0]) == '=> 1234'
     assert eval_and_collect(parsed[1]) == '=> 20'
+
+
+def test_parse_step_by_step_plan_raise_invalid_json():
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PALN
+```json
+{{
+    "1": {{"description": "", "why": ""}},
+```
+"""
+    try:
+        parsing.parse_step_by_step_plan(text)
+        assert False, "Expecting ParseError but not raised"
+    except parsing.ParseError:
+        pass
+
+
+def test_parse_step_by_step_plan_raise_less_than_2_steps():
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PALN
+```json
+{{
+    "1": {{"description": "", "why": ""}}
+}}
+```
+"""
+    try:
+        parsing.parse_step_by_step_plan(text)
+        assert False, "Expecting ParseError but not raised"
+    except parsing.ParseError as e:
+        assert "Should have a least 2 steps" in str(e)
+
+
+def test_parse_step_by_step_plan_raise_key_not_integer():
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PALN
+```json
+{{
+    "1": {{"description": "", "why": ""}},
+    "a": {{"description": "", "why": ""}}
+}}
+```
+"""
+    try:
+        parsing.parse_step_by_step_plan(text)
+        assert False, "Expecting ParseError but not raised"
+    except parsing.ParseError as e:
+        assert "not an integer" in str(e)
+
+
+def test_parse_step_by_step_plan_raise_on_invalid_ordering():
+    steps = ["step 1", "step 2"]
+    reasons = ["reason 1"]
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PALN
+```json
+{{
+    "2": {{"description": "{steps[1]}"}},
+    "1": {{"description": "{steps[0]}", "why": "{reasons[0]}"}}
+}}
+```
+"""
+    try:
+        parsing.parse_step_by_step_plan(text)
+        assert False, "Expecting ParseError but not raised"
+    except parsing.ParseError as e:
+        assert "Element keys should be a contiguous natural number sequence starting at 1" in str(e)
+
+
+def test_parse_step_by_step_plan():
+    steps = ["step 1", "step 2"]
+    reasons = ["reason 1"]
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PALN
+```json
+{{
+    "1": {{"description": "{steps[0]}", "why": "{reasons[0]}"}},
+    "2": {{"description": "{steps[1]}"}}
+}}
+```
+"""
+    results = parsing.parse_step_by_step_plan(text)
+    assert len(results) == 2
+    assert results[0].description == steps[0]
+    assert results[0].why == reasons[0]
+    assert results[1].description == steps[1]
+    assert results[1].why == None

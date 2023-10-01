@@ -234,12 +234,15 @@ class StepByStepPlan(TaoReplyStep):
 
     def __post_init__(self):
         super().__post_init__()
-        self.first_step = parse_ordered_list(self.description)[0]
+        self._steps = parse_step_by_step_plan(self.description)
+        why = f" [{self._steps[0].why}]" if _utils.str_or_blank(self._steps[0].why) == '' else ''
+        self.first_step = f"{self._steps[0].description}{why}"
+        self.description = f"# {HERE_IS_MY_STEP_BY_STEP_PLAN}\n\n{self.description.strip()}"
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         # when evaluating this node, we are always at the first step
         prompt_db: PromptDb  = my_invocation.executor.prompts
-        work_prompt = prompt_db.orchestrator_proceed.format(step=self.first_step)
+        work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.first_step)
         return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
 
 
@@ -394,14 +397,15 @@ class ExpandableStep(Step):
         return 'expand_choices'
 
     def expand_choices(self, my_invocation: Invocation, upto_branches: int):
-        upto_branches = min(upto_branches, my_invocation.executor.config.max_search_expansion)
-        prompt_db: PromptDb  = my_invocation.executor.prompts
+        executor = my_invocation.executor
+        upto_branches = min(upto_branches, executor.config.max_search_expansion)
+        prompt_db: PromptDb  = executor.prompts
         system_prompt = prompt_db.system_step_expansion
         direct_answer = prompt_db.tao_template_intuitive_answer if self.is_first_problem_solving_step() \
             else prompt_db.tao_template_direct_step_answer
         examples = ''
         tao_templates = prompt_db.tao_templates.format(examples=examples, direct_answer_template=direct_answer)
-        prompts: _t.List[(str, str)] = my_invocation.executor.show_conversation_thread()
+        prompts: _t.List[(str, str)] = executor.show_conversation_thread()
         prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
         if self.choices is None:
             self.choices = []
@@ -416,13 +420,14 @@ class ExpandableStep(Step):
             while n_retries < MAX_RETRIES:
                 try:
                     n = len(self.choices)
-                    temperature = 0.3 if len(self.choices) == 0 else None # todo: configurable
-                    plan = my_invocation.executor.llm.ask(system_prompt, prompts_to_be_sent,
-                                                          reason=self._expansion_reason(),
-                                                          step_id=f"{self.step_id}/{n}",
-                                                          temperature=temperature,
-                                                          log_request=(len(self.choices) == 0 and n_retries == 0),
-                                                          collapse_contents={'tao_templates': tao_templates})
+                    temperature = executor.config.first_try_temperature if len(self.choices) == 0 \
+                        else executor.config.alternative_temperature
+                    plan = executor.llm.ask(system_prompt, prompts_to_be_sent,
+                                            reason=self._expansion_reason(),
+                                            step_id=f"{self.step_id}/{n}",
+                                            temperature=temperature,
+                                            log_request=(len(self.choices) == 0 and n_retries == 0),
+                                            collapse_contents={'tao_templates': tao_templates})
                     choice = parse_to_step(self, plan)
                     self.choices.append(choice)
                     log_debug(f"===> received choice {len(self.choices)}: {plan[:30]}...", level=2)

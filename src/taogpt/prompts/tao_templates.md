@@ -40,15 +40,18 @@ Do not work on the plan yet, Orchestrator will prompt you to work at each step l
 added, but instead of going back to a previous step upon failure, you should take a note of the condition and 
 Orchestrator will guide you by backtracking.
 
-Follow this template **strictly**:
+Follow this markdown template **strictly**:
 
-```markdown
+`````markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
-<analysis and explanation>
-
-1. <step 1 description> [<explanation>]
-2. <step 2 description> [<explanation>]
+```json
+{{
+  "1": {{"description": "<step 1 description>", "why": "<explanation>"}},
+  "2": {{"description": "<step 2 description>", "why": "<explanation>"}},
+  // ...
+}}
 ```
+`````
 
 ## Strategy: Ask the Python Genie
 

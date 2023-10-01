@@ -41,7 +41,10 @@ Which step you want to work on next? You can choose one of two options below.
     I want to work on: get_a_random_even_number
     
     # HERE_IS_MY_STEP_BY_STEP_PLAN
-    1. roll the dice
-    2. multiply the number by 2
+    {
+      "1": {"description": "roll the dice"},
+      "2": {"description": "multiple the number by 2"},
+      ...
+    }
     ```
 

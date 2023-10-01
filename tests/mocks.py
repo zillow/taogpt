@@ -3,7 +3,7 @@ import typing as _t
 import pytest
 import tiktoken
 
-from taogpt import LLM, MarkdownLogger, PromptDb
+from taogpt import LLM, MarkdownLogger, PromptDb, Config
 from taogpt.orchestrator import Orchestrator
 from taogpt.utils import str_or_blank
 
@@ -63,8 +63,8 @@ def logger():
 
 def create_orchestrator(llm: MockLLM, logger: MarkdownLogger, check_final=True):
     return Orchestrator(
+        config=Config(check_final=check_final),
         llm=llm,
         markdown_logger=logger,
-        prompts=PromptDb.load_defaults(),
-        check_final=check_final
+        prompts=PromptDb.load_defaults()
     )

@@ -2,9 +2,14 @@ from __future__ import annotations
 import re
 import json
 import typing as _t
+import dataclasses as _dc
 import taogpt.utils as _utils
-from taogpt.constants import WILL_ASK_QUESTIONS, WILL_ANSWER_DIRECTLY, \
-    DONE, FREE_TEXT, FINAL_ANSWER
+from taogpt.constants import (
+    WILL_ASK_QUESTIONS,
+    WILL_ANSWER_DIRECTLY, \
+    DONE,
+    FREE_TEXT
+)
 
 _all_step_types = '|'.join([
     WILL_ANSWER_DIRECTLY,
@@ -114,17 +119,32 @@ def parse_final_response(text: str) -> (bool, str):
     return overall_correctness, '\n'.join(concerns)
 
 
+@_dc.dataclass
+class StepDescriptor:
+    description: str
+    why: str
+
+
+def parse_step_by_step_plan(text: str) -> _t.Dict[int, StepDescriptor]:
+    results: {int: StepDescriptor} = dict()
+    for i, item in parse_json_hash(text).items():
+        if not re.match(r"^\d+$", i):
+            raise ParseError(f"JSON hash key '{i}' is not an integer")
+        key = int(i)
+        index = len(results) + 1
+        if key != index:
+            raise ParseError(f"Element keys should be a contiguous natural number sequence starting at 1. "
+                             f"Key '{key}' should be '{index}'.")
+        if 'description' not in item:
+            raise ParseError(f'Missing description for step {key}')
+        results[index-1] = StepDescriptor(item['description'], item.get('why', None))
+    if len(results) < 2:
+        raise ParseError("Should have a least 2 steps in the plan. If only one step, choose answering directly")
+    return results
+
+
 def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:
-    match = _json_response_re.match(text)
-    if match is None:
-        raise ParseError("no JSON hash found")
-    json_text = match.group(3) if match.group(3) is not None else match.group(5)
-    try:
-        rankings: _t.Dict[str, _t.Any] = json.loads(json_text)
-    except json.JSONDecodeError as e:
-        raise ParseError(f"JSON parse error: {e}")
-    if not isinstance(rankings, dict) or not all([isinstance(x, dict) for x in rankings.values()]):
-        raise ParseError("The response must be a JSON hash of hashes")
+    rankings = parse_json_hash(text)
     if len(rankings) != expected_number:
         raise ParseError(f"Expecting {expected_number} score rankings but found {len(rankings)}.")
     results: {int: float} = dict()
@@ -154,6 +174,20 @@ def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[
         raise ParseError(f"Expecting {expected_number} rankings, received {len(results)}")
     assert len(results.keys() & dupes.keys()) == 0
     return results, dupes
+
+
+def parse_json_hash(text):
+    match = _json_response_re.match(text)
+    if match is None:
+        raise ParseError("no JSON hash found")
+    json_text = match.group(3) if match.group(3) is not None else match.group(5)
+    try:
+        responses: _t.Dict[str, _t.Any] = json.loads(json_text)
+    except json.JSONDecodeError as e:
+        raise ParseError(f"JSON parse error: {e}")
+    if not isinstance(responses, dict) or not all([isinstance(x, dict) for x in responses.values()]):
+        raise ParseError("The response must be a JSON hash of hashes")
+    return responses
 
 
 def parse_next_step_reply(text: str) -> (str, str|None):

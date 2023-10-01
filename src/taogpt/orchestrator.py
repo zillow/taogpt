@@ -184,9 +184,11 @@ class Orchestrator(Executor):
 
     def next_step(self) -> Step | None:
         system_prompt = self.prompts.system_step_expansion
-        full_expansion = self.need_search_expansion_at_next_step()
+        start_sovling = self.need_search_expansion_at_next_step()
         step = self._chain[-1].step
-        if not isinstance(step, (UserReplyStep, PythonGenieReplyStep, AnalysisStep)):
+        if start_sovling:
+            work_prompt = self.prompts.orchestrator_proceed
+        else:
             prompts = self.show_conversation_thread()
             direct_answer = self.prompts.tao_template_direct_step_answer
             work_prompt = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
@@ -206,12 +208,10 @@ class Orchestrator(Executor):
                 return parse_to_step(step, next_or_final)
             else:
                 work_prompt = self.prompts.orchestrator_proceed_to_step.format(step=decision)
-        else:
-            work_prompt = self.prompts.orchestrator_proceed
         work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
                                      initial_expansion=self.config.initial_expansion,
                                      max_expansion=self.config.max_search_expansion,
-                                     first_problem_solving_step=full_expansion)
+                                     first_problem_solving_step=start_sovling)
         return work_next_step
 
     def need_search_expansion_at_next_step(self):
@@ -327,7 +327,7 @@ class Orchestrator(Executor):
 
     def ask_user(self, questions: [str], input_fn=input) -> str:
         # for now just use the console input
-        return ask_questions(input_fn, questions)
+        return ask_questions(input_fn, questions, self.config.ask_user_questions_in_one_prompt)
 
     def ask_genie(self, codes: [str]) -> [str]:
         prompt = "Tao asks to execute the following codes:" \
@@ -397,7 +397,15 @@ class Orchestrator(Executor):
             print(f"failed after {n_retries}")
             raise e
 
-def ask_questions(input_fn, questions):
+def ask_questions(input_fn, questions: [str], one_prompt: bool):
+    if one_prompt:
+        user_prompt = "Tao wants to ask:\n"
+        user_prompt += "\n".join([f"{i+1}. {questions[i]}" for i in range(len(questions))])
+        user_prompt += '\n(Reply "cancel" to cancel.)'
+        reply = input_fn(user_prompt).strip()
+        if reply.lower() == 'cancel':
+            raise KeyboardInterrupt("User cancelled")
+        return reply
     reply = ""
     for i in range(len(questions)):
         reply_text = questions[i]
@@ -409,6 +417,8 @@ def ask_questions(input_fn, questions):
         indent = ' ' * len(bullet)
         reply_text = f"{bullet}{reply_lines[0]}"
         for i in range(1, len(reply_lines)):
+            if reply_lines[i].strip().lower() == 'cancel':
+                raise KeyboardInterrupt("User cancelled")
             reply_text += '\n' + indent + reply_lines[i].strip()
         reply += reply_text + '\n'
     return reply
