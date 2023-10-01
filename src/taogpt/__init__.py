@@ -36,8 +36,23 @@ class LLM:
         return content_to_be_logged
 
 
+@_dc.dataclass
+class Config:
+    initial_expansion: int = 1,
+    max_search_expansion: int = 4
+    ask_user_before_execute_codes: bool = True
+    max_tokens: int = 10000,
+    max_tree_branches: int = 4,
+    check_final: bool = False,
+    max_tokens_for_sage_llm: int | None = None
+
 
 class Executor(_abc.ABC):
+
+    @property
+    @_abc.abstractmethod
+    def config(self) -> Config:
+        pass
 
     @property
     @_abc.abstractmethod
@@ -76,14 +91,6 @@ class Executor(_abc.ABC):
     @_abc.abstractmethod
     def find_last_criticisms(self, invocation: Invocation) -> [str]:
         pass
-
-    @property
-    def initial_search_expansion(self) -> int:
-        return 1
-
-    @property
-    def max_search_expansion(self) -> int:
-        return 4
 
 
 class StepABC(_abc.ABC):

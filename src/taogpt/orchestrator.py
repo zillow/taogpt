@@ -4,7 +4,7 @@ import typing as _t
 import math as _math
 from frozenlist import FrozenList as _FrozenList
 
-from . import Executor, UnsolvableError, MarkdownLogger, LLM
+from . import Config, Executor, UnsolvableError, MarkdownLogger
 from .llm_model import *
 from .program import *
 import taogpt.utils as _utils
@@ -13,41 +13,36 @@ import taogpt.utils as _utils
 class Orchestrator(Executor):
 
     def __init__(self, *,
+                 config: Config,
                  llm: LLM,
                  prompts: PromptDb,
                  markdown_logger: _utils.MarkdownLogger,
-                 ask_user_before_execute_codes=True,
-                 max_tokens: int = 10000,
-                 initial_expansion: int = 1,
-                 max_tree_branches: int = 4,
-                 check_final: bool = False,
-                 sage_llm: LLM | None = None,
-                 max_tokens_for_sage_llm: int | None = None):
+                 sage_llm: LLM | None = None):
+        self._config = type(config)(**_dc.asdict(config))
         self._llm = llm
         self._prompts = prompts
         self._markdown_logger = markdown_logger
-        self._ask_user_before_execute_codes = ask_user_before_execute_codes
-        self._max_tokens = max_tokens
-        self._initial_expansion = initial_expansion
-        self._max_tree_branches = max_tree_branches
-        self._check_final = check_final
         self._sage_llm = sage_llm
 
         self._chain: [Invocation] = []
         self._frozen_chain: _FrozenList | None = None
-        if max_tokens_for_sage_llm is None:
+        if self.config.max_tokens_for_sage_llm is None:
             if self._sage_llm is not None and id(self._llm) != id(self._sage_llm):
-                self._max_tokens_for_sage_llm = self._max_tokens // 3
+                self.config.max_tokens_for_sage_llm = self.config.max_tokens // 3
             else:
-                self._max_tokens_for_sage_llm = self._max_tokens
+                self.config.max_tokens_for_sage_llm = self.config.max_tokens
         else:
-            self._max_tokens_for_sage_llm = max_tokens_for_sage_llm
+            self.config.max_tokens_for_sage_llm = self.config.max_tokens_for_sage_llm
 
     def __repr__(self) -> str:
         llm_repr = repr(self.llm)
         sage_llm_repr = repr(self.sage_llm)
         n = len(self._chain)
         return f"{self.__class__.__name__}(LLMs={llm_repr}/{sage_llm_repr},invocations={n})"
+
+    @property
+    def config(self) -> Config:
+        return self._config
 
     @property
     def llm(self) -> LLM:
@@ -69,18 +64,6 @@ class Orchestrator(Executor):
     def chain(self) -> _t.List[Invocation]:
         return self._chain
 
-    @property
-    def initial_search_expansion(self) -> int:
-        return self._initial_expansion
-
-    @property
-    def max_search_expansion(self) -> int:
-        return self._max_tree_branches
-
-    @property
-    def ask_user_before_execute_codes(self):
-        return self._ask_user_before_execute_codes
-
     def start(self, task: str | Step, analyze_first=False):
         if isinstance(task, str):
             root_step = PresentTaskStep(None, task, role=ROLE_USER)
@@ -98,12 +81,12 @@ class Orchestrator(Executor):
 
     def resume(self, additional_tokens: int=None, additional_tokens_for_smarter_llm: int=None):
         if additional_tokens is not None:
-            self._max_tokens += additional_tokens
-            print(f"extend token allowance by {additional_tokens} to {self._max_tokens}")
+            self.config.max_tokens += additional_tokens
+            print(f"extend token allowance by {additional_tokens} to {self.config.max_tokens}")
         if additional_tokens_for_smarter_llm is not None:
-            self._max_tokens_for_sage_llm += additional_tokens_for_smarter_llm
+            self.config.max_tokens_for_sage_llm += additional_tokens_for_smarter_llm
             print(f"extend token allowance for smarter LLM by {additional_tokens_for_smarter_llm} "
-                  f"to {self._max_tokens_for_sage_llm}")
+                  f"to {self.config.max_tokens_for_sage_llm}")
         self._execute_with_backtracking()
 
     def _execute_with_backtracking(self):
@@ -184,12 +167,12 @@ class Orchestrator(Executor):
             self.check_token_usages()
 
     def check_token_usages(self):
-        if 0 < self._max_tokens <= self.llm.total_tokens:
+        if 0 < self.config.max_tokens <= self.llm.total_tokens:
             raise RuntimeError(f"Regular LLM consumed {self.llm.total_tokens} tokens, "
-                               f"exceeded allowance of {self._max_tokens}")
-        if id(self.llm) != id(self.sage_llm) and 0 < self._max_tokens_for_sage_llm <= self.sage_llm.total_tokens:
+                               f"exceeded allowance of {self.config.max_tokens}")
+        if id(self.llm) != id(self.sage_llm) and 0 < self.config.max_tokens_for_sage_llm <= self.sage_llm.total_tokens:
             raise RuntimeError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
-                               f"exceeded allowance of {self._max_tokens_for_sage_llm}")
+                               f"exceeded allowance of {self.config.max_tokens_for_sage_llm}")
 
     def show_conversation_thread(self, with_extras=False, selector: _t.Callable[[int, Invocation], bool]|None=None) \
             -> [(str, str)]:
@@ -226,8 +209,8 @@ class Orchestrator(Executor):
         else:
             work_prompt = self.prompts.orchestrator_proceed
         work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
-                                     initial_expansion=self._initial_expansion,
-                                     max_expansion=self.max_search_expansion,
+                                     initial_expansion=self.config.initial_expansion,
+                                     max_expansion=self.config.max_search_expansion,
                                      first_problem_solving_step=full_expansion)
         return work_next_step
 
@@ -239,7 +222,7 @@ class Orchestrator(Executor):
         return True
 
     def summarize_final_answer(self) -> FinalAnswerStep:
-        if self._check_final:
+        if self.config.check_final:
             self.check_final_solution(self._chain[-1])
 
         is_direct_answer_only = False
@@ -347,7 +330,8 @@ class Orchestrator(Executor):
         return ask_questions(input_fn, questions)
 
     def ask_genie(self, codes: [str]) -> [str]:
-        prompt = "Tao asks to execute the following codes:" if self.ask_user_before_execute_codes else None
+        prompt = "Tao asks to execute the following codes:" \
+            if self.config.ask_user_before_execute_codes else None
         return [_utils.exec_code_and_collect_outputs(prompt, snippet.strip()) for snippet in codes]
 
     def find_last_criticisms(self, invocation: Invocation) -> {int: {str}}:

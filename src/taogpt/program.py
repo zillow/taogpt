@@ -394,7 +394,7 @@ class ExpandableStep(Step):
         return 'expand_choices'
 
     def expand_choices(self, my_invocation: Invocation, upto_branches: int):
-        upto_branches = min(upto_branches, my_invocation.executor.max_search_expansion)
+        upto_branches = min(upto_branches, my_invocation.executor.config.max_search_expansion)
         prompt_db: PromptDb  = my_invocation.executor.prompts
         system_prompt = prompt_db.system_step_expansion
         direct_answer = prompt_db.tao_template_intuitive_answer if self.is_first_problem_solving_step() \
@@ -535,7 +535,7 @@ class ExpandableStep(Step):
 
     def retryable(self, invocation: Invocation):
         assert self.choices is not None
-        return len(self.choices) <= invocation.executor.max_search_expansion \
+        return len(self.choices) <= invocation.executor.config.max_search_expansion \
             or self._ptr < len(self.choices)
 
     def backtrack(self, my_invocation: Invocation, backtrack: Backtrack|None):
@@ -582,8 +582,8 @@ class PresentTaskStep(Step):
         return ProceedStep(self,
                            '',
                            role=ROLE_ORCHESTRATOR,
-                           initial_expansion=my_invocation.executor.initial_search_expansion,
-                           max_expansion=my_invocation.executor.max_search_expansion,
+                           initial_expansion=my_invocation.executor.config.initial_expansion,
+                           max_expansion=my_invocation.executor.config.max_search_expansion,
                            first_problem_solving_step=True)
 
 
