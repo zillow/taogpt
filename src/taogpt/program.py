@@ -232,10 +232,14 @@ class StepByStepPlan(TaoReplyStep):
         p = super().__repr_local__()
         return f"{p}, {safe_subn(self.description)}"
 
+    def __post_init__(self):
+        super().__post_init__()
+        self.first_step = parse_ordered_list(self.description)[0]
+
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         # when evaluating this node, we are always at the first step
         prompt_db: PromptDb  = my_invocation.executor.prompts
-        work_prompt = prompt_db.orchestrator_proceed_to_first_step
+        work_prompt = prompt_db.orchestrator_proceed.format(step=self.first_step)
         return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
 
 
@@ -267,10 +271,7 @@ class AskPythonGenieStep(TaoReplyStep):
             self.description = f"{pitch}:\n\n{self.description}"
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        results = [
-            _utils.exec_code_and_collect_outputs("Tao wants to execute this snippet of python codes:", codes.strip())
-            for codes in self._code_snippets
-        ]
+        results = my_invocation.executor.ask_genie(self._code_snippets)
         result_markdown = '\n\n'.join(f"""```text\n{r}\n```""" for r in results)
         return PythonGenieReplyStep(
             self, f"Python Genie replied:\n\n{result_markdown}", ROLE_GENIE)

@@ -34,9 +34,11 @@ following template **strictly** so the orchestrator can parse it and show the qu
 In this strategy, the problem task is turned into a top-down, step-by-step tree of which you and Orchestrator will 
 solve using tree traversal and backtracking. Thus, you should decompose the current step one-level at a time into a 
 list of two or more sub-tasks. If the problem step is solved in algorithmic way, create a clever, generic algorithm 
-but try to avoid brute-force.
+but try to avoid brute-force. 
 
-Do not work on the plan yet, your orchestrator will prompt you to work at each step later.
+Do not work on the plan yet, Orchestrator will prompt you to work at each step later. Verification steps can be 
+added, but instead of going back to a previous step upon failure, you should take a note of the condition and 
+Orchestrator will guide you by backtracking.
 
 Follow this template **strictly**:
 
@@ -51,7 +53,8 @@ Follow this template **strictly**:
 ## Strategy: Ask the Python Genie
 
 The Python Genie is a sandboxed Python interpreter with standard library and numpy. It is a useful tool to help Tao 
-solve problems. Follow the example below to ask Genie:
+solve problems. Always ask Python Genie to do the math instead of doing it in your head. Be tidy, avoid useless code 
+comments. **Pay attention to Python indentation rules!** Follow the example below to ask Genie:
 
 `````markdown
 # LET_ME_ASK_THE_PYTHON_GENIE

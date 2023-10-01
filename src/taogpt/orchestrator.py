@@ -16,6 +16,7 @@ class Orchestrator(Executor):
                  llm: LLM,
                  prompts: PromptDb,
                  markdown_logger: _utils.MarkdownLogger,
+                 ask_user_before_execute_codes=True,
                  max_tokens: int = 10000,
                  initial_expansion: int = 1,
                  max_tree_branches: int = 4,
@@ -25,6 +26,7 @@ class Orchestrator(Executor):
         self._llm = llm
         self._prompts = prompts
         self._markdown_logger = markdown_logger
+        self._ask_user_before_execute_codes = ask_user_before_execute_codes
         self._max_tokens = max_tokens
         self._initial_expansion = initial_expansion
         self._max_tree_branches = max_tree_branches
@@ -74,6 +76,10 @@ class Orchestrator(Executor):
     @property
     def max_search_expansion(self) -> int:
         return self._max_tree_branches
+
+    @property
+    def ask_user_before_execute_codes(self):
+        return self._ask_user_before_execute_codes
 
     def start(self, task: str | Step, analyze_first=False):
         if isinstance(task, str):
@@ -341,8 +347,8 @@ class Orchestrator(Executor):
         return ask_questions(input_fn, questions)
 
     def ask_genie(self, codes: [str]) -> [str]:
-        return [_utils.exec_code_and_collect_outputs("Tao asks to execute the following codes:", snippet)
-                for snippet in codes]
+        prompt = "Tao asks to execute the following codes:" if self.ask_user_before_execute_codes else None
+        return [_utils.exec_code_and_collect_outputs(prompt, snippet.strip()) for snippet in codes]
 
     def find_last_criticisms(self, invocation: Invocation) -> {int: {str}}:
         criticism: {int: {str}} = dict()

@@ -171,9 +171,13 @@ def eval_and_collect(codes: str, return_value_indicator='=> ') -> str:
     old_stdout = _sys.stdout
     try:
         _sys.stdout = mystdout = _StringIO()
-        ret = exec_then_eval(codes)
-        _sys.stdout = old_stdout
-        output = mystdout.getvalue()
+        try:
+            ret = exec_then_eval(codes)
+            _sys.stdout = old_stdout
+            output = mystdout.getvalue()
+        except Exception as e:
+            output = str(e)
+            ret = None
         if len(output) > 0 and not output.endswith('\n'):
             output += '\n'
         if ret is not None:
@@ -184,7 +188,7 @@ def eval_and_collect(codes: str, return_value_indicator='=> ') -> str:
 
 
 def exec_code_and_collect_outputs(prompt: str, codes: str) -> str:
-    while True:
+    while prompt is not None:
         answer = input(f"""{prompt}
     
 ```python

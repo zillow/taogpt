@@ -135,7 +135,10 @@ def test_parse_python_code_snippets():
         """
 x = 5
 y = 4
-x * y
+z = 0
+for i in [1]:
+    z += i * x * y
+z
 """
     ]
     text = f"""free text before
