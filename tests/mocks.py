@@ -21,6 +21,10 @@ class MockLLM(LLM):
         self.encoder = tiktoken.encoding_for_model('gpt-4')
 
     @property
+    def model_id(self) -> str:
+        return 'mock_llm'
+
+    @property
     def total_tokens(self):
         return self._total_tokens
 

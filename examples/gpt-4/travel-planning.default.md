@@ -1,4 +1,4 @@
-# GPT-4 default system prompt
+# GPT-4 default system prompt (2023/09/30)
 
 **User**: I want to travel to Moscow. Find me a travel route. (Do not do any web search, I just need the route plan.)
 

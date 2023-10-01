@@ -14,6 +14,11 @@ class LLM:
         self.collapsed_contents: {str} = set()
 
     @property
+    @_abc.abstractmethod
+    def model_id(self) -> str:
+        pass
+
+    @property
     def total_tokens(self):
         return 0
 

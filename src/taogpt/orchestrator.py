@@ -2,6 +2,7 @@ from __future__ import annotations
 import dataclasses as _dc
 import typing as _t
 import math as _math
+import datetime as _datetime
 from frozenlist import FrozenList as _FrozenList
 
 from . import Config, Executor, UnsolvableError, MarkdownLogger
@@ -65,6 +66,8 @@ class Orchestrator(Executor):
         return self._chain
 
     def start(self, task: str | Step, analyze_first=False):
+        today = _datetime.date.today().strftime('%Y/%m/%d')
+        self.logger.log(f"Date: {today}, Model: {self.llm.model_id}")
         if isinstance(task, str):
             root_step = PresentTaskStep(None, task, role=ROLE_USER)
         elif isinstance(task, PresentTaskStep):

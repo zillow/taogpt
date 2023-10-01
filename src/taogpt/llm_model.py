@@ -41,6 +41,10 @@ class LangChainLLM(LLM):
         self._approx_token_factor: float | None = approx_token_factor
         self.reset()
 
+    @property
+    def model_id(self) -> str:
+        return self.llm.model_name
+
     def reset(self):
         self._total_tokens = 0
 

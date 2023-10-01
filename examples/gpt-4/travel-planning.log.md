@@ -1,3 +1,5 @@
+Date: 2023/09/23, Model: gpt-4-32k
+
 # SEND TO LLM for request_analysis/1/0
 
 <div style="background-color:lightgrey; display: flex; border-bottom: 1px dotted grey">
