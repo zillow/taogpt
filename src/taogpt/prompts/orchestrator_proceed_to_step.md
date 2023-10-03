@@ -1,4 +1,4 @@
-Tao, you have chosen the next step: {step}
+Tao, please to work at the bext step you have chosen: {step}
 
-Please proceed. You **must follow the response templates strictly** so that your orchestrator
-can parse your response. Think carefully before responding.
+You **must follow the response templates strictly** so that your orchestrator can parse your response. Think 
+carefully before responding.

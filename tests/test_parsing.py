@@ -87,35 +87,27 @@ def test_parsing_rankings_with_dupes():
 def test_parse_next_step_done():
     final_answer = """# FINAL_ANSWER
 This is my final answer"""
-    text = f"""I'm done.
-
-{final_answer}
-    """
-    decision, answer = parsing.parse_next_step_reply(text)
-    assert decision == DONE
+    decision, (answer, decision_detail) = parsing.parse_next_step_reply(final_answer)
+    assert decision == FINAL_ANSWER
+    assert decision_detail is None
     assert answer == final_answer.strip()
 
 
 def test_parse_next_step_done2():
-    answer_details = """This answer is correct one."""
-    final_answer = f"""## FINAL_ANSWER
+    answer_details = """I give up."""
+    final_answer = f"""## UNSOLVABLE_I_GIVE_UP
 {answer_details}
 """
-    text = f"""
-I'm done.
-
-{final_answer}
-    """
-    decision, answer = parsing.parse_next_step_reply(text)
-    assert decision == DONE
-    assert answer == final_answer.strip()
+    decision, (answer, decision_detail) = parsing.parse_next_step_reply(final_answer)
+    assert decision == UNSOLVABLE
+    assert answer == f"# {UNSOLVABLE}\n{answer_details}".strip()
     step_type, step_def = parsing.parse_step_type_spec(answer)
-    assert step_type == FINAL_ANSWER
+    assert step_type == UNSOLVABLE
     assert step_def == answer_details
 
 
 
-def test_parse_next_step_next():
+def test_parse_next_step_next_missing_next_work_at():
     next_plan = """# HERE_IS_MY_STEP_BY_STEP_PLAN
 1. step A
 2. step B
@@ -124,9 +116,65 @@ def test_parse_next_step_next():
 
 {next_plan}
     """
-    decision, answer = parsing.parse_next_step_reply(text)
-    assert decision == 'the_next_step'
-    assert answer == next_plan.strip()
+    try:
+        parsing.parse_next_step_reply(text)
+        assert False, "Expecting ParseError not raised"
+    except parsing.ParseError:
+        pass
+
+
+def test_parse_next_step_reply_next_step_to_work_at():
+    json_plan = """```json
+{
+    "1": {"description": "step A"},
+    "2": {"description": "step B"}
+}
+```
+"""
+    next_plan = f"""# HERE_IS_MY_STEP_BY_STEP_PLAN
+{json_plan}
+"""
+    text = f"""# NEXT_I_WANT_TO_WORK_AT
+Do stuff
+
+{next_plan}
+    """
+    decision, (answer, decision_details) = parsing.parse_next_step_reply(text)
+    assert decision == NEXT_I_WANT_TO_WORK_AT
+    assert answer == 'Do stuff'
+    assert decision_details == next_plan.strip()
+
+
+def test_parse_next_step_reply_example():
+    details = """```python
+# Python code with comment
+x = 123
+```
+
+and
+
+`````markdown
+# HEADING 1
+some text
+```python
+a + b
+```
+`````
+
+The end"""
+    text = f"""
+# NEXT_I_WANT_TO_WORK_AT
+Evaluate possible addition combinations.
+
+## LET_ME_ASK_THE_PYTHON_GENIE
+
+{details}
+"""
+    decision, (answer, decision_details) = parsing.parse_next_step_reply(text)
+    assert decision == NEXT_I_WANT_TO_WORK_AT
+    assert answer == 'Evaluate possible addition combinations.'
+    assert WILL_ASK_GENIE in decision_details
+    assert decision_details == f"# {WILL_ASK_GENIE}\n{details}"
 
 
 def test_parse_python_code_snippets():
@@ -187,7 +235,7 @@ def test_parse_step_by_step_plan_raise_less_than_2_steps():
         parsing.parse_step_by_step_plan(text)
         assert False, "Expecting ParseError but not raised"
     except parsing.ParseError as e:
-        assert "Should have a least 2 steps" in str(e)
+        assert "Should have at least 2 steps" in str(e)
 
 
 def test_parse_step_by_step_plan_raise_key_not_integer():
@@ -240,4 +288,4 @@ def test_parse_step_by_step_plan():
     assert results[0].description == steps[0]
     assert results[0].why == reasons[0]
     assert results[1].description == steps[1]
-    assert results[1].why == None
+    assert results[1].why is None

@@ -6,10 +6,13 @@ import dataclasses as _dc
 import taogpt.utils as _utils
 from taogpt.constants import (
     WILL_ASK_QUESTIONS,
-    WILL_ANSWER_DIRECTLY, \
-    DONE,
-    FREE_TEXT
+    WILL_ANSWER_DIRECTLY,
+    FREE_TEXT,
+    NEXT_I_WANT_TO_WORK_AT,
+    FINAL_ANSWER,
+    UNSOLVABLE
 )
+from taogpt.utils import extract_fenced_blocks, restore_fenced_block
 
 _all_step_types = '|'.join([
     WILL_ANSWER_DIRECTLY,
@@ -26,6 +29,8 @@ _step_type_re = re.compile(
 _true_false_answer_re = re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
                                    flags=re.MULTILINE|re.DOTALL|re.IGNORECASE)
 _whitespace_re = re.compile(r"\s+", flags=re.DOTALL)
+_ordered_list_re = re.compile(r'\n\s*(\d+)\.\s+(.*?)(?=\n\s*(\d+)|\n\n|\Z)', flags=re.DOTALL)
+
 
 # _all_look_good_answer_re = re.compile(r"^\s*(all look good)?\.?\s*(.+)$",
 #                                       flags=re.MULTILINE|re.DOTALL|re.IGNORECASE)
@@ -48,20 +53,23 @@ def parse_step_type_spec(text: str) -> _t.Optional[(str, str)]:
     return step_type, definition
 
 
-def parse_sections(text: str) -> {str: str|None}:
+def parse_sections(text: str, section_level: str='##') -> {str: str|None}:
+    try:
+        fenced_blocks, text = extract_fenced_blocks(text)
+    except SyntaxError as e:
+        raise ParseError(str(e))
     matched_sections = {FREE_TEXT: ''}
     section = FREE_TEXT
     for line in text.split('\n'):
-        match: re.Match = re.match(r"^##+\s+([^:]+):?\s*", line)
+        match: re.Match = re.match(rf"^{section_level}+\s+([^:]+):?\s*", line)
         if match is not None:
             section = match.group(1)
             matched_sections[section] = ''
         else:
             matched_sections[section] += line + '\n'
-    return {k: (text.strip() if text is not None else None) for k, text in matched_sections.items()}
 
-
-_ordered_list_re = re.compile(r'\n\s*(\d+)\.\s+(.*?)(?=\n\s*(\d+)|\n\n|\Z)', flags=re.DOTALL)
+    return {k: (restore_fenced_block(text, fenced_blocks).strip() if text is not None else None)
+            for k, text in matched_sections.items()}
 
 
 def parse_ordered_list(markdown_text) -> [str]:
@@ -139,14 +147,12 @@ def parse_step_by_step_plan(text: str) -> _t.Dict[int, StepDescriptor]:
             raise ParseError(f'Missing description for step {key}')
         results[index-1] = StepDescriptor(item['description'], item.get('why', None))
     if len(results) < 2:
-        raise ParseError("Should have a least 2 steps in the plan. If only one step, choose answering directly")
+        raise ParseError("Should have at least 2 steps in the plan. If only one step, choose answering directly")
     return results
 
 
 def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:
     rankings = parse_json_hash(text)
-    if len(rankings) != expected_number:
-        raise ParseError(f"Expecting {expected_number} score rankings but found {len(rankings)}.")
     results: {int: float} = dict()
     dupes: {int: int} = dict()
     for i, item in rankings.items():
@@ -163,6 +169,8 @@ def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[
         if not isinstance(score, (int, float)):
             raise ParseError(f"Score value '{score}' is not a number.")
         results[i] = float(score)
+    if len(rankings) != expected_number:
+        raise ParseError(f"Expecting {expected_number} score rankings but found {len(rankings)}.")
     for i, item in rankings.items():
         i = int(i)
         if 'duplicate_of' in item:
@@ -191,15 +199,23 @@ def parse_json_hash(text):
 
 
 def parse_next_step_reply(text: str) -> (str, str|None):
-    match: re.Match = re.match(r"^\s*I'm done\.?\s+(#+ .+)$",
-                               text, flags=re.IGNORECASE|re.DOTALL)
-    if match:
-        return DONE, _utils.str_or_blank(match.group(1))
-    match: re.Match = re.match(r"^\s*I want to work on:?\s+(.+)\n\s*(#+ .+)$",
-                               text, flags=re.IGNORECASE|re.DOTALL)
-    if match:
-        return match.group(1).strip(), _utils.str_or_blank(match.group(2))
-    raise ParseError(f'Unexpected next step reply')
+    sections: _t.Dict[str, str] = parse_sections(text, section_level='#')
+    sections.pop(FREE_TEXT)
+    for section in [FINAL_ANSWER, UNSOLVABLE]:
+        if section in sections:
+            remaining = sections.pop(section)
+            return section, (f"# {section}\n{remaining}", None)
+    if NEXT_I_WANT_TO_WORK_AT not in sections:
+        raise ParseError("No section header")
+    next_step_desc = sections.pop(NEXT_I_WANT_TO_WORK_AT).strip()
+    if _utils.str_or_blank(next_step_desc) == '':
+        raise ParseError('Missing next step description')
+    if len(sections) == 0:
+        raise ParseError("Missing a strategy section for the next step")
+    if len(sections) > 1:
+        raise ParseError("More than one strategy sections")
+    strategy, details = next(iter(sections.items()))
+    return NEXT_I_WANT_TO_WORK_AT, (next_step_desc, f"# {strategy}\n{details}")
 
 
 def is_final_answer(next_step) -> bool:

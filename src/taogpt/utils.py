@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random as _random
 import re
 import typing as _t
 import re as _re
@@ -124,12 +125,18 @@ class MarkdownLogger:
 
     @staticmethod
     def demote_h1(message: str):
+        original = message
+        try:
+            fenced_blocks, message = extract_fenced_blocks(message)
+        except SyntaxError:
+            return original
         lines = message.split(('\n'))
         for i in range(len(lines)):
-            line = lines[i].strip()
+            line = lines[i]
             matches: re.Match = MarkdownLogger.H1_RE.match(line)
             lines[i] = f"***{matches.group(1)}***\n\n" if matches is not None else line
-        return '\n'.join(lines)
+        result = '\n'.join(lines)
+        return restore_fenced_block(result, fenced_blocks)
 
     def log_conversation(self, conversation: [(str, str)], skip_system_message=1, title='Final path history'):
         if title:
@@ -201,3 +208,35 @@ Reply "yes" to execute this code snippet, or "no" to cancel.
         elif answer.strip().lower() == 'no':
             raise KeyboardInterrupt("User cancelled the request")
     return eval_and_collect(codes)
+
+
+_markdown_fenced_block_re = re.compile(r"```+", flags=re.DOTALL | re.IGNORECASE)
+
+
+def extract_fenced_blocks(text):
+    fenced_blocks = dict()
+    key_prefix = f"fenced_{_random.randint(1000, 10000000)}_"
+    while True:
+        match = _markdown_fenced_block_re.search(text, 0)
+        if match is not None:
+            open_pos = match.span()[0]
+            n_backquotes = len(match.group(0))
+            pattern = re.compile('`' * n_backquotes)
+            match = pattern.search(text, open_pos + n_backquotes)
+            if match is not None:
+                end_pos = match.span()[1]
+                key = f"{key_prefix}{len(fenced_blocks)}"
+                original = text[open_pos:end_pos]
+                fenced_blocks[key] = original
+                text = text.replace(original, key) # ok to replace all
+            else:
+                raise SyntaxError("Missing closing fenced block backquote marks.")
+        else:
+            break
+    return fenced_blocks, text
+
+
+def restore_fenced_block(text: str, fenced_blocks: _t.Dict[str, str]):
+    for key, original in fenced_blocks.items():
+        text = text.replace(key, original, 1)
+    return text

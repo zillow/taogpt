@@ -2,6 +2,15 @@ from mocks import MockLLM, create_orchestrator, logger
 from taogpt.program import *
 from taogpt.parsing import ParseError, parse_final_response
 
+EXAMPLE_STEP_BY_STEP_PLAN = """This is my plan:
+```json
+{
+    "1": {"description": "Do X"},
+    "2": {"description": "Do Y"}
+}
+```
+"""
+
 _logger = logger
 
 
@@ -118,7 +127,7 @@ def test_no_full_expansion_at_subsequent_expandable_steps(logger):
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
-    step = StepByStepPlan(step, "This is my plan:\n1. Do X\n2. Do Y", ROLE_TAO)
+    step = StepByStepPlan(step, EXAMPLE_STEP_BY_STEP_PLAN, ROLE_TAO)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
     step = AskQuestionStep(step, "I have a question", ROLE_TAO)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
@@ -136,7 +145,7 @@ def test_record_criticism_to_expandable_steps(logger):
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
     expandable: ProceedStep = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
     orchestrator.chain.append(Invocation(expandable, _executor=orchestrator))
-    plan_step: StepByStepPlan = StepByStepPlan(expandable, "This is my plan:\n1. Do X\n2. Do Y", ROLE_TAO)
+    plan_step: StepByStepPlan = StepByStepPlan(expandable, EXAMPLE_STEP_BY_STEP_PLAN, ROLE_TAO)
     expandable.choices = []
     expandable.choices.append(plan_step)
     orchestrator.chain.append(Invocation(plan_step, _executor=orchestrator))

@@ -17,7 +17,6 @@ class PromptDb:
     orchestrator_proceed_to_step: str
     orchestrator_expand_parse_error: str
     orchestrator_parse_error: str
-    orchestrator_next_step_parse_error: str
     orchestrator_critics: str
     orchestrator_summarize: str
     orchestrator_summarize_questions: str
@@ -46,7 +45,6 @@ class PromptDb:
             orchestrator_proceed_to_step=_read(path / 'orchestrator_proceed_to_step.md'),
             orchestrator_expand_parse_error=_read(path / 'orchestrator_expand_parse_error.md'),
             orchestrator_parse_error=_read(path / 'orchestrator_parse_error.md'),
-            orchestrator_next_step_parse_error=_read(path / 'orchestrator_next_step_parse_error.md'),
             orchestrator_critics=_read(path / 'orchestrator_critics.md'),
             orchestrator_summarize=_read(path / 'orchestrator_summarize.md'),
             orchestrator_summarize_questions=_read(path / 'orchestrator_summarize_questions.md'),

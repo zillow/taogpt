@@ -185,7 +185,7 @@ class Orchestrator(Executor):
                 conversation.extend(invocation.step.show_in_thread(invocation, with_extras=with_extras))
         return conversation
 
-    def next_step(self) -> Step | None:
+    def next_step(self) -> Step:
         system_prompt = self.prompts.system_step_expansion
         start_sovling = self.need_search_expansion_at_next_step()
         step = self._chain[-1].step
@@ -197,20 +197,27 @@ class Orchestrator(Executor):
             work_prompt = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
             prompts.append((ROLE_ORCHESTRATOR, work_prompt))
             prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_next_step))
-            decision, next_or_final = self.vote(system_prompt,
+            decision, (answer, plan) = self.vote(system_prompt,
                                        prompts,
                                        lambda reply: parse_next_step_reply(reply),
                                        reason='next_step',
                                        step_id=f"{step.step_id}",
                                        collapse_contents={'next_step': work_prompt})
-            if decision == DONE:
-                if UNSOLVABLE in next_or_final or FINAL_ANSWER in next_or_final:
-                    return parse_to_step(step, next_or_final)
-                return None
-            if next_or_final != '':
-                return parse_to_step(step, next_or_final)
+            assert decision is not None
+            assert answer is not None
+            if decision == NEXT_I_WANT_TO_WORK_AT:
+                work_prompt = self.prompts.orchestrator_proceed_to_step.format(step=answer)
+                return ProceedStep(
+                    step,
+                    work_prompt,
+                    role=ROLE_ORCHESTRATOR,
+                    initial_expansion=self.config.initial_expansion,
+                    max_expansion=self.config.max_search_expansion,
+                    first_problem_solving_step=start_sovling,
+                    choices=[parse_to_step(step, plan)]
+                )
             else:
-                work_prompt = self.prompts.orchestrator_proceed_to_step.format(step=decision)
+                return parse_to_step(step, answer)
         work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
                                      initial_expansion=self.config.initial_expansion,
                                      max_expansion=self.config.max_search_expansion,
@@ -382,7 +389,7 @@ class Orchestrator(Executor):
                 except Exception as e:
                     n_retries += 1
                     self._handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
-                                             prompt_db.orchestrator_next_step_parse_error)
+                                             prompt_db.orchestrator_parse_error)
         choices = sorted([item for item in rankings.items() if item[1][0] >= min_threshold],
                          key=lambda item: item[1][0], reverse=True)
         if len(choices) == 0:
@@ -397,7 +404,6 @@ class Orchestrator(Executor):
             prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
             self.logger.log(f"\n***RETRY***\n{message}")
         if n_retries >= MAX_RETRIES:
-            print(f"failed after {n_retries}")
             raise e
 
 def ask_questions(input_fn, questions: [str], one_prompt: bool):

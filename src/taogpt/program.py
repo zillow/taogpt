@@ -82,11 +82,16 @@ class UserReplyStep(Step):
 
     @property
     def step_title(self) -> str:
-        return 'User replies'
+        return 'Here are the answers'
 
     def __repr_local__(self) -> str:
         p = super().__repr_local__()
         return f"{p},reply={_utils.safe_subn(self.description)}..."
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.step_title not in self.description:
+            self.description = f"{self.step_title}:\n\n{self.description}"
 
     def retryable(self, invocation: Invocation):
         return False # maybe we can ask the user again but Tao will do so by generating new questions.
@@ -155,24 +160,6 @@ class TaoReplyStep(Step):
     @property
     def description_with_extras(self):
         return _utils.str_or_blank(self.description)
-
-
-# @_dc.dataclass(repr=False)
-# class TaoAnalysisStep(TaoReplyStep):
-#     @property
-#     def step_title(self) -> str:
-#         return 'initial analysis'
-#
-#     def __repr_local__(self) -> str:
-#         p = super().__repr_local__()
-#         return f"{p},{safe_subn(self.description)}"
-#
-#     @property
-#     def description_with_extras(self):
-#         return _utils.str_or_blank(self.description)
-#
-#     def eval_only(self, my_invocation: Invocation) -> Step | None:
-#         return None
 
 
 @_dc.dataclass(repr=False)
@@ -379,6 +366,9 @@ class ExpandableStep(Step):
         super().__post_init__()
         self._ptr = 0
         self._all_criticisms: {int: {str}} = dict()
+        if self.choices is not None:
+            for next_step in self.choices:
+                next_step.previous = self
 
     def is_first_problem_solving_step(self) -> bool:
         return self.first_problem_solving_step
