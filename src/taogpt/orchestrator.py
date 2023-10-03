@@ -199,7 +199,7 @@ class Orchestrator(Executor):
             prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_next_step))
             decision, (answer, plan) = self.vote(system_prompt,
                                        prompts,
-                                       lambda reply: parse_next_step_reply(reply),
+                                       parse_next_step_reply,
                                        reason='next_step',
                                        step_id=f"{step.step_id}",
                                        collapse_contents={'next_step': work_prompt})

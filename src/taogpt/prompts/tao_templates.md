@@ -40,8 +40,6 @@ Do not work on the plan yet, Orchestrator will prompt you to work at each step l
 added, but instead of going back to a previous step upon failure, you should take a note of the condition and 
 Orchestrator will guide you by backtracking.
 
-However, do not repeat step-by-step plan you already proposed above.
-
 Follow this markdown template **strictly**:
 
 `````markdown

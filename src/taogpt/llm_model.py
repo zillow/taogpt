@@ -95,7 +95,6 @@ class LangChainLLM(LLM):
             self._logger.close_message_section()
             messages.append(SystemMessage(content=system_prompt))
 
-        last_chat_message: ChatMessage | None = None
         for i, (role, message) in enumerate(conversation):
             if message == '':
                 continue
@@ -111,18 +110,10 @@ class LangChainLLM(LLM):
             context_len += len(message)
             self._logger.close_message_section()
             chat_message = ChatMessage(role=effective_role, content=message)
-            if last_chat_message is None:
-                last_chat_message = chat_message
-                messages.append(chat_message)
-            elif chat_message.role == last_chat_message.role:
-                # last message is already appended, just need to update it
-                last_content = last_chat_message.content.strip() # ensure no trailing newlines
-                last_chat_message.content = last_content + '\n\n' + chat_message.content # then add newlines
-            else:
-                messages.append(chat_message)
+            messages.append(chat_message)
         try:
             global _last_conversation
-            _last_conversation = messages
+            _last_conversation = messages.copy()
             reply = self.llm.predict_messages(messages)
             reply_content_logged = reply.content
             is_json = ''
