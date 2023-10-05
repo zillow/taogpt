@@ -1,2 +1,4 @@
-Tao, please proceed. You **must follow the response templates strictly** so that your orchestrator
-can parse your response. Think carefully before responding.
+Tao, please proceed to solve the problme following the "Problem Solving Instructions" above. Be sure to start with 
+one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`,
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `HERE_IS_MY_STEP_BY_STEP_PLAN`, or `FINAL_ANSWER`.
+

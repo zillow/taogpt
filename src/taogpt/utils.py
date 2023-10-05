@@ -174,17 +174,20 @@ def exec_then_eval(code):
 
 
 # credit: https://stackoverflow.com/questions/64209815/python-how-can-i-save-the-output-of-eval-in-a-variable
-def eval_and_collect(codes: str, return_value_indicator='=> ') -> str:
+def eval_and_collect(codes: str, return_value_indicator='=> ', raise_on_error=True) -> str:
     old_stdout = _sys.stdout
     try:
         _sys.stdout = mystdout = _StringIO()
         try:
             ret = exec_then_eval(codes)
-            _sys.stdout = old_stdout
             output = mystdout.getvalue()
         except Exception as e:
+            if raise_on_error:
+                raise e
             output = str(e)
             ret = None
+        finally:
+            _sys.stdout = old_stdout
         if len(output) > 0 and not output.endswith('\n'):
             output += '\n'
         if ret is not None:
@@ -238,5 +241,5 @@ def extract_fenced_blocks(text):
 
 def restore_fenced_block(text: str, fenced_blocks: _t.Dict[str, str]):
     for key, original in fenced_blocks.items():
-        text = text.replace(key, original, 1)
+        text = text.replace(key, original)
     return text

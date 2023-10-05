@@ -15,7 +15,4 @@ Follow this template:
 
 ### FILE: <file_path_name>
 <file content in markdown fenced code block>
-
-### NEXT_I_WANT_TO_WORK_AT:
-<next step>
 ```

@@ -2,7 +2,7 @@ from taogpt import parsing
 from taogpt.program import ExpandableStep
 from taogpt.constants import *
 from taogpt.prompts import PromptDb
-from taogpt.utils import eval_and_collect
+from taogpt.utils import eval_and_collect, extract_fenced_blocks, restore_fenced_block
 
 
 _REGULAR_RANKINGS = """This is what I think:
@@ -23,6 +23,29 @@ _RANKINGS_WITH_DUPES = """{
   "4": {"score": 5.1, "reason": "This looks like duplicate of 1.", "duplicate_of": 1}
 }
 """
+
+
+def test_parse_step_type_spec():
+    reply_detail = """This is an answer.
+
+### NEXT_I_WANT_TO_WORK_AT:
+"1: Initialize the Sudoku grid with the given numbers."
+""".strip()
+    text = f"""
+```json
+{{
+ "Plan completeness": {{"ok": true, "reason": "A"}},
+ "Plan correctness": {{"ok": true, "reason": "B"}},
+ "Plan efficiency": {{"ok": true, "reason": "C"}}
+}}
+```
+
+# {WILL_ANSWER_DIRECTLY}
+{reply_detail}
+"""
+    reply_type, step_def = parsing.parse_step_type_spec(text)
+    assert reply_type == WILL_ANSWER_DIRECTLY
+    assert step_def == reply_detail
 
 
 def test_ranking_prompt_format():
@@ -95,7 +118,7 @@ This is my final answer"""
 
 def test_parse_next_step_done2():
     answer_details = """I give up."""
-    final_answer = f"""## UNSOLVABLE_I_GIVE_UP
+    final_answer = f"""## BACKTRACK_ON_ERROR
 {answer_details}
 """
     decision, (answer, decision_detail) = parsing.parse_next_step_reply(final_answer)
@@ -289,3 +312,31 @@ def test_parse_step_by_step_plan():
     assert results[0].why == reasons[0]
     assert results[1].description == steps[1]
     assert results[1].why is None
+
+
+def test_replacement_with_multiple_identical_fenced_blocks():
+    text = """
+These are previous proposals tried and criticisms received going down this step:
+
+[Prior approach 1] There is indeed an error in the last step.
+
+```text
++-+-+-+-+
+|4|3|2|1|
+```
+
+Let's backtrack and correct this error.
+
+---
+[Prior approach 2] I see that there was an error in the final step of filling in the Sudoku grid.
+
+```text
++-+-+-+-+
+|4|3|2|1|
+```
+"""
+    extracted, sub_text = extract_fenced_blocks(text)
+    assert len(extracted) == 1
+    assert sub_text.strip() != text.strip()
+    restored = restore_fenced_block(sub_text, extracted)
+    assert restored == text

@@ -48,8 +48,8 @@ class Config:
     alternative_temperature: float = 0.7
     max_search_expansion: int = 4
     ask_user_before_execute_codes: bool = True
-    max_tokens: int = 10000,
-    max_tree_branches: int = 4,
+    max_tokens: int = 10000
+    max_tree_branches: int = 4
     check_final: bool = False,
     max_tokens_for_sage_llm: int | None = None
     ask_user_questions_in_one_prompt: bool = False
@@ -93,7 +93,7 @@ class Executor(_abc.ABC):
     def ask_user(self, questions: [str]) -> str:
         raise NotImplementedError('No user agent feature in the base')
 
-    def ask_genie(self, codes: [str]) -> [str]:
+    def ask_genie(self, codes: [str], invocation: Invocation) -> [str]:
         raise NotImplementedError('No ask genie agent feature in the base')
 
     @_abc.abstractmethod

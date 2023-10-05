@@ -16,13 +16,13 @@ _logger = logger
 
 def test_check_final_solution_success(logger):
     text = """{
-    "overall": {"correctness": true, "reason": "All right!"},
-    "calculation": {"correctness": true, "reason": "Good math!"}
+    "rule conformance": {"ok": true, "reason": "All right!"},
+    "calculation": {"ok": true, "reason": "Good math!"}
     }
     """
     overall, concerns = parse_final_response(text)
     assert overall
-    assert concerns == "* calculation: Good math!\n* overall: All right!"
+    assert concerns == "* rule conformance: All right!\n* calculation: Good math!"
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         assert reason == 'check_final_solution'
@@ -36,14 +36,13 @@ def test_check_final_solution_success(logger):
 
 def test_check_final_solution_failed(logger):
     text = """{
-    "overall": {"correctness": false, "reason": "The math is wrong."},
-    "calculation": {"correctness": false, "reason": "1 + 1 != 3"},
-    "etc": {"correctness": true, "reason": "Good"}
+    "calculation": {"ok": false, "reason": "1 + 1 != 3"},
+    "etc": {"ok": true, "reason": "Good"}
     }
     """
     overall, concerns = parse_final_response(text)
     assert not overall
-    assert concerns == "* calculation: 1 + 1 != 3\n* etc: Good\n* overall: The math is wrong."
+    assert concerns == "* calculation: 1 + 1 != 3\n* etc: Good"
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         assert reason == 'check_final_solution'
@@ -59,8 +58,7 @@ def test_check_final_solution_failed(logger):
 
 def test_check_final_solution_parse_error(logger):
     text = """// missing {
-    "overall": {"correctness": true, "reason": "All right!"},
-    "calculation": {"correctness": true, "reason": "Good math!"}
+    "calculation": {"ok": true, "reason": "Good math!"}
     }
     """
     try:
@@ -162,3 +160,27 @@ criticism:
     assert len(gathered) == 1
     gathered[0] = gathered[0].replace("* error 2\n* error 1", "* error 1\n* error 2")
     assert gathered[0] == expected
+
+
+def test_backtracking(logger):
+    llm = MockLLM(logger)
+    orchestrator = create_orchestrator(llm, logger)
+    orchestrator.config.ask_user_before_execute_codes = False
+    orchestrator.config.max_search_expansion = 2
+    step = PresentTaskStep(None, "This is a problem", ROLE_USER)
+    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    proceed_step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
+    orchestrator.chain.append(Invocation(proceed_step, _executor=orchestrator))
+
+    code = f"""```python
+no_such_var * 123
+```
+    """
+    step = AskPythonGenieStep(proceed_step, code, ROLE_TAO)
+    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    proceed_step.choices = [step]
+    try:
+        orchestrator.resume(1000)
+    except ParseError:
+        pass
+    assert 1 == len(proceed_step.collected_criticisms)

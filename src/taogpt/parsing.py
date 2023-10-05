@@ -19,9 +19,9 @@ _all_step_types = '|'.join([
     WILL_ASK_QUESTIONS
 ])
 _step_type_re = re.compile(
-    r"^#{1,2}\s*(I_WILL_ANSWER_DIRECTLY"
+    r"(^|\n)#{1,2}\s*(I_WILL_ANSWER_DIRECTLY"
     r"|LET_ME_ASK_THE_PYTHON_GENIE"
-    r"|UNSOLVABLE_I_GIVE_UP"
+    r"|BACKTRACK_ON_ERROR"
     r"|FINAL_ANSWER"
     r"|I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED"
     r"|HERE_IS_MY_STEP_BY_STEP_PLAN).*\n((.|\n)+)"
@@ -32,10 +32,6 @@ _whitespace_re = re.compile(r"\s+", flags=re.DOTALL)
 _ordered_list_re = re.compile(r'\n\s*(\d+)\.\s+(.*?)(?=\n\s*(\d+)|\n\n|\Z)', flags=re.DOTALL)
 
 
-# _all_look_good_answer_re = re.compile(r"^\s*(all look good)?\.?\s*(.+)$",
-#                                       flags=re.MULTILINE|re.DOTALL|re.IGNORECASE)
-
-
 class ParseError(ValueError):
     pass
 
@@ -43,13 +39,13 @@ class ParseError(ValueError):
 def parse_step_type_spec(text: str) -> _t.Optional[(str, str)]:
     text = _utils.str_or_blank(text)
     if text == '':
-        return None
-    match: re.Match = _step_type_re.match(text)
+        return None, None
+    match: re.Match = _step_type_re.search(text)
     if match is None:
-        return None
-    step_type, definition = match.group(1), _utils.str_or_blank(match.group(2))
+        return None, None
+    step_type, definition = match.group(2), _utils.str_or_blank(match.group(3))
     if definition == '':
-        return None
+        return None, None
     return step_type, definition
 
 
@@ -111,11 +107,11 @@ def parse_final_response(text: str) -> (bool, str):
     overall_reason: str|None = None
     overall_correctness: bool = True
     for concern, judgement in judgements.items():
-        if 'correctness' not in judgement:
-            raise ParseError(f"{concern} does not have the 'correctness' field.")
-        item_correctness = judgement['correctness']
+        if 'ok' not in judgement:
+            raise ParseError(f"{concern} does not have the 'ok' field.")
+        item_correctness = judgement['ok']
         if type(item_correctness) != bool:
-            raise ParseError(f"the 'correctness' field of {concern} is not a JSON boolean.")
+            raise ParseError(f"the 'ok' field of {concern} is not a JSON boolean.")
         overall_correctness = (overall_correctness and item_correctness)
         if 'reason' in judgement:
             if 'overall' == concern:

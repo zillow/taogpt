@@ -261,7 +261,7 @@ class AskPythonGenieStep(TaoReplyStep):
             self.description = f"{pitch}:\n\n{self.description}"
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
-        results = my_invocation.executor.ask_genie(self._code_snippets)
+        results = my_invocation.executor.ask_genie(self._code_snippets, my_invocation)
         result_markdown = '\n\n'.join(f"""```text\n{r}\n```""" for r in results)
         return PythonGenieReplyStep(
             self, f"Python Genie replied:\n\n{result_markdown}", ROLE_GENIE)
@@ -325,11 +325,10 @@ class AskQuestionStep(TaoReplyStep):
 
 
 def parse_to_step(step: Step, response: str) -> Step:
-    type_and_def = parse_step_type_spec(response)
-    if type_and_def is None:
+    step_type, step_def = parse_step_type_spec(response)
+    if step_type is None:
         raise ParseError(f"Invalid Tao response. Missing header.")
     else:
-        step_type, step_def = type_and_def
         if step_type == DirectAnswerStep.TYPE_SPEC:
             step_class = DirectAnswerStep
         elif step_type == FinalAnswerStep.TYPE_SPEC:

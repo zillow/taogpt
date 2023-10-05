@@ -87,11 +87,11 @@ class LangChainLLM(LLM):
             context_len += len(system_prompt)
             context_tokens += self.count_tokens(system_prompt)
             self._logger.new_message_section(ROLE_SYSTEM, -1)
-            if log_request and system_prompt not in self.collapsed_contents:
+            if system_prompt not in self.collapsed_contents:
                 self._logger.log(system_prompt, demote_h1=True)
                 self.collapsed_contents.add(system_prompt)
             else:
-                self._logger.log(f"... [text of length {len(system_prompt)}] ...")
+                self._logger.log(f"... system_prompt [text of length {len(system_prompt)}] ...")
             self._logger.close_message_section()
             messages.append(SystemMessage(content=system_prompt))
 
@@ -101,11 +101,11 @@ class LangChainLLM(LLM):
             effective_role = LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[role]
             self._logger.new_message_section(role, i)
             self._logger.log(f"**{role} >>> said**:\n")
-            if log_request:
+            if len(message) > 500:
                 deduped_msg = self.deduplicate_for_logging(message, collapse_contents)
                 self._logger.log(deduped_msg, demote_h1=True)
             else:
-                self._logger.log(f"... [text of length {len(message)}] ...")
+                self._logger.log(message)
             context_tokens += self.count_tokens(message)
             context_len += len(message)
             self._logger.close_message_section()

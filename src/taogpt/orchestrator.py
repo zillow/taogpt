@@ -339,10 +339,19 @@ class Orchestrator(Executor):
         # for now just use the console input
         return ask_questions(input_fn, questions, self.config.ask_user_questions_in_one_prompt)
 
-    def ask_genie(self, codes: [str]) -> [str]:
+    def ask_genie(self, codes: [str], invocation: Invocation) -> [str]:
         prompt = "Tao asks to execute the following codes:" \
             if self.config.ask_user_before_execute_codes else None
-        return [_utils.exec_code_and_collect_outputs(prompt, snippet.strip()) for snippet in codes]
+        snippet: str|None = None
+        try:
+            return [_utils.exec_code_and_collect_outputs(prompt, snippet.strip()) for snippet in codes]
+        except Exception as e:
+            self.record_criticisms([f"""Python Genie reported error: {str(e)} when running this code snippet:
+```python
+{snippet}
+```
+"""])
+            raise Backtrack("Python execution error", blame=invocation)
 
     def find_last_criticisms(self, invocation: Invocation) -> {int: {str}}:
         criticism: {int: {str}} = dict()

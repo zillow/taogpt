@@ -10,7 +10,7 @@ the proposed approaches in the range of [0.0, 10.0], the higher the score the mo
 
 Scoring criteria: 
 * If the original task problem contains error and not solvable or we are at a dead-end or infinite loop trying to 
-  solve the original, then all approaches except `UNSOLVABLE_I_GIVE_UP` get 0 scores.
+  solve the original, then all approaches except `BACKTRACK_ON_ERROR` get 0 scores.
 * The approach must conform to the templates for Tao and parsable; else it should get a score of 0.
 * Direct answers that are incorrect should get a score of 0.
 * The approaches which lead to incorrect results should get a score of 0.

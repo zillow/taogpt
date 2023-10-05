@@ -1,23 +1,22 @@
-Instruction: given conversation so far, select **one and only one strategy** from the list below and provide a good 
-response in proper markdown format. For all responses, making sure you follow markdown syntax and closes all quotes 
-and blockquotes properly. Don't repeat the current state or answer without making progress.
+# Problem Solving Instructions
 
-## Strategy: Unsolvable, Given up
+Given problem solving session so far, choose one of the following strategies:
 
-If there are fundamental **errors** or **contradictions** with the problem/task definition or the solving path thus
-far, explain what issues are there and why the issues cannot be removed.
+## Strategy: Give up on errors
 
-Follow this template:
+If you see any errors or inconsistencies, Respond with:
 
-```markdown
-# UNSOLVABLE_I_GIVE_UP
-<explanation>
-```
+ ```markdown
+ # BACKTRACK_ON_ERROR
+ <explanation>
+ ```
+
+Do NOT try to fix the error here. Orchestrator wouldn't understand. Instead it will let you try other alternatives.
 
 ## Strategy: Ask Questions
 
-Many problems requires clarifications. Use this strategy to ask questions, but avoid asking obvious, trivial, or
-useless questions. You should try to ask all questions you need up front. You must follow the
+Many problems requires clarifications. Use this strategy to ask questions, but avoid obvious, trivial, 
+redundant, or useless questions. You should try to ask all questions you need up front. You must follow the
 following template **strictly** so the orchestrator can parse it and show the questions to the user.
 
 ```markdown
@@ -38,16 +37,18 @@ but try to avoid brute-force.
 
 Do not work on the plan yet, Orchestrator will prompt you to work at each step later. Verification steps can be 
 added, but instead of going back to a previous step upon failure, you should take a note of the condition and 
-Orchestrator will guide you by backtracking.
+Orchestrator will let you backtrack.
 
 Follow this markdown template **strictly**:
 
 `````markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
+<brief explanation of your plan>
+
 ```json
 {{
-  "1": {{"description": "<step 1 description>", "why": "<explanation>"}},
-  "2": {{"description": "<step 2 description>", "why": "<explanation>"}},
+  "1": {{"description": "<step 1 description>"}},
+  "2": {{"description": "<step 2 description>"}},
   // ...
 }}
 ```

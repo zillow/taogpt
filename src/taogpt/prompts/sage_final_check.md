@@ -1,14 +1,13 @@
 Tao has presented the above final solution for the task problem. Is the final answer presented correct? Please judge 
-on the overall correctness as well as the correctness of any individual concerns applicable such as "calculation", 
-"completeness", and "syntax" (for answers with codes).
+on any applicable individual concerns such as calculation, completeness, syntax (for answers with codes), rule 
+conformance, etc..
 
 Response must be in valid JSON like this:
 
 ```json
 {
-  "overall": {"correctness": false, "reason": "Multiple errors with this answer."},
-  "calculation": {"correctness": false, "reason": "(12 - 1) * 3 does not equal to 22."},
-  "completeness": {"correctness": false, "reason": "The answer is incomplete."},
-  // ... please brainstorm other concerns applicable ...
+  "<concern 1>": {"ok": false, "reason": "<explanation>"},
+  "<concern 2>": {"ok": false, "reason": "<explanation>"},
+  // ...
 }
 ```

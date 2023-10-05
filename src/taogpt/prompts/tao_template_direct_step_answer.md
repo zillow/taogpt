@@ -17,19 +17,5 @@ Follow this template:
 <file content in markdown fenced code block>
 
 ### NEXT_I_WANT_TO_WORK_AT:
-<next step>
-```
-
-
-Important Note: if this is the **final** step, then put "None. This is the final step." in the 
-`NEXT_I_WANT_TO_WORK_AT` section.
-
-Response template:
-
-```markdown
-# I_WILL_ANSWER_DIRECTLY
-<answer and explanation>
-
-### NEXT_I_WANT_TO_WORK_AT:
-<next step>
+<next step ID: description> or "None. This is the final step."
 ```

@@ -15,7 +15,7 @@ Which step you want to work on next? You can choose one of two options below.
     If you hit the dead-end, you can give up solving the problem and Orchestrator will help you try different alternatives:
     
     ```markdown
-    # UNSOLVABLE_I_GIVE_UP
+    # BACKTRACK_ON_ERROR
     <Some explanation>
     ```
 
@@ -31,7 +31,7 @@ Which step you want to work on next? You can choose one of two options below.
     <strategy for the next step>
     ```
     
-    Follow the strategy-selection instruction above for the details of the next step. Example:
+    Follow **strictly** the Problem Solving Instructions and templates above for the details of the next step. Example:
     
     ```markdown
     # NEXT_I_WANT_TO_WORK_AT
