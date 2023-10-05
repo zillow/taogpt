@@ -4,14 +4,22 @@ Given problem solving session so far, choose one of the following strategies:
 
 ## Strategy: Give up on errors
 
-If you see any errors or inconsistencies, Respond with:
+If you see any errors or inconsistencies, response with the list of **specific** issues in valid JSON like this:
 
- ```markdown
+ `````markdown
  # BACKTRACK_ON_ERROR
- <explanation>
- ```
 
-Do NOT try to fix the error here. Orchestrator wouldn't understand. Instead it will let you try other alternatives.
+```json
+[
+  "<issue 1>",
+  "<issue 2>",
+  // ...
+]
+```
+`````
+
+Do NOT try to fix the errors since Orchestrator wouldn't understand. Instead it will let you try other alternatives 
+later.
 
 ## Strategy: Ask Questions
 
@@ -33,7 +41,7 @@ following template **strictly** so the orchestrator can parse it and show the qu
 In this strategy, the problem task is turned into a top-down, step-by-step tree of which you and Orchestrator will 
 solve using tree traversal and backtracking. Thus, you should decompose the current step one-level at a time into a 
 list of two or more sub-tasks. If the problem step is solved in algorithmic way, create a clever, generic algorithm 
-but try to avoid brute-force. 
+but try to avoid brute-force. Also avoid steps that do very little work because those can be merged into other steps.
 
 Do not work on the plan yet, Orchestrator will prompt you to work at each step later. Verification steps can be 
 added, but instead of going back to a previous step upon failure, you should take a note of the condition and 

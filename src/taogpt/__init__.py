@@ -44,6 +44,7 @@ class LLM:
 @_dc.dataclass
 class Config:
     initial_expansion: int = 1
+    first_expansion: int = 1
     first_try_temperature: float = 0.0
     alternative_temperature: float = 0.7
     max_search_expansion: int = 4
@@ -53,6 +54,7 @@ class Config:
     check_final: bool = False,
     max_tokens_for_sage_llm: int | None = None
     ask_user_questions_in_one_prompt: bool = False
+    pause_after_initial_solving_expansion: bool = False
 
 
 class Executor(_abc.ABC):
@@ -88,6 +90,9 @@ class Executor(_abc.ABC):
 
     @_abc.abstractmethod
     def show_conversation_thread(self) -> [(str, str)]:
+        pass
+
+    def record_criticisms(self, criticisms: [str]):
         pass
 
     def ask_user(self, questions: [str]) -> str:
@@ -129,6 +134,12 @@ class Backtrack(RuntimeError):
     def __init__(self, reason: str | None, blame: Invocation):
         super().__init__(reason)
         self.blame = blame
+
+
+class Pause(RuntimeError):
+    def __init__(self, reason: str | None, cause: StepABC):
+        super().__init__(reason)
+        self.cause = cause
 
 
 class UnsolvableError(RuntimeError):

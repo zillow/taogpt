@@ -104,7 +104,6 @@ def parse_final_response(text: str) -> (bool, str):
     if not isinstance(judgements, dict) or not all([isinstance(x, dict) for x in judgements.values()]):
         raise ParseError("The response must be a JSON hash of hashes")
     concerns = []
-    overall_reason: str|None = None
     overall_correctness: bool = True
     for concern, judgement in judgements.items():
         if 'ok' not in judgement:
@@ -113,13 +112,9 @@ def parse_final_response(text: str) -> (bool, str):
         if type(item_correctness) != bool:
             raise ParseError(f"the 'ok' field of {concern} is not a JSON boolean.")
         overall_correctness = (overall_correctness and item_correctness)
-        if 'reason' in judgement:
-            if 'overall' == concern:
-                overall_reason = f"* overall: {judgement['reason']}"
-            else:
-                concerns.append(f"* {concern}: {judgement['reason']}")
-    if overall_reason is not None:
-        concerns.append(overall_reason)
+        if not item_correctness:
+            reason = f": {judgement['reason']}" if 'reason' in judgement else ''
+            concerns.append(f"* {concern}{reason}")
     return overall_correctness, '\n'.join(concerns)
 
 
@@ -131,7 +126,13 @@ class StepDescriptor:
 
 def parse_step_by_step_plan(text: str) -> _t.Dict[int, StepDescriptor]:
     results: {int: StepDescriptor} = dict()
-    for i, item in parse_json_hash(text).items():
+    try:
+        plan = parse_json_hash(text)
+    except ParseError as ex:
+        if not 'no JSON hash found' in str(ex):
+            raise ex
+        plan = {str(i + 1): {"description": desc} for i, desc in enumerate(parse_ordered_list(text))}
+    for i, item in plan.items():
         if not re.match(r"^\d+$", i):
             raise ParseError(f"JSON hash key '{i}' is not an integer")
         key = int(i)
@@ -191,6 +192,20 @@ def parse_json_hash(text):
         raise ParseError(f"JSON parse error: {e}")
     if not isinstance(responses, dict) or not all([isinstance(x, dict) for x in responses.values()]):
         raise ParseError("The response must be a JSON hash of hashes")
+    return responses
+
+
+def parse_json_list(text):
+    match = _json_response_re.match(text)
+    if match is None:
+        raise ParseError("no JSON hash found")
+    json_text = match.group(3) if match.group(3) is not None else match.group(5)
+    try:
+        responses: _t.List[str] = json.loads(json_text)
+    except json.JSONDecodeError as e:
+        raise ParseError(f"JSON parse error: {e}")
+    if not isinstance(responses, list) or not all([isinstance(x, str) for x in responses]):
+        raise ParseError("The response must be a JSON list of strings")
     return responses
 
 

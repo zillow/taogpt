@@ -50,7 +50,7 @@ def test_parse_step_type_spec():
 
 def test_ranking_prompt_format():
     prompts: PromptDb = PromptDb.load_defaults()
-    prompts.orchestrator_eval_strategy_choices.format(approaches='\n\n'.join(
+    prompts.orchestrator_rank_choices.format(approaches='\n\n'.join(
         [f"[Approach # {i+1}]" for i in range(4)]))
 
 

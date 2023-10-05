@@ -7,7 +7,7 @@ import math as _math
 
 import taogpt
 import taogpt.llm_model
-from . import StepABC, Invocation, Backtrack
+from . import StepABC, Invocation, Backtrack, Pause
 from .parsing import *
 from .constants import *
 import taogpt.utils as _utils
@@ -202,8 +202,11 @@ class GiveUpStep(TaoReplyStep):
         super().__post_init__()
         if len(self.description) == 0:
             raise ParseError("Must provide explanation why you gave up.")
+        self.issues = [issue.replace('\n', '').strip() for issue in parse_json_list(self.description)]
 
-    def eval_only(self, my_invocation: Invocation) -> Step | None:
+    def eval_only(self, my_invocation: Invocation):
+        if len(self.issues) > 0:
+            my_invocation.executor.record_criticisms(self.issues)
         raise Backtrack(f"Problem or step is unsolvable. I gave up.", my_invocation)
 
 
@@ -349,7 +352,7 @@ def parse_to_step(step: Step, response: str) -> Step:
 @_dc.dataclass(repr=False)
 class ExpandableStep(Step):
     choices: _t.List[Step] | None = None
-    initial_expansion: int = 1
+    first_expansion: int = 1
     incremental_expansion: int = 1
     max_expansion: int = 4
     first_problem_solving_step: bool = False
@@ -369,9 +372,6 @@ class ExpandableStep(Step):
             for next_step in self.choices:
                 next_step.previous = self
 
-    def is_first_problem_solving_step(self) -> bool:
-        return self.first_problem_solving_step
-
     @property
     def collected_criticisms(self):
         return self._all_criticisms
@@ -390,10 +390,9 @@ class ExpandableStep(Step):
         upto_branches = min(upto_branches, executor.config.max_search_expansion)
         prompt_db: PromptDb  = executor.prompts
         system_prompt = prompt_db.system_step_expansion
-        direct_answer = prompt_db.tao_template_intuitive_answer if self.is_first_problem_solving_step() \
+        direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
             else prompt_db.tao_template_direct_step_answer
-        examples = ''
-        tao_templates = prompt_db.tao_templates.format(examples=examples, direct_answer_template=direct_answer)
+        tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
         prompts: _t.List[(str, str)] = executor.show_conversation_thread()
         prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
         if self.choices is None:
@@ -433,22 +432,29 @@ class ExpandableStep(Step):
         prior: Step
         prior_plans_and_criticisms = []
         for i, prior in enumerate(self.choices):
-            desc_with_criticism = f"[Prior approach {i + 1}] {prior.description}"
+            # desc_with_criticism = f"[Prior approach {i + 1}] {prior.description}"
+            desc_with_criticism = f""
             if i in self._all_criticisms:
-                desc_with_criticism += "\n\ncriticism:\n"
+                # desc_with_criticism += "\n\ncriticism:\n"
                 desc_with_criticism += '\n'.join([f"* {s.strip()}" for s in self._all_criticisms[i]])
             prior_plans_and_criticisms.append(desc_with_criticism)
         return prior_plans_and_criticisms
 
-    def rank_choices(self, my_invocation: Invocation, n_existing_choices: int=None):
+    def rank_choices(self, my_invocation: Invocation, n_existing_choices: int=0):
+        question_indices = [i for i in range(n_existing_choices, len(self.choices))
+                               if isinstance(self.choices[i], AskPythonGenieStep)]
+        if len(question_indices) > 0:
+            if self.consolidate_questions(self.choices, question_indices):
+                indices = list(range(n_existing_choices)) + question_indices
+                self.choices = [self.choices[i] for i in indices]
+                my_invocation.executor.logger.log(f"\n**Questions consolidated, final indices**: {indices}\n\n")
         prompt_db: PromptDb  = my_invocation.executor.prompts
         system_prompt = prompt_db.sage
-        direct_answer = prompt_db.tao_template_intuitive_answer if self.is_first_problem_solving_step() \
+        direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
             else prompt_db.tao_template_direct_step_answer
-        tao_templates = prompt_db.tao_templates.format(
-            examples='', direct_answer_template=direct_answer)
+        tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
         prompts = my_invocation.executor.show_conversation_thread()
-        work_prompt = prompt_db.orchestrator_eval_strategy_choices.format(
+        work_prompt = prompt_db.orchestrator_rank_choices.format(
             tao_templates='', # skip template
             approaches='\n\n---\n\n'.join([
                 f"# [Approach {i+1}] {plan.step_title}\n\n{plan.description_with_extras}"
@@ -465,7 +471,7 @@ class ExpandableStep(Step):
             prompts_to_be_sent = prompts.copy()
             while n_retries < MAX_RETRIES:
                 try:
-                    rank_choice_instruction = prompt_db.orchestrator_eval_strategy_choices.split('---')[-1].strip()
+                    rank_choice_instruction = prompt_db.orchestrator_rank_choices.split('---')[-1].strip()
                     response = my_invocation.executor.sage_llm.ask(
                         system_prompt, prompts_to_be_sent,
                         reason='rank_choices',
@@ -490,8 +496,6 @@ class ExpandableStep(Step):
         my_invocation.executor.logger.log(f"\n**Sorted indices**: {indices} **scores**:\n{final_score_repr}\n\n")
         if len(indices) == 0:
             raise Backtrack(f"No valid plan found for this step.", my_invocation)
-        if self.consolidate_questions(self.choices, indices):
-            my_invocation.executor.logger.log(f"\n**Questions consolidated, final indices**: {indices}\n\n")
         if n_existing_choices is not None and n_existing_choices > 0:
             indices = list(range(n_existing_choices)) + indices
         self.choices = [self.choices[i] for i in indices]
@@ -542,10 +546,12 @@ class ExpandableStep(Step):
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         if self.choices is None or len(self.choices) < self.max_expansion:
             old_length = len(self.choices) if self.choices is not None else 0
-            incr = self.initial_expansion if self.choices is None else self.incremental_expansion
+            incr = self.first_expansion if self.choices is None else self.incremental_expansion
             self.expand_choices(my_invocation, upto_branches=self._ptr + incr)
             if self.choices is not None and len(self.choices) - old_length > 1:
                 self.rank_choices(my_invocation, n_existing_choices=old_length)
+            if self.first_problem_solving_step and my_invocation.executor.config.pause_after_initial_solving_expansion:
+                raise Pause("Pause after initial solving expansion", self)
         if self.choices is None or len(self.choices) == 0:
             raise Backtrack('No viable options.', blame=my_invocation)
         if self._ptr < len(self.choices):
@@ -576,7 +582,7 @@ class PresentTaskStep(Step):
         return ProceedStep(self,
                            '',
                            role=ROLE_ORCHESTRATOR,
-                           initial_expansion=my_invocation.executor.config.initial_expansion,
+                           first_expansion=my_invocation.executor.config.first_expansion,
                            max_expansion=my_invocation.executor.config.max_search_expansion,
                            first_problem_solving_step=True)
 

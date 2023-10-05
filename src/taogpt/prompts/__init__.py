@@ -11,7 +11,7 @@ class PromptDb:
     tao_template_intuitive_answer: str
     orchestrator_ask_init_analysis: str
     orchestrator_direct_solve: str
-    orchestrator_eval_strategy_choices: str
+    orchestrator_rank_choices: str
     orchestrator_next_step: str
     orchestrator_proceed: str
     orchestrator_proceed_to_step: str
@@ -39,7 +39,7 @@ class PromptDb:
             tao_template_intuitive_answer=_read(path / 'tao_template_intuitive_answer.md'),
             orchestrator_ask_init_analysis=_read(path / 'orchestrator_ask_init_analysis.md'),
             orchestrator_direct_solve=_read(path / 'orchestrator_direct_solve.md'),
-            orchestrator_eval_strategy_choices=_read(path / 'orchestrator_rank_choices.md'),
+            orchestrator_rank_choices=_read(path / 'orchestrator_rank_choices.md'),
             orchestrator_next_step=_read(path / 'orchestrator_next_step.md'),
             orchestrator_proceed=_read(path / 'orchestrator_proceed.md'),
             orchestrator_proceed_to_step=_read(path / 'orchestrator_proceed_to_step.md'),

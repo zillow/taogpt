@@ -19,9 +19,8 @@ Scoring criteria:
 * The approach which looks more efficient and avoids unnecessary works is preferred.
 * Try to avoid identical scores (except 0's;) you can use decimal points (e.g. 9.5) to 
   distinguish two different approaches. 
-* But if two approaches are nearly identical except wordings or details of explanation, mark the later one as a 
-  duplicate of the first; note: an approach can only duplicate another approach if the two are of same kinds, e.g. 
-  two direct answers.
+* But if two approaches are similar, mark the later one as a duplicate of the first; note: an approach can only 
+  duplicate another approach if the two are of same kinds, e.g. two direct answers.
 
 Response must be in valid JSON like this:
 

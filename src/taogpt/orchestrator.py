@@ -82,7 +82,9 @@ class Orchestrator(Executor):
             self._chain.append(Invocation(init_analysis_step, _executor=self))
         self._execute_with_backtracking()
 
-    def resume(self, additional_tokens: int=None, additional_tokens_for_smarter_llm: int=None):
+    def resume(self, additional_tokens: int=None,
+               unblock_initial_expansion: bool=False,
+               additional_tokens_for_smarter_llm: int=None):
         if additional_tokens is not None:
             self.config.max_tokens += additional_tokens
             print(f"extend token allowance by {additional_tokens} to {self.config.max_tokens}")
@@ -90,6 +92,8 @@ class Orchestrator(Executor):
             self.config.max_tokens_for_sage_llm += additional_tokens_for_smarter_llm
             print(f"extend token allowance for smarter LLM by {additional_tokens_for_smarter_llm} "
                   f"to {self.config.max_tokens_for_sage_llm}")
+        if unblock_initial_expansion:
+            self.config.pause_after_initial_solving_expansion = False
         self._execute_with_backtracking()
 
     def _execute_with_backtracking(self):
@@ -187,9 +191,9 @@ class Orchestrator(Executor):
 
     def next_step(self) -> Step:
         system_prompt = self.prompts.system_step_expansion
-        start_sovling = self.need_search_expansion_at_next_step()
+        start_solving = self.is_first_solving_expansion()
         step = self._chain[-1].step
-        if start_sovling:
+        if start_solving:
             work_prompt = self.prompts.orchestrator_proceed
         else:
             prompts = self.show_conversation_thread()
@@ -211,20 +215,21 @@ class Orchestrator(Executor):
                     step,
                     work_prompt,
                     role=ROLE_ORCHESTRATOR,
-                    initial_expansion=self.config.initial_expansion,
+                    first_expansion=self.config.first_expansion,
                     max_expansion=self.config.max_search_expansion,
-                    first_problem_solving_step=start_sovling,
+                    first_problem_solving_step=start_solving,
                     choices=[parse_to_step(step, plan)]
                 )
             else:
                 return parse_to_step(step, answer)
+        first_expansion = self.config.initial_expansion if start_solving else self.config.first_expansion
         work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
-                                     initial_expansion=self.config.initial_expansion,
+                                     first_expansion=first_expansion,
                                      max_expansion=self.config.max_search_expansion,
-                                     first_problem_solving_step=start_sovling)
+                                     first_problem_solving_step=start_solving)
         return work_next_step
 
-    def need_search_expansion_at_next_step(self):
+    def is_first_solving_expansion(self):
         for i, invocation in enumerate(self.chain):
             if isinstance(invocation.step, ExpandableStep) \
                     and i < len(self.chain) - 1 and not isinstance(self.chain[i + 1].step, AskQuestionStep):

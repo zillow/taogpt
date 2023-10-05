@@ -99,7 +99,7 @@ def test_need_full_expansion_at_first_expandable_step(logger):
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
-    assert orchestrator.need_search_expansion_at_next_step()
+    assert orchestrator.is_first_solving_expansion()
 
 
 def test_need_full_expansion_at_first_expandable_step_followed_by_ask_step(logger):
@@ -115,7 +115,7 @@ def test_need_full_expansion_at_first_expandable_step_followed_by_ask_step(logge
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
-    assert orchestrator.need_search_expansion_at_next_step()
+    assert orchestrator.is_first_solving_expansion()
 
 
 def test_no_full_expansion_at_subsequent_expandable_steps(logger):
@@ -133,7 +133,7 @@ def test_no_full_expansion_at_subsequent_expandable_steps(logger):
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
     orchestrator.chain.append(Invocation(step, _executor=orchestrator))
-    assert not orchestrator.need_search_expansion_at_next_step()
+    assert not orchestrator.is_first_solving_expansion()
 
 
 def test_record_criticism_to_expandable_steps(logger):
