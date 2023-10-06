@@ -65,8 +65,8 @@ Follow this markdown template **strictly**:
 ## Strategy: Ask the Python Genie
 
 The Python Genie is a sandboxed Python interpreter with standard library and numpy. It is a useful tool to help Tao 
-solve problems. Always ask Python Genie to do the math instead of doing it in your head. Be tidy, avoid useless code 
-comments. **Pay attention to Python indentation rules!** Follow the example below to ask Genie:
+solve problems. It's stateful and previously defined globals can be used without redefining. Be tidy, avoid useless 
+code comments. **Pay attention to Python indentation rules!** Follow the example below to ask Genie:
 
 `````markdown
 # LET_ME_ASK_THE_PYTHON_GENIE

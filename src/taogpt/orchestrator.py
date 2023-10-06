@@ -27,6 +27,7 @@ class Orchestrator(Executor):
 
         self._chain: [Invocation] = []
         self._frozen_chain: _FrozenList | None = None
+        self._python_scope = dict()
         if self.config.max_tokens_for_sage_llm is None:
             if self._sage_llm is not None and id(self._llm) != id(self._sage_llm):
                 self.config.max_tokens_for_sage_llm = self.config.max_tokens // 3
@@ -181,12 +182,12 @@ class Orchestrator(Executor):
             raise RuntimeError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
                                f"exceeded allowance of {self.config.max_tokens_for_sage_llm}")
 
-    def show_conversation_thread(self, with_extras=False, selector: _t.Callable[[int, Invocation], bool]|None=None) \
+    def show_conversation_thread(self, with_header=True, selector: _t.Callable[[int, Invocation], bool] | None=None) \
             -> [(str, str)]:
         conversation: [(str, str)] = []
         for i, invocation in enumerate(self._chain):
             if selector is None or selector(i, invocation):
-                conversation.extend(invocation.step.show_in_thread(invocation, with_extras=with_extras))
+                conversation.extend(invocation.step.show_in_thread(invocation, with_header=with_header))
         return conversation
 
     def next_step(self) -> Step:
@@ -349,7 +350,8 @@ class Orchestrator(Executor):
             if self.config.ask_user_before_execute_codes else None
         snippet: str|None = None
         try:
-            return [_utils.exec_code_and_collect_outputs(prompt, snippet.strip()) for snippet in codes]
+            return [_utils.exec_code_and_collect_outputs(prompt, snippet.strip(), global_scope=self._python_scope)
+                    for snippet in codes]
         except Exception as e:
             self.record_criticisms([f"""Python Genie reported error: {str(e)} when running this code snippet:
 ```python
@@ -372,6 +374,7 @@ class Orchestrator(Executor):
     def reset(self):
         self.llm.reset()
         self._chain = []
+        self._python_scope = dict()
         self._frozen_chain = _FrozenList()
 
     def vote(self, system_prompt: str, prompts: [(str, str)], parser: _t.Callable[[str], _t.Any],

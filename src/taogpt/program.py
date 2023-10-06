@@ -46,11 +46,15 @@ class Step(StepABC):
         return self._step_local_id
 
     @property
-    def description_with_extras(self):
-        return self.description
+    def description_with_header(self) -> str:
+        """
+        Always emit the `# ` prefix. Caller can remove the `#` heading indicator if need to.
+        :return:
+        """
+        return f"{self.step_title}\n\n{self.description}" if len(self.step_title) > 0 else self.description
 
-    def show_in_thread(self, my_invocation: Invocation, with_extras=False) -> [(str, str)]:
-        content = self.description_with_extras if with_extras else self.description
+    def show_in_thread(self, my_invocation: Invocation, with_header=True) -> [(str, str)]:
+        content = self.description_with_header if with_header else self.description
         return [(self.role, content)]
 
     def rank_choices(self, choices: [Step]) -> _t.List[Step]:
@@ -88,11 +92,6 @@ class UserReplyStep(Step):
         p = super().__repr_local__()
         return f"{p},reply={_utils.safe_subn(self.description)}..."
 
-    def __post_init__(self):
-        super().__post_init__()
-        if self.step_title not in self.description:
-            self.description = f"{self.step_title}:\n\n{self.description}"
-
     def retryable(self, invocation: Invocation):
         return False # maybe we can ask the user again but Tao will do so by generating new questions.
 
@@ -102,7 +101,7 @@ class PythonGenieReplyStep(Step):
 
     @property
     def step_title(self) -> str:
-        return 'The Python Genie replies'
+        return 'The Python Genie Replies'
 
     def __repr_local__(self) -> str:
         p = super().__repr_local__()
@@ -117,7 +116,7 @@ class AnalysisStep(Step):
 
     @property
     def step_title(self) -> str:
-        return 'ask for analysis'
+        return 'Problem Analysis'
 
     def __post_init__(self):
         super().__post_init__()
@@ -156,10 +155,6 @@ class TaoReplyStep(Step):
         super().__post_init__()
         sections = parse_sections(self.description)
         self.description = sections[FREE_TEXT]
-
-    @property
-    def description_with_extras(self):
-        return _utils.str_or_blank(self.description)
 
 
 @_dc.dataclass(repr=False)
@@ -227,7 +222,6 @@ class StepByStepPlan(TaoReplyStep):
         self._steps = parse_step_by_step_plan(self.description)
         why = f" [{self._steps[0].why}]" if _utils.str_or_blank(self._steps[0].why) == '' else ''
         self.first_step = f"{self._steps[0].description}{why}"
-        self.description = f"# {HERE_IS_MY_STEP_BY_STEP_PLAN}\n\n{self.description.strip()}"
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         # when evaluating this node, we are always at the first step
@@ -242,7 +236,7 @@ class FinalAnswerStep(TaoReplyStep):
 
     @property
     def step_title(self) -> str:
-        return "Tao's final answer"
+        return "Tao's Final Answer"
 
 
 @_dc.dataclass(repr=False)
@@ -266,8 +260,7 @@ class AskPythonGenieStep(TaoReplyStep):
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         results = my_invocation.executor.ask_genie(self._code_snippets, my_invocation)
         result_markdown = '\n\n'.join(f"""```text\n{r}\n```""" for r in results)
-        return PythonGenieReplyStep(
-            self, f"Python Genie replied:\n\n{result_markdown}", ROLE_GENIE)
+        return PythonGenieReplyStep(self, result_markdown, ROLE_GENIE)
 
 
 @_dc.dataclass(repr=False)
@@ -454,10 +447,16 @@ class ExpandableStep(Step):
             else prompt_db.tao_template_direct_step_answer
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
         prompts = my_invocation.executor.show_conversation_thread()
+
+        def _fix_desc_heading(desc: str):
+            if desc.strip().startswith('# '):
+                return desc.replace('# ', '', 1)
+            return desc
+
         work_prompt = prompt_db.orchestrator_rank_choices.format(
             tao_templates='', # skip template
             approaches='\n\n---\n\n'.join([
-                f"# [Approach {i+1}] {plan.step_title}\n\n{plan.description_with_extras}"
+                f"# [Approach {i+1}] {_fix_desc_heading(plan.description_with_header)}"
                 for i, plan in enumerate(self.choices)
             ])
         )
@@ -565,7 +564,7 @@ class ProceedStep(ExpandableStep):
 
     @property
     def step_title(self) -> str:
-        return "Tao will proceed"
+        return ""
 
     def _expansion_reason(self) -> str:
         return "proceed_to_next"
@@ -576,7 +575,7 @@ class PresentTaskStep(Step):
 
     @property
     def step_title(self) -> str:
-        return "task problem"
+        return ""
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         return ProceedStep(self,
@@ -593,7 +592,7 @@ class SageReplyStep(Step):
 
     @property
     def step_title(self) -> str:
-        return "Sage replied"
+        return "Sage Replied"
 
     def _expansion_reason(self) -> str:
         return "respond_to_criticism"

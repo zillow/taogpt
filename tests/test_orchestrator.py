@@ -22,7 +22,7 @@ def test_check_final_solution_success(logger):
     """
     overall, concerns = parse_final_response(text)
     assert overall
-    assert concerns == "* rule conformance: All right!\n* calculation: Good math!"
+    assert concerns == ""
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         assert reason == 'check_final_solution'
@@ -42,7 +42,7 @@ def test_check_final_solution_failed(logger):
     """
     overall, concerns = parse_final_response(text)
     assert not overall
-    assert concerns == "* calculation: 1 + 1 != 3\n* etc: Good"
+    assert concerns == "* calculation: 1 + 1 != 3"
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         assert reason == 'check_final_solution'
@@ -151,11 +151,7 @@ def test_record_criticism_to_expandable_steps(logger):
     orchestrator.record_criticisms(errors)
     assert len(expandable.collected_criticisms) == 1
     assert expandable.collected_criticisms[0] == errors
-    expected = f"""[Prior approach 1] {plan_step.description}
-
-criticism:
-* error 1
-* error 2"""
+    expected = f"""* error 1\n* error 2"""
     gathered = expandable.gather_choices_with_criticisms()
     assert len(gathered) == 1
     gathered[0] = gathered[0].replace("* error 2\n* error 1", "* error 1\n* error 2")

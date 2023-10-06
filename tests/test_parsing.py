@@ -202,14 +202,21 @@ Evaluate possible addition combinations.
 
 def test_parse_python_code_snippets():
     code_snippets = [
-        "1234",
+        """
+import math
+
+def foo():
+    _ = math.sin(1234)
+    return 3
+
+1234""",
         """
 x = 5
 y = 4
 z = 0
 for i in [1]:
     z += i * x * y
-z
+z + foo()
 """
     ]
     text = f"""free text before
@@ -228,8 +235,9 @@ free text after
     assert len(parsed) == 2
     assert parsed[0].strip() == code_snippets[0].strip()
     assert parsed[1].strip() == code_snippets[1].strip()
-    assert eval_and_collect(parsed[0]) == '=> 1234'
-    assert eval_and_collect(parsed[1]) == '=> 20'
+    global_scope = dict()
+    assert eval_and_collect(parsed[0], global_scope) == '=> 1234'
+    assert eval_and_collect(parsed[1], global_scope) == '=> 23'
 
 
 def test_parse_step_by_step_plan_raise_invalid_json():

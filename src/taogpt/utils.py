@@ -164,22 +164,23 @@ class MarkdownLogger:
 
 
 # credit: https://stackoverflow.com/questions/39379331/python-exec-a-code-block-and-eval-the-last-line
-def exec_then_eval(code):
+def exec_then_eval(code, global_scope: _t.Dict[str, _t.Any]):
     block = _ast.parse(code, mode='exec')
     # assumes last node is an expression
     last = _ast.Expression(block.body.pop().value)
-    _globals, _locals = {}, {}
-    exec(compile(block, '<string>', mode='exec'), _globals, _locals)
-    return eval(compile(last, '<string>', mode='eval'), _globals, _locals)
+    exec(compile(block, '<string>', mode='exec'), global_scope, global_scope)
+    return eval(compile(last, '<string>', mode='eval'), global_scope, global_scope)
 
 
 # credit: https://stackoverflow.com/questions/64209815/python-how-can-i-save-the-output-of-eval-in-a-variable
-def eval_and_collect(codes: str, return_value_indicator='=> ', raise_on_error=True) -> str:
+def eval_and_collect(codes: str, global_scope: _t.Dict[str, _t.Any],
+                     return_value_indicator='=> ',
+                     raise_on_error=True) -> str:
     old_stdout = _sys.stdout
     try:
         _sys.stdout = mystdout = _StringIO()
         try:
-            ret = exec_then_eval(codes)
+            ret = exec_then_eval(codes, global_scope)
             output = mystdout.getvalue()
         except Exception as e:
             if raise_on_error:
@@ -197,7 +198,7 @@ def eval_and_collect(codes: str, return_value_indicator='=> ', raise_on_error=Tr
         _sys.stdout = old_stdout
 
 
-def exec_code_and_collect_outputs(prompt: str, codes: str) -> str:
+def exec_code_and_collect_outputs(prompt: str, codes: str, global_scope: _t.Dict[str, _t.Any]|None=None) -> str:
     while prompt is not None:
         answer = input(f"""{prompt}
     
@@ -210,7 +211,7 @@ Reply "yes" to execute this code snippet, or "no" to cancel.
             break
         elif answer.strip().lower() == 'no':
             raise KeyboardInterrupt("User cancelled the request")
-    return eval_and_collect(codes)
+    return eval_and_collect(codes, global_scope or dict())
 
 
 _markdown_fenced_block_re = re.compile(r"```+", flags=re.DOTALL | re.IGNORECASE)

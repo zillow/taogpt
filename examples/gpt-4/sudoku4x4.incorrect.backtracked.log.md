@@ -7959,3 +7959,1877 @@ This solution satisfies all the rules of Sudoku: each row, column, and 2x2 sub-g
 
 **Text lengths**: context=14219 + reply:304=14523 **Total tokens**: 3933
 
+---
+<div style="color: white; background-color: black">
+
+# BACKTRACK to ProceedStep:Tao, some critic say@14
+
+</div>
+
+# SEND TO LLM for proceed_to_next/14/1
+
+<div style="background-color:lightgrey; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[-1] **system**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+... system_prompt [text of length 211] ...
+
+
+</div>
+</div>
+
+<div style="background-color:lightgreen; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[0] **user**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**user >>> said**:
+
+
+Solve this 4x4 Sudoku:
+
+```text
++-+-+-+-+
+| |3| |1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[1] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. The Sudoku puzzle provided is a valid 4x4 grid with some numbers already filled in. The rules of Sudoku require that each row, column, and 2x2 sub-grid contain all of the digits from 1 to 4. There are no repeated numbers in any row, column, or 2x2 sub-grid in the provided puzzle, so it is a valid starting point for a Sudoku puzzle.
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[2] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, please proceed to solve the problme following the "Problem Solving Instructions" above. Be sure to start with 
+one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`,
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `HERE_IS_MY_STEP_BY_STEP_PLAN`, or `FINAL_ANSWER`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[3] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+***HERE_IS_MY_STEP_BY_STEP_PLAN***
+
+
+
+To solve this Sudoku, I will follow this step by step plan:
+
+1. Fill in the cells that have only one possible value. This can be found by checking the numbers in the current row, column, and 2x2 sub-grid.
+2. If a cell can have more than one possible value, choose one and proceed.
+3. If this results in a contradiction (a cell that cannot have any value), backtrack and try another value.
+4. Repeat this process until the Sudoku is solved.
+
+```json
+{
+  "1": {"description": "Fill in the cell at row 1, column 2. This cell must be 4 because it is the only number not yet in the first row."},
+  "2": {"description": "Fill in the cell at row 1, column 3. This cell must be 2 because it is the only number not yet in the first 2x2 sub-grid."},
+  "3": {"description": "Fill in the cell at row 2, column 2. This cell must be 4 because it is the only number not yet in the first column."},
+  "4": {"description": "Fill in the cell at row 2, column 3. This cell must be 2 because it is the only number not yet in the second 2x2 sub-grid."},
+  "5": {"description": "Fill in the cell at row 2, column 4. This cell must be 1 because it is the only number not yet in the second row."},
+  "6": {"description": "Fill in the cell at row 3, column 2. This cell must be 1 because it is the only number not yet in the third 2x2 sub-grid."},
+  "7": {"description": "Fill in the cell at row 3, column 3. This cell must be 2 because it is the only number not yet in the third column."},
+  "8": {"description": "Fill in the cell at row 4, column 3. This cell must be 1 because it is the only number not yet in the fourth 2x2 sub-grid."},
+  "9": {"description": "Fill in the cell at row 4, column 4. This cell must be 3 because it is the only number not yet in the fourth row."}
+}
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[4] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 1, column 2. This cell must be 4 because it is the only number not yet in the first row. [None]
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[5] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 1, column 2 is indeed 4 because it is the only number not yet in the first row. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3| |1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[6] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 1, column 3. This cell must be 2 because it is the only number not yet in the first 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[7] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 1, column 3 is indeed 2 because it is the only number not yet in the first 2x2 sub-grid. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[8] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 2. This cell must be 4 because it is the only number not yet in the first column.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[9] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 2 is indeed 4 because it is the only number not yet in the first column. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4| |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[10] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 3. This cell must be 2 because it is the only number not yet in the second 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[11] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 3 is indeed 2 because it is the only number not yet in the second 2x2 sub-grid. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4|2|3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[12] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 4. This cell must be 1 because it is the only number not yet in the second row.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[13] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 4 is indeed 1 because it is the only number not yet in the second row. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4|2|3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[14] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+[..tao_templates:3363..]
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[15] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 3, column 2. This cell must be 1 because it is the only number not yet in the third 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[16] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+We don't have all records of prior alternatives attempted for this step, but here are criticisms received:
+
+* The cell at row 3, column 3 cannot be 2 because there is already a 2 in the third row.
+
+You should come up with a new proposal and avoid these mistakes.
+
+
+</div>
+</div>
+
+Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.7
+
+***BACKTRACK_ON_ERROR***
+
+
+
+```json
+[
+  "The cell at row 3, column 2 cannot be 1 because there is already a 1 in the third column."
+]
+```
+
+**Text lengths**: context=11512 + reply:131=11643 **Total tokens**: 3112
+
+---
+<div style="color: white; background-color: black">
+
+# BACKTRACK to ProceedStep:Tao, some critic say@14
+
+</div>
+
+# SEND TO LLM for proceed_to_next/14/2
+
+<div style="background-color:lightgrey; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[-1] **system**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+... system_prompt [text of length 211] ...
+
+
+</div>
+</div>
+
+<div style="background-color:lightgreen; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[0] **user**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**user >>> said**:
+
+
+Solve this 4x4 Sudoku:
+
+```text
++-+-+-+-+
+| |3| |1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[1] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. The Sudoku puzzle provided is a valid 4x4 grid with some numbers already filled in. The rules of Sudoku require that each row, column, and 2x2 sub-grid contain all of the digits from 1 to 4. There are no repeated numbers in any row, column, or 2x2 sub-grid in the provided puzzle, so it is a valid starting point for a Sudoku puzzle.
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[2] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, please proceed to solve the problme following the "Problem Solving Instructions" above. Be sure to start with 
+one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`,
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `HERE_IS_MY_STEP_BY_STEP_PLAN`, or `FINAL_ANSWER`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[3] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+***HERE_IS_MY_STEP_BY_STEP_PLAN***
+
+
+
+To solve this Sudoku, I will follow this step by step plan:
+
+1. Fill in the cells that have only one possible value. This can be found by checking the numbers in the current row, column, and 2x2 sub-grid.
+2. If a cell can have more than one possible value, choose one and proceed.
+3. If this results in a contradiction (a cell that cannot have any value), backtrack and try another value.
+4. Repeat this process until the Sudoku is solved.
+
+```json
+{
+  "1": {"description": "Fill in the cell at row 1, column 2. This cell must be 4 because it is the only number not yet in the first row."},
+  "2": {"description": "Fill in the cell at row 1, column 3. This cell must be 2 because it is the only number not yet in the first 2x2 sub-grid."},
+  "3": {"description": "Fill in the cell at row 2, column 2. This cell must be 4 because it is the only number not yet in the first column."},
+  "4": {"description": "Fill in the cell at row 2, column 3. This cell must be 2 because it is the only number not yet in the second 2x2 sub-grid."},
+  "5": {"description": "Fill in the cell at row 2, column 4. This cell must be 1 because it is the only number not yet in the second row."},
+  "6": {"description": "Fill in the cell at row 3, column 2. This cell must be 1 because it is the only number not yet in the third 2x2 sub-grid."},
+  "7": {"description": "Fill in the cell at row 3, column 3. This cell must be 2 because it is the only number not yet in the third column."},
+  "8": {"description": "Fill in the cell at row 4, column 3. This cell must be 1 because it is the only number not yet in the fourth 2x2 sub-grid."},
+  "9": {"description": "Fill in the cell at row 4, column 4. This cell must be 3 because it is the only number not yet in the fourth row."}
+}
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[4] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 1, column 2. This cell must be 4 because it is the only number not yet in the first row. [None]
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[5] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 1, column 2 is indeed 4 because it is the only number not yet in the first row. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3| |1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[6] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 1, column 3. This cell must be 2 because it is the only number not yet in the first 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[7] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 1, column 3 is indeed 2 because it is the only number not yet in the first 2x2 sub-grid. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[8] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 2. This cell must be 4 because it is the only number not yet in the first column.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[9] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 2 is indeed 4 because it is the only number not yet in the first column. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4| |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[10] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 3. This cell must be 2 because it is the only number not yet in the second 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[11] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 3 is indeed 2 because it is the only number not yet in the second 2x2 sub-grid. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4|2|3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[12] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 4. This cell must be 1 because it is the only number not yet in the second row.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[13] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 4 is indeed 1 because it is the only number not yet in the second row. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4|2|3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[14] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+[..tao_templates:3363..]
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[15] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 3, column 2. This cell must be 1 because it is the only number not yet in the third 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[16] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+We don't have all records of prior alternatives attempted for this step, but here are criticisms received:
+
+* The cell at row 3, column 3 cannot be 2 because there is already a 2 in the third row.
+
+---
+
+
+You should come up with a new proposal and avoid these mistakes.
+
+
+</div>
+</div>
+
+Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.7
+
+***BACKTRACK_ON_ERROR***
+
+
+
+```json
+[
+  "The cell at row 3, column 3 cannot be 2 because there is already a 2 in the third row."
+]
+```
+
+**Text lengths**: context=11518 + reply:128=11646 **Total tokens**: 3114
+
+---
+<div style="color: white; background-color: black">
+
+# BACKTRACK to ProceedStep:Tao, some critic say@14
+
+</div>
+
+# SEND TO LLM for proceed_to_next/14/3
+
+<div style="background-color:lightgrey; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[-1] **system**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+... system_prompt [text of length 211] ...
+
+
+</div>
+</div>
+
+<div style="background-color:lightgreen; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[0] **user**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**user >>> said**:
+
+
+Solve this 4x4 Sudoku:
+
+```text
++-+-+-+-+
+| |3| |1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[1] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. The Sudoku puzzle provided is a valid 4x4 grid with some numbers already filled in. The rules of Sudoku require that each row, column, and 2x2 sub-grid contain all of the digits from 1 to 4. There are no repeated numbers in any row, column, or 2x2 sub-grid in the provided puzzle, so it is a valid starting point for a Sudoku puzzle.
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[2] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, please proceed to solve the problme following the "Problem Solving Instructions" above. Be sure to start with 
+one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`,
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `HERE_IS_MY_STEP_BY_STEP_PLAN`, or `FINAL_ANSWER`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[3] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+***HERE_IS_MY_STEP_BY_STEP_PLAN***
+
+
+
+To solve this Sudoku, I will follow this step by step plan:
+
+1. Fill in the cells that have only one possible value. This can be found by checking the numbers in the current row, column, and 2x2 sub-grid.
+2. If a cell can have more than one possible value, choose one and proceed.
+3. If this results in a contradiction (a cell that cannot have any value), backtrack and try another value.
+4. Repeat this process until the Sudoku is solved.
+
+```json
+{
+  "1": {"description": "Fill in the cell at row 1, column 2. This cell must be 4 because it is the only number not yet in the first row."},
+  "2": {"description": "Fill in the cell at row 1, column 3. This cell must be 2 because it is the only number not yet in the first 2x2 sub-grid."},
+  "3": {"description": "Fill in the cell at row 2, column 2. This cell must be 4 because it is the only number not yet in the first column."},
+  "4": {"description": "Fill in the cell at row 2, column 3. This cell must be 2 because it is the only number not yet in the second 2x2 sub-grid."},
+  "5": {"description": "Fill in the cell at row 2, column 4. This cell must be 1 because it is the only number not yet in the second row."},
+  "6": {"description": "Fill in the cell at row 3, column 2. This cell must be 1 because it is the only number not yet in the third 2x2 sub-grid."},
+  "7": {"description": "Fill in the cell at row 3, column 3. This cell must be 2 because it is the only number not yet in the third column."},
+  "8": {"description": "Fill in the cell at row 4, column 3. This cell must be 1 because it is the only number not yet in the fourth 2x2 sub-grid."},
+  "9": {"description": "Fill in the cell at row 4, column 4. This cell must be 3 because it is the only number not yet in the fourth row."}
+}
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[4] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 1, column 2. This cell must be 4 because it is the only number not yet in the first row. [None]
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[5] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 1, column 2 is indeed 4 because it is the only number not yet in the first row. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3| |1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[6] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 1, column 3. This cell must be 2 because it is the only number not yet in the first 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[7] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 1, column 3 is indeed 2 because it is the only number not yet in the first 2x2 sub-grid. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[8] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 2. This cell must be 4 because it is the only number not yet in the first column.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[9] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 2 is indeed 4 because it is the only number not yet in the first column. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4| |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[10] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 3. This cell must be 2 because it is the only number not yet in the second 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[11] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 3 is indeed 2 because it is the only number not yet in the second 2x2 sub-grid. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4|2|3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[12] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 4. This cell must be 1 because it is the only number not yet in the second row.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[13] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 4 is indeed 1 because it is the only number not yet in the second row. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4|2|3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[14] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+[..tao_templates:3363..]
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[15] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 3, column 2. This cell must be 1 because it is the only number not yet in the third 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[16] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+We don't have all records of prior alternatives attempted for this step, but here are criticisms received:
+
+* The cell at row 3, column 3 cannot be 2 because there is already a 2 in the third row.
+
+---
+
+
+---
+
+
+You should come up with a new proposal and avoid these mistakes.
+
+
+</div>
+</div>
+
+Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.7
+
+***BACKTRACK_ON_ERROR***
+
+
+
+```json
+[
+  "The cell at row 3, column 2 cannot be 1 because there is already a 1 in the second column."
+]
+```
+
+**Text lengths**: context=11524 + reply:132=11656 **Total tokens**: 3116
+
+---
+<div style="color: white; background-color: black">
+
+# BACKTRACK to ProceedStep:Tao, some critic say@14
+
+</div>
+
+---
+<div style="color: white; background-color: black">
+
+# BACKTRACK to ProceedStep:Tao, some critic say@12
+
+</div>
+
+# SEND TO LLM for proceed_to_next/12/1
+
+<div style="background-color:lightgrey; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[-1] **system**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+... system_prompt [text of length 211] ...
+
+
+</div>
+</div>
+
+<div style="background-color:lightgreen; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[0] **user**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**user >>> said**:
+
+
+Solve this 4x4 Sudoku:
+
+```text
++-+-+-+-+
+| |3| |1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[1] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. The Sudoku puzzle provided is a valid 4x4 grid with some numbers already filled in. The rules of Sudoku require that each row, column, and 2x2 sub-grid contain all of the digits from 1 to 4. There are no repeated numbers in any row, column, or 2x2 sub-grid in the provided puzzle, so it is a valid starting point for a Sudoku puzzle.
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[2] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, please proceed to solve the problme following the "Problem Solving Instructions" above. Be sure to start with 
+one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`,
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `HERE_IS_MY_STEP_BY_STEP_PLAN`, or `FINAL_ANSWER`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[3] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+***HERE_IS_MY_STEP_BY_STEP_PLAN***
+
+
+
+To solve this Sudoku, I will follow this step by step plan:
+
+1. Fill in the cells that have only one possible value. This can be found by checking the numbers in the current row, column, and 2x2 sub-grid.
+2. If a cell can have more than one possible value, choose one and proceed.
+3. If this results in a contradiction (a cell that cannot have any value), backtrack and try another value.
+4. Repeat this process until the Sudoku is solved.
+
+```json
+{
+  "1": {"description": "Fill in the cell at row 1, column 2. This cell must be 4 because it is the only number not yet in the first row."},
+  "2": {"description": "Fill in the cell at row 1, column 3. This cell must be 2 because it is the only number not yet in the first 2x2 sub-grid."},
+  "3": {"description": "Fill in the cell at row 2, column 2. This cell must be 4 because it is the only number not yet in the first column."},
+  "4": {"description": "Fill in the cell at row 2, column 3. This cell must be 2 because it is the only number not yet in the second 2x2 sub-grid."},
+  "5": {"description": "Fill in the cell at row 2, column 4. This cell must be 1 because it is the only number not yet in the second row."},
+  "6": {"description": "Fill in the cell at row 3, column 2. This cell must be 1 because it is the only number not yet in the third 2x2 sub-grid."},
+  "7": {"description": "Fill in the cell at row 3, column 3. This cell must be 2 because it is the only number not yet in the third column."},
+  "8": {"description": "Fill in the cell at row 4, column 3. This cell must be 1 because it is the only number not yet in the fourth 2x2 sub-grid."},
+  "9": {"description": "Fill in the cell at row 4, column 4. This cell must be 3 because it is the only number not yet in the fourth row."}
+}
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[4] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 1, column 2. This cell must be 4 because it is the only number not yet in the first row. [None]
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[5] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 1, column 2 is indeed 4 because it is the only number not yet in the first row. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3| |1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[6] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 1, column 3. This cell must be 2 because it is the only number not yet in the first 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[7] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 1, column 3 is indeed 2 because it is the only number not yet in the first 2x2 sub-grid. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1| | |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[8] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 2. This cell must be 4 because it is the only number not yet in the first column.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[9] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 2 is indeed 4 because it is the only number not yet in the first column. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4| |3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[10] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 3. This cell must be 2 because it is the only number not yet in the second 2x2 sub-grid.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[11] **Tao**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**Tao >>> said**:
+
+The cell at row 2, column 3 is indeed 2 because it is the only number not yet in the second 2x2 sub-grid. The updated Sudoku grid is:
+
+```text
++-+-+-+-+
+|4|3|2|1|
++-+-+-+-+
+|1|4|2|3|
++-+-+-+-+
+|2| |3|4|
++-+-+-+-+
+|3|4| |2|
++-+-+-+-+
+```
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[12] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+[..tao_templates:3363..]
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[13] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+Tao, some critic says your last step answer has errors while others think it's OK. Please check the steps done so far.
+If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, otherwise proceed to step 
+
+* Fill in the cell at row 2, column 4. This cell must be 1 because it is the only number not yet in the second row.
+
+following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
+headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `BACKTRACK_ON_ERROR`, 
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `HERE_IS_MY_STEP_BY_STEP_PLAN`.
+
+
+
+</div>
+</div>
+
+<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+
+<div style="flex: 130px">
+
+[14] **orchestrator**
+
+</div>
+<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+
+**orchestrator >>> said**:
+
+We don't have all records of prior alternatives attempted for this step, but here are criticisms received:
+
+* The cell at row 3, column 3 cannot be 2 because there is already a 2 in the third row.
+
+You should come up with a new proposal and avoid these mistakes.
+
+
+</div>
+</div>
+
+Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.7
+
+***BACKTRACK_ON_ERROR***
+
+
+
+```json
+[
+  "The cell at row 3, column 3 cannot be 2 because there is already a 2 in the third row."
+]
+```
+
+**Text lengths**: context=10642 + reply:128=10770 **Total tokens**: 2860
+
