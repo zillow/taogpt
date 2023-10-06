@@ -51,7 +51,7 @@ class Step(StepABC):
         Always emit the `# ` prefix. Caller can remove the `#` heading indicator if need to.
         :return:
         """
-        return f"{self.step_title}\n\n{self.description}" if len(self.step_title) > 0 else self.description
+        return f"# {self.step_title}\n\n{self.description}" if len(self.step_title) > 0 else self.description
 
     def show_in_thread(self, my_invocation: Invocation, with_header=True) -> [(str, str)]:
         content = self.description_with_header if with_header else self.description

@@ -27,7 +27,7 @@ class Orchestrator(Executor):
 
         self._chain: [Invocation] = []
         self._frozen_chain: _FrozenList | None = None
-        self._python_scope = dict()
+        self._create_python_scope()
         if self.config.max_tokens_for_sage_llm is None:
             if self._sage_llm is not None and id(self._llm) != id(self._sage_llm):
                 self.config.max_tokens_for_sage_llm = self.config.max_tokens // 3
@@ -202,27 +202,39 @@ class Orchestrator(Executor):
             work_prompt = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
             prompts.append((ROLE_ORCHESTRATOR, work_prompt))
             prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_next_step))
-            decision, (answer, plan) = self.vote(system_prompt,
-                                       prompts,
-                                       parse_next_step_reply,
-                                       reason='next_step',
-                                       step_id=f"{step.step_id}",
-                                       collapse_contents={'next_step': work_prompt})
-            assert decision is not None
-            assert answer is not None
-            if decision == NEXT_I_WANT_TO_WORK_AT:
-                work_prompt = self.prompts.orchestrator_proceed_to_step.format(step=answer)
-                return ProceedStep(
-                    step,
-                    work_prompt,
-                    role=ROLE_ORCHESTRATOR,
-                    first_expansion=self.config.first_expansion,
-                    max_expansion=self.config.max_search_expansion,
-                    first_problem_solving_step=start_solving,
-                    choices=[parse_to_step(step, plan)]
-                )
-            else:
-                return parse_to_step(step, answer)
+
+            n_retries = 0
+            prompts_to_be_sent = prompts.copy()
+            response: str = ''
+            while n_retries < MAX_RETRIES:
+                try:
+                    response = self.llm.ask(system_prompt,
+                                            prompts_to_be_sent,
+                                            reason='next_step',
+                                            step_id=f"{step.step_id}",
+                                            temperature=0.0 if n_retries == 0 else self.config.alternative_temperature,
+                                            log_request=n_retries == 0,
+                                            collapse_contents=dict())
+                    decision, (answer, plan) = parse_next_step_reply(response)
+                    assert decision is not None
+                    assert answer is not None
+                    if decision == NEXT_I_WANT_TO_WORK_AT:
+                        work_prompt = self.prompts.orchestrator_proceed_to_step.format(step=answer)
+                        return ProceedStep(
+                            step,
+                            work_prompt,
+                            role=ROLE_ORCHESTRATOR,
+                            first_expansion=self.config.first_expansion,
+                            max_expansion=self.config.max_search_expansion,
+                            first_problem_solving_step=start_solving,
+                            choices=[parse_to_step(step, plan)]
+                        )
+                    else:
+                        return parse_to_step(step, answer)
+                except Exception as e:
+                    n_retries += 1
+                    self._handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
+                                             self.prompts.orchestrator_parse_error)
         first_expansion = self.config.initial_expansion if start_solving else self.config.first_expansion
         work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
                                      first_expansion=first_expansion,
@@ -346,6 +358,7 @@ class Orchestrator(Executor):
         return ask_questions(input_fn, questions, self.config.ask_user_questions_in_one_prompt)
 
     def ask_genie(self, codes: [str], invocation: Invocation) -> [str]:
+        self._verify_python_scope()
         prompt = "Tao asks to execute the following codes:" \
             if self.config.ask_user_before_execute_codes else None
         snippet: str|None = None
@@ -374,8 +387,15 @@ class Orchestrator(Executor):
     def reset(self):
         self.llm.reset()
         self._chain = []
-        self._python_scope = dict()
+        self._create_python_scope()
         self._frozen_chain = _FrozenList()
+
+    def _create_python_scope(self):
+        self._python_scope = {'_taogpt_orchestrator_python_scope_sig': time.time()}
+
+    def _verify_python_scope(self):
+        assert self._python_scope is not None
+        assert isinstance(self._python_scope['_taogpt_orchestrator_python_scope_sig'], float)
 
     def vote(self, system_prompt: str, prompts: [(str, str)], parser: _t.Callable[[str], _t.Any],
              reason: str=None, step_id:str=None, min_threshold=0.0, majority=1,

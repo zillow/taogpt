@@ -16,7 +16,8 @@ Scoring criteria:
 * The approaches which lead to incorrect results should get a score of 0.
 * The assumption implied/used should be correct.
 * The questions asked by Tao should be relevant and non-redundant.
-* The approach which looks more efficient and avoids unnecessary works is preferred.
+* Worship Occam's razor! The approach which looks more concise, efficient and avoids unnecessary works is preferred.
+* A step-by-step strategy without loops is preferred over one with loops.
 * Try to avoid identical scores (except 0's;) you can use decimal points (e.g. 9.5) to 
   distinguish two different approaches. 
 * But if two approaches are similar, mark the later one as a duplicate of the first; note: an approach can only 

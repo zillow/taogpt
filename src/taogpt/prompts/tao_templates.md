@@ -38,14 +38,16 @@ following template **strictly** so the orchestrator can parse it and show the qu
 
 ## Strategy: Step-by-step Plan
 
-In this strategy, the problem task is turned into a top-down, step-by-step tree of which you and Orchestrator will 
-solve using tree traversal and backtracking. Thus, you should decompose the current step one-level at a time into a 
-list of two or more sub-tasks. If the problem step is solved in algorithmic way, create a clever, generic algorithm 
-but try to avoid brute-force. Also avoid steps that do very little work because those can be merged into other steps.
+In this strategy, the problem task is turned into a top-down, step-by-step plan of which you and Orchestrator will 
+solve using tree traversal and backtracking.
 
-Do not work on the plan yet, Orchestrator will prompt you to work at each step later. Verification steps can be 
-added, but instead of going back to a previous step upon failure, you should take a note of the condition and 
-Orchestrator will let you backtrack.
+* We worship Occam's razor, keep the plan concise.
+* Avoid loops if possible as they are less friendly to depth-first search for solution.
+* If the problem step is solved in algorithmic way, create a clever, generic algorithm; avoid brute-force.
+* Avoid steps that do very little work because those should be merged into other steps. 
+* Test steps should be added.
+
+Do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
 
 Follow this markdown template **strictly**:
 
@@ -56,7 +58,13 @@ Follow this markdown template **strictly**:
 ```json
 {{
   "1": {{"description": "<step 1 description>"}},
-  "2": {{"description": "<step 2 description>"}},
+  "2": {{
+        "description": "<step 2 description>",
+        "sub_steps": {{
+            "1": {{"description": "<step 2.1 description>"}},
+            "2": {{"description": "<step 2.2 description>"}}
+        }}
+       }},
   // ...
 }}
 ```

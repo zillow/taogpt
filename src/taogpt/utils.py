@@ -155,12 +155,11 @@ class MarkdownLogger:
 
     def new_message_section(self, role, step_index):
         color = MarkdownLogger.role_color_map.get(role, 'white')
-        self.log(f'<div style="background-color:{color}; display: flex; border-bottom: 1px dotted grey">\n\n'
-                 f'<div style="flex: 130px">\n\n[{step_index}] **{role}**\n\n</div>\n'
-                 f'<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">')
+        self.log(f'<div style="background-color:{color}; padding: 5px; border-bottom: 1px dotted grey">\n'
+                 f'<div>[{step_index}] <b>{role}</b>:</div>\n')
 
     def close_message_section(self):
-        self.log('\n</div>\n</div>')
+        self.log('\n</div>')
 
 
 # credit: https://stackoverflow.com/questions/39379331/python-exec-a-code-block-and-eval-the-last-line

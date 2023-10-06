@@ -100,7 +100,6 @@ class LangChainLLM(LLM):
                 continue
             effective_role = LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[role]
             self._logger.new_message_section(role, i)
-            self._logger.log(f"**{role} >>> said**:\n")
             if len(message) > 500:
                 deduped_msg = self.deduplicate_for_logging(message, collapse_contents)
                 self._logger.log(deduped_msg, demote_h1=True)
