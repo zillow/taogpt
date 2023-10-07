@@ -168,10 +168,16 @@ class DirectAnswerStep(TaoReplyStep):
         return DirectAnswerStep.TYPE_SPEC
 
     def __post_init__(self):
-        sections = parse_sections(self.description)
-        self.next_step = sections.get(NEXT_I_WANT_TO_WORK_AT, None)
+        self.description = re.sub(rf"#+\s+{NEXT_I_WANT_TO_WORK_AT}", f"### {NEXT_I_WANT_TO_WORK_AT}:",
+                                  self.description, 1)
+        sections: _t.Dict[str, str] = parse_sections(self.description)
+        self.next_step = sections.pop(NEXT_I_WANT_TO_WORK_AT, None)
         self.is_final_step = self.is_final_step or is_final_answer(self.next_step)
-        super().__post_init__()
+        reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
+        self.description = '\n\n'.join(reconstructed)
+        self.description = re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=re.IGNORECASE)
+        self.description = re.sub(r"#+ FILE", "### FILE", self.description, flags=re.IGNORECASE).strip()
+        Step.__post_init__(self)
 
     def eval_only(self, my_invocation: Invocation) -> Step | None:
         if not _utils.is_blank(self.next_step) and not self.is_final_step:

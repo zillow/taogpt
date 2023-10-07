@@ -59,3 +59,22 @@ def test_consolidate_do_nothing_if_no_questions():
 def test_step_types():
     step = ProceedStep(None, '1. do X\n2. do Y', ROLE_TAO)
     assert isinstance(step, ExpandableStep)
+
+
+def test_final_direct_answer_with_nonstandard_heading():
+    content = f"""22
+
+### FILE: dir/foo.py
+```python
+# return constant
+1234
+```"""
+    text = f"""# {WILL_ANSWER_DIRECTLY}
+{content}
+
+# {NEXT_I_WANT_TO_WORK_AT}
+None. I'm done.
+"""
+    step: DirectAnswerStep = parse_to_step(None, text)
+    assert step.is_final_step
+    assert step.description == content

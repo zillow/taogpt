@@ -250,9 +250,6 @@ class Orchestrator(Executor):
         return True
 
     def summarize_final_answer(self) -> FinalAnswerStep:
-        if self.config.check_final:
-            self.check_final_solution(self._chain[-1])
-
         is_direct_answer_only = False
         if isinstance(self._chain[-1].step, DirectAnswerStep):
             for i in range(len(self._chain) - 2, -1, -1):
@@ -265,17 +262,21 @@ class Orchestrator(Executor):
             if is_direct_answer_only:
                 final_answer_step = FinalAnswerStep(last_step.previous, last_step.description, ROLE_TAO)
                 self._chain[-1].step = final_answer_step
+                if self.config.check_final:
+                    self.check_final_solution(self._chain[-1])
                 return final_answer_step
 
         system_prompt = self.prompts.sage
         prompts = self.show_conversation_thread()
         summarize_prompt = self.prompts.orchestrator_summarize
         prompts.append((ROLE_ORCHESTRATOR, summarize_prompt))
+        prompts_to_be_sent = prompts.copy()
         n_retries= 0
         ex: Exception|None = None
+        response: str|None = None
         while n_retries < MAX_RETRIES:
             try:
-                response = self.llm.ask(system_prompt, prompts,
+                response = self.llm.ask(system_prompt, prompts_to_be_sent,
                                         reason='summarize',
                                         step_id=f"summarize/{n_retries}",
                                         temperature=0.0,
@@ -284,17 +285,25 @@ class Orchestrator(Executor):
                 final_answer_step = FinalAnswerStep(self._chain[-1].step, response, ROLE_TAO)
                 new_invocation = Invocation(final_answer_step, _executor=self)
                 self._chain.append(new_invocation)
+                if self.config.check_final:
+                    self.check_final_solution(self._chain[-1])
                 return final_answer_step
             except Backtrack as e:
                 raise e
             except Exception as e:
                 ex = e
                 n_retries += 1
+                self._handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
+                                         self.prompts.orchestrator_parse_error)
         raise ex
 
     def check_final_solution(self, invocation: Invocation):
         system_prompt = self.prompts.sage
-        prompts = self.show_conversation_thread()
+
+        def _select(step_num: int, inv: Invocation) -> bool:
+            return isinstance(inv.step, (PresentTaskStep, AnalysisStep))
+
+        prompts = self.show_conversation_thread(selector=_select)
         sage_prompt = self.prompts.sage_final_check
         prompts.append((ROLE_SAGE, sage_prompt))
         self.check_execution_state(system_prompt, prompts, invocation, parse_final_response,

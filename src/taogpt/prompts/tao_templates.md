@@ -41,11 +41,10 @@ following template **strictly** so the orchestrator can parse it and show the qu
 In this strategy, the problem task is turned into a top-down, step-by-step plan of which you and Orchestrator will 
 solve using tree traversal and backtracking.
 
-* We worship Occam's razor, keep the plan concise.
+* Think abstract and worship Occam's razor. Prefer elegant, generic steps. Avoid overly specific and detailed steps; 
+  you will be working on the steps later. For example, prefer "Set suitable value to missing elements" over "Set 2nd and 5th elements to 22".
 * Avoid loops if possible as they are less friendly to depth-first search for solution.
-* If the problem step is solved in algorithmic way, create a clever, generic algorithm; avoid brute-force.
-* Avoid steps that do very little work because those should be merged into other steps. 
-* Test steps should be added.
+* Cherish verifiability.
 
 Do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
 
@@ -53,16 +52,15 @@ Follow this markdown template **strictly**:
 
 `````markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
-<brief explanation of your plan>
 
 ```json
 {{
-  "1": {{"description": "<step 1 description>"}},
+  "1": {{"description": "<brief description>"}},
   "2": {{
-        "description": "<step 2 description>",
+        "description": "<brief description>",
         "sub_steps": {{
-            "1": {{"description": "<step 2.1 description>"}},
-            "2": {{"description": "<step 2.2 description>"}}
+            "1": {{"description": "<brief description>"}},
+            "2": {{"description": "<brief description>"}}
         }}
        }},
   // ...

@@ -16,12 +16,13 @@ Scoring criteria:
 * The approaches which lead to incorrect results should get a score of 0.
 * The assumption implied/used should be correct.
 * The questions asked by Tao should be relevant and non-redundant.
-* Worship Occam's razor! The approach which looks more concise, efficient and avoids unnecessary works is preferred.
-* A step-by-step strategy without loops is preferred over one with loops.
+* Worship Occam's razor. Prefer elegant, generic steps. Avoid overly specific steps. For example, prefer "Find and 
+  set missing elements to fill-in values" and avoid "Set 2nd and 5th elements to 22".
+* Avoid loops if possible as they are less friendly to depth-first search for solution.
 * Try to avoid identical scores (except 0's;) you can use decimal points (e.g. 9.5) to 
   distinguish two different approaches. 
-* But if two approaches are similar, mark the later one as a duplicate of the first; note: an approach can only 
-  duplicate another approach if the two are of same kinds, e.g. two direct answers.
+* Among similar approaches, mark others as duplicates of the best one; note: an approach can only duplicate another 
+  approach if the two are of same kinds, e.g. two direct answers.
 
 Response must be in valid JSON like this:
 

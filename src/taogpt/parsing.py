@@ -57,9 +57,11 @@ def parse_sections(text: str, section_level: str='##') -> {str: str|None}:
     matched_sections = {FREE_TEXT: ''}
     section = FREE_TEXT
     for line in text.split('\n'):
-        match: re.Match = re.match(rf"^{section_level}+\s+([^:]+):?\s*", line)
+        match: re.Match = re.match(rf"^{section_level}+\s+([^\n]+)", line)
         if match is not None:
             section = match.group(1)
+            while section.endswith(':'):
+                section = section[:-1]
             matched_sections[section] = ''
         else:
             matched_sections[section] += line + '\n'
@@ -217,7 +219,7 @@ def parse_next_step_reply(text: str) -> (str, str|None):
             remaining = sections.pop(section)
             return section, (f"# {section}\n{remaining}", None)
     if NEXT_I_WANT_TO_WORK_AT not in sections:
-        raise ParseError("No section header")
+        raise ParseError(f"No section header `# NEXT_I_WANT_TO_WORK_AT`")
     next_step_desc = sections.pop(NEXT_I_WANT_TO_WORK_AT).strip()
     if _utils.str_or_blank(next_step_desc) == '':
         raise ParseError('Missing next step description')
