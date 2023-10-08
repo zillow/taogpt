@@ -91,7 +91,8 @@ class Executor(_abc.ABC):
         pass
 
     @_abc.abstractmethod
-    def show_conversation_thread(self) -> [(str, str)]:
+    def show_conversation_thread(self, with_header=True, selector: _t.Callable[[int, StepABC], bool] | None=None) \
+            -> [(str, str)]:
         pass
 
     def record_criticisms(self, criticisms: [str]):
@@ -100,54 +101,52 @@ class Executor(_abc.ABC):
     def ask_user(self, questions: [str]) -> str:
         raise NotImplementedError('No user agent feature in the base')
 
-    def ask_genie(self, codes: [str], invocation: Invocation) -> [str]:
+    def ask_genie(self, codes: [str], step: StepABC) -> [str]:
         raise NotImplementedError('No ask genie agent feature in the base')
 
-    @_abc.abstractmethod
-    def find_last_criticisms(self, invocation: Invocation) -> [str]:
-        pass
+    def handle_parse_error(self,
+                           e: Exception,
+                           n_retries: int,
+                           prompts: [(str, str)],
+                           prompts_to_be_sent: [(str, str)],
+                           response: str,
+                           retry_prompt: str):
+        raise e # base just re-throw without retry
 
 
+@_dc.dataclass(repr=False)
 class StepABC(_abc.ABC):
+    previous: _t.Optional[StepABC]
+    description: str
+    role: str
+
     @property
     @_abc.abstractmethod
     def step_id(self) -> int:
         pass
 
-    @property
-    @_abc.abstractmethod
-    def description(self) -> str:
-        pass
-
-    @description.setter
-    @_abc.abstractmethod
-    def description(self, value: str) -> str:
-        pass
-
+    # @property
+    # @_abc.abstractmethod
+    # def description(self) -> str:
+    #     pass
+    #
+    # @description.setter
+    # @_abc.abstractmethod
+    # def description(self, value: str) -> str:
+    #     pass
+    #
     @property
     @_abc.abstractmethod
     def description_with_header(self) -> str:
         pass
 
-
-@_dc.dataclass(repr=False)
-class Invocation:
-    step: StepABC
-    _executor: Executor | None = None
-
-    def __repr__(self) -> str:
-        c = self.__class__.__name__
-        step = self.step.step_id
-        sc = self.step.__class__.__name__
-        return f"{c}(step={sc}#{step})"
-
-    @property
-    def executor(self) -> Executor:
-        return self._executor
+    @_abc.abstractmethod
+    def eval(self, executor: Executor) -> StepABC | None:
+        pass
 
 
 class Backtrack(RuntimeError):
-    def __init__(self, reason: str | None, blame: Invocation):
+    def __init__(self, reason: str | None, blame: StepABC):
         super().__init__(reason)
         self.blame = blame
 

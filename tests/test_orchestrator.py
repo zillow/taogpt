@@ -28,8 +28,8 @@ def test_check_final_solution_success(logger):
         assert reason == 'check_final_solution'
         return text
 
-    invocation, llm, orchestrator = create_final_check_chain(reply, logger)
-    orchestrator.check_final_solution(invocation)
+    step, llm, orchestrator = create_final_check_chain(reply, logger)
+    orchestrator.check_final_solution(step)
     assert len(llm.conversation_sequence) == 1
     assert llm.conversation_sequence[-1][0] == 'check_final_solution'
 
@@ -48,9 +48,9 @@ def test_check_final_solution_failed(logger):
         assert reason == 'check_final_solution'
         return text
 
-    invocation, llm, orchestrator = create_final_check_chain(reply, logger)
+    step, llm, orchestrator = create_final_check_chain(reply, logger)
     try:
-        orchestrator.check_final_solution(invocation)
+        orchestrator.check_final_solution(step)
         assert False, "expecting Backtrack not raised"
     except Backtrack:
         pass
@@ -71,9 +71,9 @@ def test_check_final_solution_parse_error(logger):
         assert reason == 'check_final_solution'
         return text
 
-    invocation, llm, orchestrator = create_final_check_chain(reply, logger)
+    step, llm, orchestrator = create_final_check_chain(reply, logger)
     try:
-        orchestrator.check_final_solution(invocation)
+        orchestrator.check_final_solution(step)
         assert False, "expecting ParseError not raised"
     except ParseError:
         pass
@@ -83,22 +83,21 @@ def create_final_check_chain(reply, logger):
     llm = MockLLM(logger, reply_fn=reply)
     orchestrator = create_orchestrator(llm, logger, check_final=True)
     step = PresentTaskStep(None, "This is a problem", ROLE_USER)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = DirectAnswerStep(step, "This is an answer", ROLE_TAO)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = FinalAnswerStep(step, "This is the final answer", ROLE_TAO)
-    invocation = Invocation(step, _executor=orchestrator)
-    orchestrator.chain.append(invocation)
-    return invocation, llm, orchestrator
+    orchestrator.chain.append(step)
+    return step, llm, orchestrator
 
 
 def test_need_full_expansion_at_first_expandable_step(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
     step = PresentTaskStep(None, "This is a problem", ROLE_USER)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     assert orchestrator.is_first_solving_expansion()
 
 
@@ -106,15 +105,15 @@ def test_need_full_expansion_at_first_expandable_step_followed_by_ask_step(logge
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
     step = PresentTaskStep(None, "This is a problem", ROLE_USER)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = AskQuestionStep(step, "I have a question", ROLE_TAO)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = UserReplyStep(step, "This is your answer", ROLE_USER)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     assert orchestrator.is_first_solving_expansion()
 
 
@@ -122,17 +121,17 @@ def test_no_full_expansion_at_subsequent_expandable_steps(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
     step = PresentTaskStep(None, "This is a problem", ROLE_USER)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = StepByStepPlan(step, EXAMPLE_STEP_BY_STEP_PLAN, ROLE_TAO)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = AskQuestionStep(step, "I have a question", ROLE_TAO)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = UserReplyStep(step, "This is your answer", ROLE_USER)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     assert not orchestrator.is_first_solving_expansion()
 
 
@@ -140,13 +139,13 @@ def test_record_criticism_to_expandable_steps(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
     step = PresentTaskStep(None, "This is a problem", ROLE_USER)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     expandable: ProceedStep = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
-    orchestrator.chain.append(Invocation(expandable, _executor=orchestrator))
+    orchestrator.chain.append(expandable)
     plan_step: StepByStepPlan = StepByStepPlan(expandable, EXAMPLE_STEP_BY_STEP_PLAN, ROLE_TAO)
     expandable.choices = []
     expandable.choices.append(plan_step)
-    orchestrator.chain.append(Invocation(plan_step, _executor=orchestrator))
+    orchestrator.chain.append(plan_step)
     errors = {'error 1', 'error 2'}
     orchestrator.record_criticisms(errors)
     assert len(expandable.collected_criticisms) == 1
@@ -164,16 +163,16 @@ def test_backtracking(logger):
     orchestrator.config.ask_user_before_execute_codes = False
     orchestrator.config.max_search_expansion = 2
     step = PresentTaskStep(None, "This is a problem", ROLE_USER)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     proceed_step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
-    orchestrator.chain.append(Invocation(proceed_step, _executor=orchestrator))
+    orchestrator.chain.append(proceed_step)
 
     code = f"""```python
 no_such_var * 123
 ```
     """
     step = AskPythonGenieStep(proceed_step, code, ROLE_TAO)
-    orchestrator.chain.append(Invocation(step, _executor=orchestrator))
+    orchestrator.chain.append(step)
     proceed_step.choices = [step]
     try:
         orchestrator.resume(1000)
