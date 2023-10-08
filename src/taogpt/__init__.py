@@ -118,14 +118,13 @@ class StepABC(_abc.ABC):
 @_dc.dataclass(repr=False)
 class Invocation:
     step: StepABC
-    execution_count: int = 0
     _executor: Executor | None = None
 
     def __repr__(self) -> str:
         c = self.__class__.__name__
         step = self.step.step_id
         sc = self.step.__class__.__name__
-        return f"{c}(step={sc}#{step},exec={self.execution_count})"
+        return f"{c}(step={sc}#{step})"
 
     @property
     def executor(self) -> Executor:

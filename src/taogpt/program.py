@@ -11,7 +11,7 @@ from . import StepABC, Invocation, Backtrack, Pause
 from .parsing import *
 from .constants import *
 import taogpt.utils as _utils
-from .utils import log_debug, safe_subn
+from .utils import safe_subn
 from taogpt.prompts import PromptDb
 
 

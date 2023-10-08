@@ -153,7 +153,6 @@ class Orchestrator(Executor):
         while True:
             invocation = self._chain[-1]
             new_step = invocation.step.eval(invocation)
-            invocation.execution_count += 1
             while new_step is not None:
                 new_invocation = Invocation(new_step, _executor=self)
                 self._chain.append(new_invocation) # note: we don't necessary eval the new resulting step
