@@ -119,6 +119,11 @@ class StepABC(_abc.ABC):
     def description(self) -> str:
         pass
 
+    @description.setter
+    @_abc.abstractmethod
+    def description(self, value: str) -> str:
+        pass
+
     @property
     @_abc.abstractmethod
     def description_with_header(self) -> str:
