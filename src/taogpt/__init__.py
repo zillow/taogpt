@@ -114,6 +114,16 @@ class StepABC(_abc.ABC):
     def step_id(self) -> int:
         pass
 
+    @property
+    @_abc.abstractmethod
+    def description(self) -> str:
+        pass
+
+    @property
+    @_abc.abstractmethod
+    def description_with_header(self) -> str:
+        pass
+
 
 @_dc.dataclass(repr=False)
 class Invocation:
