@@ -34,11 +34,26 @@ class LangChainLLM(LLM):
         ROLE_GENIE: 'system',
     }
 
-    def __init__(self, llm: _ChatOpenAI,logger: _utils.MarkdownLogger, approx_token_factor: float=None):
+    def __init__(self,
+                 llm: _ChatOpenAI,
+                 logger: _utils.MarkdownLogger,
+                 approx_token_factor: float=None,
+                 long_context_token_threshold: int=None,
+                 long_context_llm: _ChatOpenAI=None,
+                 long_context_llm_token_factor: float=2.0):
         super().__init__()
+        self._total_tokens = 0
         self.llm = llm
         self._logger = logger
         self._approx_token_factor: float | None = approx_token_factor
+        if long_context_llm is not None:
+            assert long_context_token_threshold is not None and long_context_token_threshold > 0, \
+                "If long-context LLM is given, token threshold must be > 0"
+            assert long_context_llm_token_factor is not None and long_context_llm_token_factor > 1.0, \
+                "If long-context LLM is given, token factor must be > 1.0"
+        self.long_context_token_threshold = long_context_token_threshold
+        self.long_context_llm = long_context_llm,
+        self.long_context_llm_token_factor = long_context_llm_token_factor
         self.reset()
 
     @property
@@ -113,7 +128,12 @@ class LangChainLLM(LLM):
         try:
             global _last_conversation
             _last_conversation = messages.copy()
-            reply = self.llm.predict_messages(messages)
+            llm = self.llm
+            token_factor = 1.0
+            if self.long_context_llm is not None and context_tokens > self.long_context_token_threshold:
+                llm = self.long_context_llm
+                token_factor = self.long_context_llm_token_factor
+            reply = llm.predict_messages(messages)
             reply_content_logged = reply.content
             is_json = ''
             try:
@@ -127,11 +147,12 @@ class LangChainLLM(LLM):
             self._logger.log(reply_content_logged, demote_h1=True)
             reply_len = len(reply.content)
             total_len = context_len + reply_len
-            total_tokens_for_this = context_tokens + self.count_tokens(reply.content)
+            token_count = context_tokens + self.count_tokens(reply.content)
 
+            eff_tokens = f" (eff. tokens: {token_count * token_factor})" if token_factor != 1.0 else ''
             self._logger.log(f"**Text lengths**: context={context_len} + reply:{reply_len}={total_len}"
-                             f" **Total tokens**: {total_tokens_for_this}\n")
-            self._total_tokens += total_tokens_for_this
+                             f" **Total tokens**: {token_count}{eff_tokens}\n")
+            self._total_tokens += token_count
             return reply.content
         except Exception as e:
             print(e)

@@ -3,12 +3,13 @@ import dataclasses as _dc
 import typing as _t
 import math as _math
 import datetime as _datetime
-from frozenlist import FrozenList as _FrozenList
 
 from . import Config, Executor, UnsolvableError, MarkdownLogger
 from .llm_model import *
 from .program import *
 import taogpt.utils as _utils
+
+_CONTINUE_VOTE_QUORUM = 0.51
 
 
 class Orchestrator(Executor):
@@ -26,7 +27,6 @@ class Orchestrator(Executor):
         self._sage_llm = sage_llm
 
         self._chain: [Invocation] = []
-        self._frozen_chain: _FrozenList | None = None
         self._create_python_scope()
         if self.config.max_tokens_for_sage_llm is None:
             if self._sage_llm is not None and id(self._llm) != id(self._sage_llm):
@@ -102,7 +102,6 @@ class Orchestrator(Executor):
             while len(self._chain) > 0:
                 try:
                     self._loop()
-                    self._frozen_chain = _FrozenList(self._chain)
                     break
                 except Backtrack as backtrack:
                     self.backtrack(backtrack)
@@ -121,7 +120,6 @@ class Orchestrator(Executor):
         self._execute_with_backtracking()
 
     def backtrack(self, backtrack: Backtrack):
-        self._frozen_chain = _FrozenList(self._chain)
         while len(self._chain) > 0:
             last: Invocation = self._chain.pop(-1)
             if id(last) == id(backtrack.blame): # found the culprit
@@ -191,7 +189,7 @@ class Orchestrator(Executor):
         return conversation
 
     def next_step(self) -> Step:
-        system_prompt = self.prompts.system_step_expansion
+        system_prompt = self.prompts.tao_intro
         start_solving = self.is_first_solving_expansion()
         step = self._chain[-1].step
         if start_solving:
@@ -206,7 +204,7 @@ class Orchestrator(Executor):
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
             response: str = ''
-            while n_retries < MAX_RETRIES:
+            while n_retries < self.config.max_retries:
                 try:
                     response = self.llm.ask(system_prompt,
                                             prompts_to_be_sent,
@@ -266,7 +264,7 @@ class Orchestrator(Executor):
                     self.check_final_solution(self._chain[-1])
                 return final_answer_step
 
-        system_prompt = self.prompts.sage
+        system_prompt = self.prompts.sage_intro
         prompts = self.show_conversation_thread()
         summarize_prompt = self.prompts.orchestrator_summarize
         prompts.append((ROLE_ORCHESTRATOR, summarize_prompt))
@@ -274,7 +272,7 @@ class Orchestrator(Executor):
         n_retries= 0
         ex: Exception|None = None
         response: str|None = None
-        while n_retries < MAX_RETRIES:
+        while n_retries < self.config.max_retries:
             try:
                 response = self.llm.ask(system_prompt, prompts_to_be_sent,
                                         reason='summarize',
@@ -298,7 +296,7 @@ class Orchestrator(Executor):
         raise ex
 
     def check_final_solution(self, invocation: Invocation):
-        system_prompt = self.prompts.sage
+        system_prompt = self.prompts.sage_intro
 
         def _select(step_num: int, inv: Invocation) -> bool:
             return isinstance(inv.step, (PresentTaskStep, AnalysisStep))
@@ -314,18 +312,19 @@ class Orchestrator(Executor):
                               prompts: [(str, str)],
                               invocation: Invocation,
                               response_parser: _t.Callable[[str], (bool, str)],
-                              max_voting_factor=MAX_VOTING_FACTOR,
+                              votes: int=None,
                               reason='check_state',
                               collapse_contents: {str:str}=None):
+        votes = votes or self.config.votes
         all_criticism: [str] = []
-        min_yes_needed = int(max_voting_factor * CONTINUE_VOTE_QUORUM)
-        max_no_allowed = int(_math.ceil(max_voting_factor * (1 - CONTINUE_VOTE_QUORUM)))
+        min_yes_needed = int(_math.ceil(votes * _CONTINUE_VOTE_QUORUM))
+        max_no_allowed = int(_math.ceil(votes * (1 - _CONTINUE_VOTE_QUORUM)))
         n_success, n_true = 0, 0
-        for i in range(max_voting_factor):
+        for i in range(votes):
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
             response: str = ''
-            while n_retries < MAX_RETRIES:
+            while n_retries < self.config.max_retries:
                 try:
                     response = self.sage_llm.ask(
                         system_prompt,
@@ -353,7 +352,7 @@ class Orchestrator(Executor):
             self.record_criticisms(all_criticism)
         if n_success == 0:
             raise RuntimeError('Sage failed to perform execution state check')
-        if (n_true / n_success) < CONTINUE_VOTE_QUORUM:
+        if (n_true / n_success) < _CONTINUE_VOTE_QUORUM:
             fail_votes = 1. - (n_true / n_success)
             raise Backtrack(f'We are on a dead path with {fail_votes * 100:.1f}% of votes', blame=invocation)
 
@@ -397,7 +396,6 @@ class Orchestrator(Executor):
         self.llm.reset()
         self._chain = []
         self._create_python_scope()
-        self._frozen_chain = _FrozenList()
 
     def _create_python_scope(self):
         self._python_scope = {'_taogpt_orchestrator_python_scope_sig': time.time()}
@@ -418,7 +416,7 @@ class Orchestrator(Executor):
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
             response: str = ''
-            while n_retries < MAX_RETRIES:
+            while n_retries < self.config.max_retries:
                 try:
                     response = self.llm.ask(system_prompt,
                                             prompts_to_be_sent,
@@ -449,7 +447,7 @@ class Orchestrator(Executor):
             message = retry_req.format(error=str(e))
             prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
             self.logger.log(f"\n***RETRY***\n{message}")
-        if n_retries >= MAX_RETRIES:
+        if n_retries >= self.config.max_retries:
             raise e
 
 def ask_questions(input_fn, questions: [str], one_prompt: bool):

@@ -55,6 +55,8 @@ class Config:
     max_tokens_for_sage_llm: int | None = None
     ask_user_questions_in_one_prompt: bool = False
     pause_after_initial_solving_expansion: bool = False
+    max_retries: int = 3
+    votes: int = 1
 
 
 class Executor(_abc.ABC):

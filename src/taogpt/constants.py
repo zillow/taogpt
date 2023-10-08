@@ -18,10 +18,14 @@ ROLE_GENIE = 'python'
 
 USER_ANSWERS = 'USER_ANSWERS'
 
-TRUE_OR_FALSE = 'true or false'
-
-MAX_RETRIES = 5
-MAX_VOTING_FACTOR = 1
-CONTINUE_VOTE_QUORUM = 0.6
-CONTINUE = 'CONTINUE'
 FREE_TEXT = '_FREE'
+
+role_color_map = {
+    'system': 'lightgrey',
+    ROLE_USER: 'lightgreen',
+    ROLE_TAO: 'lightyellow',
+    'assistant': 'lightyellow',
+    ROLE_ORCHESTRATOR: 'lightcyan',
+    ROLE_SAGE: 'lightcyan',
+    ROLE_GENIE: 'lightsteelblue'
+}

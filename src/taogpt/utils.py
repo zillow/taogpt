@@ -12,12 +12,7 @@ from pathlib import Path as _Path
 from dataclasses import  MISSING as _MISSING
 from typing import Generic, TypeVar
 from taogpt.constants import (
-    ROLE_GENIE,
-    ROLE_ORCHESTRATOR,
-    ROLE_SAGE,
-    ROLE_TAO,
-    ROLE_SYSTEM,
-    ROLE_USER
+    role_color_map
 )
 
 _T = TypeVar('_T')
@@ -65,37 +60,12 @@ def is_blank(text: str) -> bool:
     return text is None or str_or_blank(text) == ''
 
 
-_debugged: int = 0
-
-
-def enable_debugging(level=1):
-    global _debugged
-    _debugged = level
-
-
-def log_debug(obj: _t.Any, level: int=1):
-    global _debugged
-    if level > _debugged:
-        return
-    print(obj)
-
-
 def safe_subn(text: str | None, n=20, default='') -> str:
     return text[:n].strip() if text is not None else default
 
 
 class MarkdownLogger:
-    # H1_RE = _re.compile(r"^# +([^\n]+)", flags=_re.MULTILINE|_re.DOTALL)
     H1_RE = _re.compile(r"^# +(.+)")
-    role_color_map = {
-        'system': 'lightgrey',
-        ROLE_USER: 'lightgreen',
-        ROLE_TAO: 'lightyellow',
-        'assistant': 'lightyellow',
-        ROLE_ORCHESTRATOR: 'lightcyan',
-        ROLE_SAGE: 'lightcyan',
-        ROLE_GENIE: 'lightsteelblue'
-    }
 
     def __init__(self, log_path: str|_Path):
         self._log_path = _Path(log_path)
@@ -154,7 +124,7 @@ class MarkdownLogger:
             self.close_message_section()
 
     def new_message_section(self, role, step_index):
-        color = MarkdownLogger.role_color_map.get(role, 'white')
+        color = role_color_map.get(role, 'white')
         self.log(f'<div style="background-color:{color}; padding: 5px; border-bottom: 1px dotted grey">\n'
                  f'<div>[{step_index}] <b>{role}</b>:</div>\n')
 
