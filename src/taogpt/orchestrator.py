@@ -3,6 +3,7 @@ import dataclasses as _dc
 import typing as _t
 import math as _math
 import datetime as _datetime
+import json as _json
 
 from . import UnsolvableError, MarkdownLogger
 from .llm_model import *
@@ -40,7 +41,7 @@ class Orchestrator(Executor):
         llm_repr = repr(self.llm)
         sage_llm_repr = repr(self.sage_llm)
         n = len(self._chain)
-        return f"{self.__class__.__name__}(LLMs={llm_repr}/{sage_llm_repr},invocations={n})"
+        return f"{self.__class__.__name__}(LLMs={llm_repr}/{sage_llm_repr},chain={n})"
 
     @property
     def config(self) -> Config:
@@ -66,9 +67,8 @@ class Orchestrator(Executor):
     def chain(self) -> _t.List[Step]:
         return self._chain
 
-    def start(self, task: str | Step, analyze_first=False):
-        today = _datetime.date.today().strftime('%Y/%m/%d')
-        self.logger.log(f"Date: {today}, Model: {self.llm.model_id}")
+    def start(self, task: str | Step):
+        self.log_configs()
         if isinstance(task, str):
             root_step = PresentTaskStep(None, task, role=ROLE_USER)
         elif isinstance(task, PresentTaskStep):
@@ -78,21 +78,36 @@ class Orchestrator(Executor):
                              f"or a PresentTaskStep object, got {type(task)}")
         self.reset()
         self._chain.append(root_step)
-        if analyze_first:
+        if self.config.analyze_first:
             init_analysis_step = AnalysisStep(root_step, '', ROLE_ORCHESTRATOR)
             self._chain.append(init_analysis_step)
         self._execute_with_backtracking()
+
+    def log_configs(self, logger: MarkdownLogger=None):
+        if logger is None:
+            logger = self.logger
+        today = _datetime.date.today().strftime('%Y/%m/%d')
+        logger.log(f"Date: {today}")
+        logger.log(f"**Configurations for {self.__class__.__name__}**")
+        llm_repr = repr(self.llm)
+        sage_llm_repr = repr(self.sage_llm)
+        logger.log(f"LLM: {llm_repr}")
+        logger.log(f"Sage LLM: {sage_llm_repr}")
+        logger.log(f"""```json
+{_json.dumps(_dc.asdict(self.config), indent=2)}
+```
+        """)
 
     def resume(self, additional_tokens: int=None,
                unblock_initial_expansion: bool=False,
                additional_tokens_for_smarter_llm: int=None):
         if additional_tokens is not None:
             self.config.max_tokens += additional_tokens
-            print(f"extend token allowance by {additional_tokens} to {self.config.max_tokens}")
+            self.logger.log(f"**resume**: extend token allowance by {additional_tokens} to {self.config.max_tokens}")
         if additional_tokens_for_smarter_llm is not None:
             self.config.max_tokens_for_sage_llm += additional_tokens_for_smarter_llm
-            print(f"extend token allowance for smarter LLM by {additional_tokens_for_smarter_llm} "
-                  f"to {self.config.max_tokens_for_sage_llm}")
+            self.logger.log(f"**resume**: extend token allowance for sage "
+                            f"LLM by {additional_tokens_for_smarter_llm} to {self.config.max_tokens_for_sage_llm}")
         if unblock_initial_expansion:
             self.config.pause_after_initial_solving_expansion = False
         self._execute_with_backtracking()
@@ -145,7 +160,7 @@ class Orchestrator(Executor):
 
     def _loop(self):
         while True:
-            new_step = self._chain[-1]
+            new_step = self._chain[-1].eval(self)
             while new_step is not None:
                 self._chain.append(new_step) # note: we don't necessary eval the new resulting step
                 if isinstance(new_step, DirectAnswerStep) and new_step.is_final_step:
@@ -287,7 +302,7 @@ class Orchestrator(Executor):
     def check_final_solution(self, step: Step):
         system_prompt = self.prompts.sage_intro
 
-        def _select(step_num: int, step: StepABC) -> bool:
+        def _select(_: int, step: StepABC) -> bool:
             return isinstance(step, (PresentTaskStep, AnalysisStep))
 
         prompts = self.show_conversation_thread(selector=_select)

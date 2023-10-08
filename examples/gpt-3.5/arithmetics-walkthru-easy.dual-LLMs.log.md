@@ -4,11 +4,11 @@ Date: 2023/10/08
 
 LLM: gpt-3.5-turbo-16k
 
-Sage LLM: gpt-3.5-turbo-16k
+Sage LLM: gpt-4
 
 ```json
 {
-  "initial_expansion": 4,
+  "initial_expansion": 2,
   "first_expansion": 1,
   "first_try_temperature": 0.0,
   "alternative_temperature": 0.7,
@@ -50,7 +50,9 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>orchestrator</b>:</div>
 
-**Problem Analysis**
+***Problem Analysis***
+
+
 
 Some critics said this problem is not solvable due to fundamental errors. Other critics said it is solvable.
 
@@ -63,11 +65,11 @@ Do not try to solve the problem yet, just provide analysis.
 
 Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
-Upon analyzing the problem, there doesn't appear to be any fundamental errors, invalid assumptions, or contradictions in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
+Upon analyzing the problem, it appears that there is no fundamental error, invalid assumption, or contradiction in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
 
 To solve this problem, we need to substitute the given values into the expression and calculate the result.
 
-**Text lengths**: context=570 + reply:341=911 **Total tokens**: 207
+**Text lengths**: context=570 + reply:335=905 **Total tokens**: 206
 
 # SEND TO LLM for proceed_to_next/2/0
 
@@ -91,9 +93,11 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>Tao</b>:</div>
 
-**Problem Analysis**
+***Problem Analysis***
 
-Upon analyzing the problem, there doesn't appear to be any fundamental errors, invalid assumptions, or contradictions in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
+
+
+Upon analyzing the problem, it appears that there is no fundamental error, invalid assumption, or contradiction in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
 
 To solve this problem, we need to substitute the given values into the expression and calculate the result.
 
@@ -236,98 +240,6 @@ Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
 Let's ask the Python Genie to calculate the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`.
 
-**Text lengths**: context=4169 + reply:137=4306 **Total tokens**: 1055
-
-
-***RETRY***
-Your Orchestrator cannot parse your response due to **error**: No python code snippet inside markdown fenced block..
-
-Please respond again following the template. In particular, make sure to **start with** one of the 
-headings `# I_WILL_ANSWER_DIRECTLY`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, `# LET_ME_ASK_THE_PYTHON_GENIE`, 
-`# BACKTRACK_ON_ERROR`, or `# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED` based on which strategy you have 
-chosen in the above response.
-
-# SEND TO LLM for proceed_to_next/2/0
-
-<div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
-<div>[-1] <b>system</b>:</div>
-
-... system_prompt [text of length 211] ...
-
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[0] <b>user</b>:</div>
-
-
-What's x mod (y - z) where x = 10, y = 7, z = 4.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[1] <b>Tao</b>:</div>
-
-**Problem Analysis**
-
-Upon analyzing the problem, there doesn't appear to be any fundamental errors, invalid assumptions, or contradictions in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
-
-To solve this problem, we need to substitute the given values into the expression and calculate the result.
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>orchestrator</b>:</div>
-
-[..tao_templates:3218..]
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>orchestrator</b>:</div>
-
-Tao, please proceed to solve the problem following the "Problem Solving Instructions" above. Be sure to start with 
-one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`,
-`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, or `# FINAL_ANSWER`.
-
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[4] <b>Tao</b>:</div>
-
-**LET_ME_ASK_THE_PYTHON_GENIE**
-
-Let's ask the Python Genie to calculate the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`.
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[5] <b>orchestrator</b>:</div>
-
-Your Orchestrator cannot parse your response due to **error**: No python code snippet inside markdown fenced block..
-
-Please respond again following the template. In particular, make sure to **start with** one of the 
-headings `# I_WILL_ANSWER_DIRECTLY`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, `# LET_ME_ASK_THE_PYTHON_GENIE`, 
-`# BACKTRACK_ON_ERROR`, or `# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED` based on which strategy you have 
-chosen in the above response.
-
-
-</div>
-
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
-
-***LET_ME_ASK_THE_PYTHON_GENIE***
-
-
-
-Let's ask the Python Genie to calculate the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`.
-
 ```python
 x = 10
 y = 7
@@ -337,7 +249,8 @@ result = x % (y - z)
 result
 ```
 
-**Text lengths**: context=4770 + reply:200=4970 **Total tokens**: 1252
+
+**Text lengths**: context=4163 + reply:202=4365 **Total tokens**: 1084
 
 # SEND TO LLM for proceed_to_next/2/1
 
@@ -361,78 +274,11 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>Tao</b>:</div>
 
-**Problem Analysis**
-
-Upon analyzing the problem, there doesn't appear to be any fundamental errors, invalid assumptions, or contradictions in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
-
-To solve this problem, we need to substitute the given values into the expression and calculate the result.
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>orchestrator</b>:</div>
-
-[..tao_templates:3218..]
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>orchestrator</b>:</div>
-
-Tao, please proceed to solve the problem following the "Problem Solving Instructions" above. Be sure to start with 
-one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`,
-`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, or `# FINAL_ANSWER`.
+***Problem Analysis***
 
 
 
-</div>
-
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.7
-
-***LET_ME_ASK_THE_PYTHON_GENIE***
-
-
-
-```python
-x = 10
-y = 7
-z = 4
-
-result = x % (y - z)
-result
-```
-
-By substituting the given values into the expression, we find that `x mod (y - z) = 10 mod (7 - 4) = 10 mod 3 = 1`. Therefore, the result is `1`.
-
-**Text lengths**: context=4169 + reply:239=4408 **Total tokens**: 1095
-
-# SEND TO LLM for proceed_to_next/2/2
-
-<div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
-<div>[-1] <b>system</b>:</div>
-
-... system_prompt [text of length 211] ...
-
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[0] <b>user</b>:</div>
-
-
-What's x mod (y - z) where x = 10, y = 7, z = 4.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[1] <b>Tao</b>:</div>
-
-**Problem Analysis**
-
-Upon analyzing the problem, there doesn't appear to be any fundamental errors, invalid assumptions, or contradictions in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
+Upon analyzing the problem, it appears that there is no fundamental error, invalid assumption, or contradiction in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
 
 To solve this problem, we need to substitute the given values into the expression and calculate the result.
 
@@ -464,76 +310,7 @@ Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.7
 
 
 
-```python
-x = 10
-y = 7
-z = 4
-
-result = x % (y - z)
-result
-```
-
-The value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4` is `2`.
-
-**Text lengths**: context=4169 + reply:167=4336 **Total tokens**: 1081
-
-# SEND TO LLM for proceed_to_next/2/3
-
-<div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
-<div>[-1] <b>system</b>:</div>
-
-... system_prompt [text of length 211] ...
-
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[0] <b>user</b>:</div>
-
-
-What's x mod (y - z) where x = 10, y = 7, z = 4.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[1] <b>Tao</b>:</div>
-
-**Problem Analysis**
-
-Upon analyzing the problem, there doesn't appear to be any fundamental errors, invalid assumptions, or contradictions in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
-
-To solve this problem, we need to substitute the given values into the expression and calculate the result.
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>orchestrator</b>:</div>
-
-[..tao_templates:3218..]
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>orchestrator</b>:</div>
-
-Tao, please proceed to solve the problem following the "Problem Solving Instructions" above. Be sure to start with 
-one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`,
-`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, or `# FINAL_ANSWER`.
-
-
-
-</div>
-
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.7
-
-***LET_ME_ASK_THE_PYTHON_GENIE***
-
-
-
-Let me calculate the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4` using the Python Genie.
+I will ask the Python Genie to calculate the value of `x mod (y - z)` using the given values.
 
 ```python
 x = 10
@@ -545,7 +322,7 @@ result
 ```
 
 
-**Text lengths**: context=4169 + reply:202=4371 **Total tokens**: 1085
+**Text lengths**: context=4163 + reply:189=4352 **Total tokens**: 1069
 
 # SEND TO LLM for rank_choices/2/0
 
@@ -572,9 +349,11 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>Tao</b>:</div>
 
-**Problem Analysis**
+***Problem Analysis***
 
-Upon analyzing the problem, there doesn't appear to be any fundamental errors, invalid assumptions, or contradictions in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
+
+
+Upon analyzing the problem, it appears that there is no fundamental error, invalid assumption, or contradiction in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
 
 To solve this problem, we need to substitute the given values into the expression and calculate the result.
 
@@ -622,45 +401,7 @@ result
 
 Python Genie, Python Genie, run the Python snippet underneath:
 
-```python
-x = 10
-y = 7
-z = 4
-
-result = x % (y - z)
-result
-```
-
-By substituting the given values into the expression, we find that `x mod (y - z) = 10 mod (7 - 4) = 10 mod 3 = 1`. Therefore, the result is `1`.
-
----
-
-***[Approach 3] LET_ME_ASK_THE_PYTHON_GENIE***
-
-
-
-Python Genie, Python Genie, run the Python snippet underneath:
-
-```python
-x = 10
-y = 7
-z = 4
-
-result = x % (y - z)
-result
-```
-
-The value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4` is `2`.
-
----
-
-***[Approach 4] LET_ME_ASK_THE_PYTHON_GENIE***
-
-
-
-Python Genie, Python Genie, run the Python snippet underneath:
-
-Let me calculate the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4` using the Python Genie.
+I will ask the Python Genie to calculate the value of `x mod (y - z)` using the given values.
 
 ```python
 x = 10
@@ -705,46 +446,25 @@ Response must be in valid JSON like this:
 
 </div>
 
-JSON Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
 ```json
 {
-  "1": {
-    "score": 9.5,
-    "reason": "The approach correctly substitutes the given values into the expression and calculates the result."
-  },
-  "2": {
-    "score": 9.0,
-    "reason": "The approach correctly substitutes the given values into the expression and calculates the result."
-  },
-  "3": {
-    "score": 9.0,
-    "reason": "The approach correctly substitutes the given values into the expression and calculates the result."
-  },
-  "4": {
-    "score": 9.5,
-    "reason": "The approach correctly substitutes the given values into the expression and calculates the result."
-  }
+  "1": {"score": 10, "reason": "This approach is correct. It directly calculates the result using Python."},
+  "2": {"score": 0, "duplicate_of": 1, "reason": "This approach is identical to the first one."}
 }
 ```
 
-**Text lengths**: context=4048 + reply:542=4590 **Total tokens**: 1245
+**Text lengths**: context=3455 + reply:221=3676 **Total tokens**: 956
 
 
-**Sorted indices**: [0, 3, 1, 2] **scores**:
-1. score 9.5
-2. score 9.0
-3. score 9.0
-4. score 9.5
+**Sorted indices**: [0] **scores**:
+1. score 10.0
 
-
-**resume**: extend token allowance by 0 to 5000
-
-**resume**: extend token allowance for sage LLM by 0 to 5000
 
 **resume**: extend token allowance by 5000 to 10000
 
-**resume**: extend token allowance for sage LLM by 0 to 5000
+**resume**: extend token allowance for sage LLM by 0 to 1666
 
 # SEND TO LLM for next_step/4
 
@@ -768,9 +488,11 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>Tao</b>:</div>
 
-**Problem Analysis**
+***Problem Analysis***
 
-Upon analyzing the problem, there doesn't appear to be any fundamental errors, invalid assumptions, or contradictions in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
+
+
+Upon analyzing the problem, it appears that there is no fundamental error, invalid assumption, or contradiction in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
 
 To solve this problem, we need to substitute the given values into the expression and calculate the result.
 
@@ -791,7 +513,9 @@ one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[3] <b>Tao</b>:</div>
 
-**LET_ME_ASK_THE_PYTHON_GENIE**
+***LET_ME_ASK_THE_PYTHON_GENIE***
+
+
 
 Python Genie, Python Genie, run the Python snippet underneath:
 
@@ -812,7 +536,9 @@ result
 <div style="background-color:lightsteelblue; padding: 5px; border-bottom: 1px dotted grey">
 <div>[4] <b>python</b>:</div>
 
-**The Python Genie Replies**
+***The Python Genie Replies***
+
+
 
 ```text
 => 1
@@ -999,5 +725,5 @@ Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
 The value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4` is 1.
 
-**Text lengths**: context=5815 + reply:87=5902 **Total tokens**: 1477
+**Text lengths**: context=5809 + reply:87=5896 **Total tokens**: 1476
 

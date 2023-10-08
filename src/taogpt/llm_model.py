@@ -52,13 +52,20 @@ class LangChainLLM(LLM):
             assert long_context_llm_token_factor is not None and long_context_llm_token_factor > 1.0, \
                 "If long-context LLM is given, token factor must be > 1.0"
         self.long_context_token_threshold = long_context_token_threshold
-        self.long_context_llm = long_context_llm,
+        self.long_context_llm = long_context_llm
         self.long_context_llm_token_factor = long_context_llm_token_factor
         self.reset()
 
     @property
     def model_id(self) -> str:
         return self.llm.model_name
+
+    def __repr__(self) -> str:
+        if self.long_context_llm is not None:
+            long_ctx = f" ({self.long_context_llm.model_name}@len(ctx)>{self.long_context_token_threshold})"
+        else:
+            long_ctx = ''
+        return f"{self.model_id}{long_ctx}"
 
     def reset(self):
         self._total_tokens = 0
@@ -119,7 +126,7 @@ class LangChainLLM(LLM):
                 deduped_msg = self.deduplicate_for_logging(message, collapse_contents)
                 self._logger.log(deduped_msg, demote_h1=True)
             else:
-                self._logger.log(message)
+                self._logger.log(message, demote_h1=True)
             context_tokens += self.count_tokens(message)
             context_len += len(message)
             self._logger.close_message_section()

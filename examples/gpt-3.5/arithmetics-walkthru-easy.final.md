@@ -1,3 +1,31 @@
+Date: 2023/10/08
+
+**Configurations for Orchestrator**
+
+LLM: gpt-3.5-turbo-16k
+
+Sage LLM: gpt-3.5-turbo-16k
+
+```json
+{
+  "initial_expansion": 4,
+  "first_expansion": 1,
+  "first_try_temperature": 0.0,
+  "alternative_temperature": 0.7,
+  "max_search_expansion": 4,
+  "votes": 1
+  "analyze_first": true,
+  "check_final": true,
+  "max_tokens": 5000,
+  "max_tokens_for_sage_llm": 1666,
+  "max_retries": 3,
+  "ask_user_questions_in_one_prompt": true,
+  "ask_user_before_execute_codes": false,
+  "pause_after_initial_solving_expansion": true
+}
+```
+        
+
 <div style="background-color: beige; text-align: center; padding: 5px">
 
 
@@ -5,63 +33,50 @@
 
 </div>
 
-<div style="background-color:lightgreen; display: flex; border-bottom: 1px dotted grey">
-
-<div style="flex: 130px">
-
-[0] **user**
-
-</div>
-<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
+<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
+<div>[0] <b>user</b>:</div>
 
 
 What's x mod (y - z) where x = 10, y = 7, z = 4.
 
 
 </div>
-</div>
 
-<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
+<div>[1] <b>Tao</b>:</div>
 
-<div style="flex: 130px">
-
-[1] **Tao**
-
-</div>
-<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
-
-Upon analyzing the problem statement, I don't see any fundamental errors, invalid assumptions, or contradictions. The problem is asking for the value of "x mod (y - z)" where x = 10, y = 7, and z = 4. As long as the values of x, y, and z are valid and well-defined, we can proceed to solve the problem.
+***Problem Analysis***
 
 
-</div>
-</div>
 
-<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+Upon analyzing the problem, there doesn't appear to be any fundamental errors, invalid assumptions, or contradictions in the problem statement. The problem asks for the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`. 
 
-<div style="flex: 130px">
-
-[2] **orchestrator**
-
-</div>
-<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
-
-Tao, please proceed. You **must follow the response templates strictly** so that your orchestrator
-can parse your response. Think carefully before responding.
+To solve this problem, we need to substitute the given values into the expression and calculate the result.
 
 
 </div>
+
+<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
+<div>[2] <b>orchestrator</b>:</div>
+
+Tao, please proceed to solve the problem following the "Problem Solving Instructions" above. Be sure to start with 
+one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`,
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, or `# FINAL_ANSWER`.
+
+
+
 </div>
 
-<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
+<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
+<div>[3] <b>Tao</b>:</div>
 
-<div style="flex: 130px">
+***LET_ME_ASK_THE_PYTHON_GENIE***
 
-[3] **Tao**
 
-</div>
-<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
 
 Python Genie, Python Genie, run the Python snippet underneath:
+
+Let's ask the Python Genie to calculate the value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4`.
 
 ```python
 x = 10
@@ -74,18 +89,13 @@ result
 
 
 </div>
-</div>
 
-<div style="background-color:lightsteelblue; display: flex; border-bottom: 1px dotted grey">
+<div style="background-color:lightsteelblue; padding: 5px; border-bottom: 1px dotted grey">
+<div>[4] <b>python</b>:</div>
 
-<div style="flex: 130px">
+***The Python Genie Replies***
 
-[4] **python**
 
-</div>
-<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
-
-Python Genie replied:
 
 ```text
 => 1
@@ -93,56 +103,18 @@ Python Genie replied:
 
 
 </div>
-</div>
 
-<div style="background-color:lightcyan; display: flex; border-bottom: 1px dotted grey">
+<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
+<div>[5] <b>Tao</b>:</div>
 
-<div style="flex: 130px">
+***Tao's Final Answer***
 
-[5] **orchestrator**
 
-</div>
-<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
 
-Tao, please proceed. You **must follow the response templates strictly** so that your orchestrator
-can parse your response. Think carefully before responding.
+The value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4` is 1.
 
 
 </div>
-</div>
 
-<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
-
-<div style="flex: 130px">
-
-[6] **Tao**
-
-</div>
-<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
-
-The value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4` is `1`.
-
-Explanation:
-The expression `y - z` evaluates to `7 - 4 = 3`. Then, `x mod (y - z)` is equivalent to `10 mod 3`, which gives a remainder of `1`.
-
-
-</div>
-</div>
-
-<div style="background-color:lightyellow; display: flex; border-bottom: 1px dotted grey">
-
-<div style="flex: 130px">
-
-[7] **Tao**
-
-</div>
-<div style="flex: 100%; border-left: 1px dotted grey; padding-left: 5px">
-
-The value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4` is `1`.
-
-
-</div>
-</div>
-
-**total tokens**: 3566
+**total tokens**: 8497
 

@@ -40,23 +40,33 @@ class LLM:
                 break
         return content_to_be_logged
 
+    def __repr__(self) -> str:
+        return self.model_id
+
 
 @_dc.dataclass
 class Config:
+    # hyperparameters
     initial_expansion: int = 1
     first_expansion: int = 1
     first_try_temperature: float = 0.0
     alternative_temperature: float = 0.7
     max_search_expansion: int = 4
-    ask_user_before_execute_codes: bool = True
-    max_tokens: int = 10000
-    max_tree_branches: int = 4
-    check_final: bool = False,
-    max_tokens_for_sage_llm: int | None = None
-    ask_user_questions_in_one_prompt: bool = False
-    pause_after_initial_solving_expansion: bool = False
-    max_retries: int = 3
     votes: int = 1
+
+    # behavioral
+    analyze_first: bool = True
+    check_final: bool = True,
+
+    # token usage controls
+    max_tokens: int = 10000
+    max_tokens_for_sage_llm: int | None = None
+    max_retries: int = 3
+
+    # user interactions
+    ask_user_questions_in_one_prompt: bool = False
+    ask_user_before_execute_codes: bool = True
+    pause_after_initial_solving_expansion: bool = False
 
 
 class Executor(_abc.ABC):
