@@ -28,11 +28,11 @@ class Step(StepABC):
     def __repr_local__(self) -> str:
         d = safe_subn(self.description)
         prev = self.previous.step_id if self.previous is not None else None
-        return f"step_id={self.step_id},prev={prev},role={self.role},description={d}"
+        return f"step_id={self.step_id},description={d},prev={prev}"
 
     @property
     def step_id(self) -> int:
-        return self._step_local_id
+        return self.previous.step_id + 1 if self.previous is not None else 0
 
     @property
     def description_with_header(self) -> str:
@@ -60,7 +60,7 @@ class Step(StepABC):
         return None
 
     def __post_init__(self):
-        self._step_local_id = self.previous.step_id + 1 if self.previous is not None else 0
+        pass
 
 
 @_dc.dataclass(repr=False)
@@ -158,7 +158,8 @@ class DirectAnswerStep(TaoReplyStep):
     def eval_only(self, executor) -> Step | None:
         if not _utils.is_blank(self.next_step) and not self.is_final_step:
             prompt_db: PromptDb  = executor.prompts
-            work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.next_step)
+            prev_step = executor.set_current_step_description(self.next_step) or "unknown"
+            work_prompt = prompt_db.orchestrator_proceed_to_step.format(prev_step=prev_step, step=self.next_step)
             return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
         return None
 
@@ -196,19 +197,21 @@ class StepByStepPlan(TaoReplyStep):
         return StepByStepPlan.TYPE_SPEC
 
     def __repr_local__(self) -> str:
-        p = super().__repr_local__()
-        return f"{p}, {safe_subn(self.description)}"
+        prev = self.previous.step_id if self.previous is not None else None
+        desc = ','.join([step.__class__.__name__ for step in self._steps])
+        return f"step_id={self.step_id},[{desc}],prev={prev}"
 
     def __post_init__(self):
         super().__post_init__()
         self._steps = parse_step_by_step_plan(self.description)
-        why = f" [{self._steps[0].why}]" if _utils.str_or_blank(self._steps[0].why) == '' else ''
+        why = f" [{self._steps[0].why}]" if _utils.str_or_blank(self._steps[0].why) != '' else ''
         self.first_step = f"{self._steps[0].description}{why}"
 
     def eval_only(self, executor) -> Step | None:
         # when evaluating this node, we are always at the first step
         prompt_db: PromptDb  = executor.prompts
-        work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.first_step)
+        prev_step = executor.set_current_step_description(self.first_step) or "unknown"
+        work_prompt = prompt_db.orchestrator_proceed_to_step.format(prev_step=prev_step, step=self.first_step)
         return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
 
 
@@ -320,7 +323,7 @@ def parse_to_step(step: Step, response: str) -> Step:
         else:
             step_class = StepByStepPlan
         if step_def is None:
-            raise ParseError(f"Missing details.")
+            raise ParseError(f"Unknown strategy heading '{step_type}'")
     return step_class(step, description=step_def, role=ROLE_TAO)
 
 
@@ -342,6 +345,7 @@ class ExpandableStep(Step):
     def __post_init__(self):
         super().__post_init__()
         self._ptr = 0
+        self.n_expanded = 0
         self._all_criticisms: {int: {str}} = dict()
         if self.choices is not None:
             for next_step in self.choices:
@@ -375,23 +379,23 @@ class ExpandableStep(Step):
             prior_plans_and_criticisms = self.gather_choices_with_criticisms()
             criticism = prompt_db.orchestrator_critics.format(criticisms='\n\n---\n'.join(prior_plans_and_criticisms))
             prompts.append((ROLE_ORCHESTRATOR, criticism))
-        while len(self.choices) < upto_branches:
+        while self.n_expanded < upto_branches:
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
             plan: str|None = None
             while n_retries < executor.config.max_retries:
                 try:
-                    n = len(self.choices)
-                    temperature = executor.config.first_try_temperature if len(self.choices) == 0 \
+                    temperature = executor.config.first_try_temperature if self.n_expanded == 0 \
                         else executor.config.alternative_temperature
                     plan = executor.llm.ask(system_prompt, prompts_to_be_sent,
                                             reason=self._expansion_reason(),
-                                            step_id=f"{self.step_id}/{n}",
+                                            step_id=f"{self.step_id}/{self.n_expanded}",
                                             temperature=temperature,
                                             log_request=(len(self.choices) == 0 and n_retries == 0),
                                             collapse_contents={'tao_templates': tao_templates})
                     choice = parse_to_step(self, plan)
                     self.choices.append(choice)
+                    self.n_expanded += 1
                     break
                 except Exception as e:
                     n_retries += 1
@@ -507,8 +511,8 @@ class ExpandableStep(Step):
 
     def retryable(self, config):
         assert self.choices is not None
-        return len(self.choices) <= config.max_search_expansion \
-            or self._ptr < len(self.choices)
+        return self.n_expanded <= config.max_search_expansion \
+            or self._ptr < len(self.choices) # consume existing expansions
 
     def backtrack(self, backtrack: Backtrack | None):
         if self._ptr < self.max_expansion:
@@ -518,11 +522,11 @@ class ExpandableStep(Step):
         raise Backtrack("No more alternative", blame=self)
 
     def eval_only(self, executor: Executor) -> Step | None:
-        if self.choices is None or len(self.choices) < self.max_expansion:
-            old_length = len(self.choices) if self.choices is not None else 0
-            incr = self.first_expansion if self.choices is None else self.incremental_expansion
+        old_length = self.n_expanded
+        if (self.choices is None or self._ptr >= len(self.choices)) and old_length < self.max_expansion:
+            incr = self.first_expansion if old_length == 0 else self.incremental_expansion
             self.expand_choices(executor, upto_branches=self._ptr + incr)
-            if self.choices is not None and len(self.choices) - old_length > 1:
+            if self.n_expanded - old_length > 1: # todo: keep n_expanded
                 self.rank_choices(executor, n_existing_choices=old_length)
             if self.first_problem_solving_step and executor.config.pause_after_initial_solving_expansion:
                 raise Pause("Pause after initial solving expansion", self)
@@ -568,7 +572,4 @@ class SageReplyStep(Step):
     @property
     def step_title(self) -> str:
         return "Sage Replied"
-
-    def _expansion_reason(self) -> str:
-        return "respond_to_criticism"
 

@@ -233,7 +233,7 @@ def parse_next_step_reply(text: str) -> (str, str|None):
 
 def is_final_answer(next_step) -> bool:
     next_step = _utils.str_or_blank(next_step).lower()
-    return 'none' in next_step or 'this is the final step' in next_step
+    return next_step.startswith('none') or 'this is the final step' in next_step
 
 
 _python_response_re = re.compile(r"```python\n+(.+?)```", flags=re.DOTALL | re.IGNORECASE)

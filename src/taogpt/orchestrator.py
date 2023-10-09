@@ -21,6 +21,7 @@ class Orchestrator(Executor):
                  prompts: PromptDb,
                  markdown_logger: _utils.MarkdownLogger,
                  sage_llm: LLM | None = None):
+        super().__init__()
         self._config = type(config)(**_dc.asdict(config))
         self._llm = llm
         self._prompts = prompts
@@ -163,17 +164,17 @@ class Orchestrator(Executor):
             new_step = self._chain[-1].eval(self)
             while new_step is not None:
                 self._chain.append(new_step) # note: we don't necessary eval the new resulting step
-                if isinstance(new_step, DirectAnswerStep) and new_step.is_final_step:
+                if isinstance(new_step, DirectAnswerStep) and new_step.is_final_step \
+                        or isinstance(new_step, FinalAnswerStep):
                     self.summarize_final_answer()
                     return
                 self.check_token_usages()
                 new_step = new_step.eval(self)
             new_step = self.next_step()
-            if new_step is None:
-                self.summarize_final_answer()
-                return
             self._chain.append(new_step)
-            if isinstance(new_step, FinalAnswerStep):
+            if isinstance(new_step, DirectAnswerStep) and new_step.is_final_step\
+                    or isinstance(new_step, FinalAnswerStep):
+                self.summarize_final_answer()
                 return
             self.check_token_usages()
 
@@ -200,10 +201,13 @@ class Orchestrator(Executor):
         if start_solving:
             work_prompt = self.prompts.orchestrator_proceed
         else:
+            current = self.current_step_description
             prompts = self.show_conversation_thread()
             direct_answer = self.prompts.tao_template_direct_step_answer
             work_prompt = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
             prompts.append((ROLE_ORCHESTRATOR, work_prompt))
+            if current is not None:
+                prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_at_step.format(current_step=current)))
             prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_next_step))
 
             n_retries = 0
@@ -222,7 +226,8 @@ class Orchestrator(Executor):
                     assert decision is not None
                     assert answer is not None
                     if decision == NEXT_I_WANT_TO_WORK_AT:
-                        work_prompt = self.prompts.orchestrator_proceed_to_step.format(step=answer)
+                        prev_step = self.set_current_step_description(answer) or "unknown"
+                        work_prompt = self.prompts.orchestrator_proceed_to_step.format(prev_step=prev_step, step=answer)
                         return ProceedStep(
                             step,
                             work_prompt,
@@ -253,15 +258,20 @@ class Orchestrator(Executor):
         return True
 
     def summarize_final_answer(self) -> FinalAnswerStep:
+        last_step = self.chain[-1]
+        if isinstance(last_step, FinalAnswerStep):
+            if self.config.check_final:
+                self.check_final_solution(last_step)
+            return last_step
+
         is_direct_answer_only = False
-        if isinstance(self._chain[-1], DirectAnswerStep):
+        if isinstance(last_step, DirectAnswerStep):
             for i in range(len(self._chain) - 2, -1, -1):
                 if isinstance(self._chain[i], PresentTaskStep):
                     is_direct_answer_only = True
                     break
                 elif isinstance(self._chain[i], (DirectAnswerStep, PythonGenieReplyStep, StepByStepPlan)):
                     break
-            last_step = self._chain[-1]
             if is_direct_answer_only:
                 final_answer_step = FinalAnswerStep(self._chain[-2], last_step.description, ROLE_TAO)
                 self._chain[-1] = final_answer_step
@@ -303,7 +313,7 @@ class Orchestrator(Executor):
         system_prompt = self.prompts.sage_intro
 
         def _select(_: int, step: StepABC) -> bool:
-            return isinstance(step, (PresentTaskStep, AnalysisStep))
+            return isinstance(step, (PresentTaskStep, AnalysisStep, FinalAnswerStep))
 
         prompts = self.show_conversation_thread(selector=_select)
         sage_prompt = self.prompts.sage_final_check

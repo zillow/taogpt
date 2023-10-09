@@ -11,14 +11,18 @@ the proposed approaches in the range of [0.0, 10.0], the higher the score the mo
 Scoring criteria: 
 * If the original task problem contains error and not solvable or we are at a dead-end or infinite loop trying to 
   solve the original, then all approaches except `BACKTRACK_ON_ERROR` get 0 scores.
-* The approach must conform to the templates for Tao and parsable; else it should get a score of 0.
 * Direct answers that are incorrect should get a score of 0.
 * The approaches which lead to incorrect results should get a score of 0.
 * The assumption implied/used should be correct.
-* The questions asked by Tao should be relevant and non-redundant.
-* Worship Occam's razor. Prefer elegant, generic steps. Avoid overly specific steps. For example, prefer "Find and 
-  set missing elements to fill-in values" and avoid "Set 2nd and 5th elements to 22".
-* Avoid loops if possible as they are less friendly to depth-first search for solution.
+* The questions asked by Tao should be relevant and not trivial.
+* For `HERE_IS_MY_STEP_BY_STEP_PLAN` approaches:
+  * Worship Occam's razor. Prefer simple, linear, decomposable steps without looping if possible. Loops are less 
+    friendly to the top-down tree search problem solving method. The problem solver will choose the backtracking 
+    approach automatically when things go wrong, so no need to mention in the step-by-step plan.
+  * Think abstract. Prefer **elegant, generic, and high-level** plans. Avoid detailed low-level ones. Avoid overly 
+    specific steps. For example, prefer "Find and set missing elements to fill-in values" and avoid "Set 2nd and 5th 
+    elements to 22".
+  * Don't worry about the details; we will work on the details later.
 * Try to avoid identical scores (except 0's;) you can use decimal points (e.g. 9.5) to 
   distinguish two different approaches. 
 * Among similar approaches, mark others as duplicates of the best one; note: an approach can only duplicate another 

@@ -71,6 +71,9 @@ class Config:
 
 class Executor(_abc.ABC):
 
+    def __init__(self):
+        self._current_step: str|None = None
+
     @property
     @_abc.abstractmethod
     def config(self) -> Config:
@@ -113,6 +116,15 @@ class Executor(_abc.ABC):
 
     def ask_genie(self, codes: [str], step: StepABC) -> [str]:
         raise NotImplementedError('No ask genie agent feature in the base')
+
+    def set_current_step_description(self, next_step: str) -> str:
+        last_step = self._current_step
+        self._current_step = next_step
+        return last_step
+
+    @property
+    def current_step_description(self) -> str:
+        return self._current_step
 
     def handle_parse_error(self,
                            e: Exception,
