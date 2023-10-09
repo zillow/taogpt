@@ -5,7 +5,7 @@ import math as _math
 import datetime as _datetime
 import json as _json
 
-from . import UnsolvableError, MarkdownLogger
+from . import UnsolvableError, MarkdownLogger, TokenUsageError
 from .llm_model import *
 from .program import *
 import taogpt.utils as _utils
@@ -30,7 +30,7 @@ class Orchestrator(Executor):
         self._chain: _t.List[Step] = []
         self._create_python_scope()
         if self.config.max_tokens_for_sage_llm is None:
-            if self._sage_llm is not None and id(self._llm) != id(self._sage_llm):
+            if self._sage_llm is not None and self._llm is not self._sage_llm:
                 self.config.max_tokens_for_sage_llm = self.config.max_tokens // 3
             else:
                 self.config.max_tokens_for_sage_llm = self.config.max_tokens
@@ -179,11 +179,11 @@ class Orchestrator(Executor):
 
     def check_token_usages(self):
         if 0 < self.config.max_tokens <= self.llm.total_tokens:
-            raise RuntimeError(f"Regular LLM consumed {self.llm.total_tokens} tokens, "
-                               f"exceeded allowance of {self.config.max_tokens}")
-        if id(self.llm) != id(self.sage_llm) and 0 < self.config.max_tokens_for_sage_llm <= self.sage_llm.total_tokens:
-            raise RuntimeError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
-                               f"exceeded allowance of {self.config.max_tokens_for_sage_llm}")
+            raise TokenUsageError(f"Regular LLM consumed {self.llm.total_tokens} tokens, "
+                                  f"exceeded allowance of {self.config.max_tokens}", self.chain[-1])
+        if self.llm is not self.sage_llm and 0 < self.config.max_tokens_for_sage_llm <= self.sage_llm.total_tokens:
+            raise TokenUsageError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
+                                  f"exceeded allowance of {self.config.max_tokens_for_sage_llm}", self.chain[-1])
 
     def show_conversation_thread(self, with_header=True, selector: _t.Callable[[int, StepABC], bool] | None=None) \
             -> [(str, str)]:

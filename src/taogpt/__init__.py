@@ -167,6 +167,10 @@ class Pause(RuntimeError):
         self.cause = cause
 
 
+class TokenUsageError(Pause):
+    pass
+
+
 class UnsolvableError(RuntimeError):
     def __init__(self, reason: str):
         super().__init__(reason)
