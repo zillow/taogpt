@@ -213,3 +213,22 @@ def restore_fenced_block(text: str, fenced_blocks: _t.Dict[str, str]):
     for key, original in fenced_blocks.items():
         text = text.replace(key, original)
     return text
+
+
+def safe_is_instance(obj, class_or_tuple):
+    """
+    When using autoreload (in Jupyter notebook), `isinstance` is not safe. This walk up the hierarchy
+    and check using `__qualname__`.
+    :param obj:
+    :param class_or_tuple:
+    :return:
+    """
+    if isinstance(obj, class_or_tuple): # try using the default one
+        return True
+
+    if not isinstance(class_or_tuple, (tuple, list, set)):
+        class_or_tuple = (class_or_tuple, )
+
+    check_classes = [cls.__qualname__ if isinstance(cls, type) else cls for cls in class_or_tuple]
+    mro_classes = [cls.__qualname__ for cls in obj.__class__.mro()]
+    return any(check_class in mro_classes for check_class in check_classes)

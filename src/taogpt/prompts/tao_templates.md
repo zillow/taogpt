@@ -87,4 +87,7 @@ Note: if the problem step asks for writing codes as the answer, provide the code
 
 {direct_answer_template}
 
+Important notes:
+* Respect the original task problem! Do NOT alter inadvertently.
+
 {examples}

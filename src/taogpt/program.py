@@ -18,17 +18,35 @@ from taogpt.prompts import PromptDb
 @_dc.dataclass(repr=False)
 class Step(StepABC):
 
+    def __post_init__(self):
+        self._step_name: str|None = None
+
     @property
     def step_title(self) -> str:
         return ''
 
+    def set_step_name(self, name: str|None):
+        name = _utils.str_or_blank(name)
+        if name == '':
+            return
+        if self._step_name is None:
+            self._step_name = name
+            if not self.description.strip().startswith("[at step"):
+                self.description = f"[at step {name}]\n\n{self.description}"
+        else:
+            raise RuntimeError(f"step name has already been set to {self._step_name}")
+
+    @property
+    def step_name(self) -> str|None:
+        return self._step_name
+
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.__repr_local__()})"
+        prev = self.previous.step_id if self.previous is not None else None
+        return f"{self.__class__.__name__}(step_id={self.step_id},prev={prev};{self.__repr_local__()})"
 
     def __repr_local__(self) -> str:
         d = safe_subn(self.description)
-        prev = self.previous.step_id if self.previous is not None else None
-        return f"step_id={self.step_id},description={d},prev={prev}"
+        return f"description={d}"
 
     @property
     def step_id(self) -> int:
@@ -59,9 +77,6 @@ class Step(StepABC):
     def eval_only(self, executor) -> Step | None:
         return None
 
-    def __post_init__(self):
-        pass
-
 
 @_dc.dataclass(repr=False)
 class UserReplyStep(Step):
@@ -70,10 +85,6 @@ class UserReplyStep(Step):
     def step_title(self) -> str:
         return 'Here are the answers'
 
-    def __repr_local__(self) -> str:
-        p = super().__repr_local__()
-        return f"{p},reply={_utils.safe_subn(self.description)}..."
-
 
 @_dc.dataclass(repr=False)
 class PythonGenieReplyStep(Step):
@@ -81,10 +92,6 @@ class PythonGenieReplyStep(Step):
     @property
     def step_title(self) -> str:
         return 'The Python Genie Replies'
-
-    def __repr_local__(self) -> str:
-        p = super().__repr_local__()
-        return f"{p},reply={_utils.safe_subn(self.description)}..."
 
 
 @_dc.dataclass(repr=False)
@@ -172,10 +179,6 @@ class GiveUpStep(TaoReplyStep):
     def step_title(self) -> str:
         return GiveUpStep.TYPE_SPEC
 
-    def __repr_local__(self) -> str:
-        p = super().__repr_local__()
-        return f"{p}, {safe_subn(self.description)}"
-
     def __post_init__(self):
         super().__post_init__()
         if len(self.description) == 0:
@@ -197,9 +200,8 @@ class StepByStepPlan(TaoReplyStep):
         return StepByStepPlan.TYPE_SPEC
 
     def __repr_local__(self) -> str:
-        prev = self.previous.step_id if self.previous is not None else None
         desc = ';'.join([_utils.safe_subn(step.description, 10) for step in self._steps.values()])
-        return f"step_id={self.step_id},[{desc}],prev={prev}"
+        return f"[{desc}]"
 
     def __post_init__(self):
         super().__post_init__()
@@ -261,10 +263,6 @@ class AskQuestionStep(TaoReplyStep):
         super().__post_init__()
         self._need_consolidate = False
 
-    def __repr_local__(self) -> str:
-        p = super().__repr_local__()
-        return f"{p},questions={_utils.safe_subn(self.description)[:10]}..."
-
     @property
     def need_consolidate(self) -> bool:
         return self._need_consolidate
@@ -305,7 +303,7 @@ class AskQuestionStep(TaoReplyStep):
                     raise e
 
 
-def parse_to_step(step: Step, response: str) -> Step:
+def parse_to_step(prev_step: Step, response: str, working_on: str=None) -> Step:
     step_type, step_def = parse_step_type_spec(response)
     if step_type is None:
         raise ParseError(f"Invalid Tao response. Missing header.")
@@ -324,7 +322,10 @@ def parse_to_step(step: Step, response: str) -> Step:
             step_class = StepByStepPlan
         if step_def is None:
             raise ParseError(f"Unknown strategy heading '{step_type}'")
-    return step_class(step, description=step_def, role=ROLE_TAO)
+    step = step_class(prev_step, description=step_def, role=ROLE_TAO)
+    if working_on is not None:
+        step.set_step_name(working_on)
+    return step
 
 
 @_dc.dataclass(repr=False)
@@ -361,7 +362,8 @@ class ExpandableStep(Step):
         if not self._ptr in self._all_criticisms:
             self._all_criticisms[self._ptr] = set()
         self._all_criticisms[self._ptr].update(additional_criticisms)
-        criticism_list = [f'* {c}' for c in additional_criticisms]
+        c: str
+        criticism_list = [f'* {c}' if not c.startswith('* ') else c for c in additional_criticisms]
         note = promptDb.orchestrator_criticisms.format(criticisms='\n'.join(criticism_list))
         self.choices[self._ptr].description += note
 
@@ -397,7 +399,7 @@ class ExpandableStep(Step):
                                             temperature=temperature,
                                             log_request=(len(self.choices) == 0 and n_retries == 0),
                                             collapse_contents={'tao_templates': tao_templates})
-                    choice = parse_to_step(self, plan)
+                    choice = parse_to_step(self, plan, working_on=executor.current_step_description)
                     self.choices.append(choice)
                     self.n_expanded += 1
                     break
@@ -417,7 +419,7 @@ class ExpandableStep(Step):
 
     def rank_choices(self, executor: Executor, n_existing_choices: int = 0):
         question_indices = [i for i in range(n_existing_choices, len(self.choices))
-                               if isinstance(self.choices[i], AskPythonGenieStep)]
+                            if _utils.safe_is_instance(self.choices[i], AskPythonGenieStep)]
         if len(question_indices) > 0:
             if self.consolidate_questions(self.choices, question_indices):
                 indices = list(range(n_existing_choices)) + question_indices
@@ -481,7 +483,7 @@ class ExpandableStep(Step):
 
     @staticmethod
     def consolidate_questions(choices, indices) -> bool:
-        question_indices = [i for i in indices if isinstance(choices[i], AskQuestionStep)]
+        question_indices = [i for i in indices if _utils.safe_is_instance(choices[i], AskQuestionStep)]
         if len(question_indices) > 1:
             merged_question: AskQuestionStep = choices[question_indices[0]]
             for i in range(len(question_indices) - 1, 0, -1):  # all except first in reversed order
@@ -523,6 +525,11 @@ class ExpandableStep(Step):
         raise Backtrack("No more alternative", blame=self)
 
     def eval_only(self, executor: Executor) -> Step | None:
+        step: Step
+        for step in reversed(executor.chain):
+            if step.step_name is not None:
+                executor.set_current_step_description(step.step_name)
+                break
         old_length = self.n_expanded
         if (self.choices is None or self._ptr >= len(self.choices)) and old_length < self.max_expansion:
             incr = self.first_expansion if old_length == 0 else self.incremental_expansion

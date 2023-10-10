@@ -100,6 +100,11 @@ class Executor(_abc.ABC):
 
     @property
     @_abc.abstractmethod
+    def chain(self) -> [StepABC]:
+        pass
+
+    @property
+    @_abc.abstractmethod
     def logger(self) -> MarkdownLogger:
         pass
 

@@ -103,7 +103,7 @@ def parse_final_response(text: str) -> (bool, str):
         judgements: _t.Dict[str, _t.Dict[str, _t.Union[bool, str]]] = json.loads(json_text)
     except json.JSONDecodeError as e:
         raise ParseError(f"JSON parse error: {e}")
-    if not isinstance(judgements, dict) or not all([isinstance(x, dict) for x in judgements.values()]):
+    if not _utils.safe_is_instance(judgements, dict) or not all([_utils.safe_is_instance(x, dict) for x in judgements.values()]):
         raise ParseError("The response must be a JSON hash of hashes")
     concerns = []
     overall_correctness: bool = True
@@ -165,7 +165,7 @@ def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[
         if 'score' not in item:
             raise ParseError(f"No 'score' for item {i}")
         score = item['score']
-        if not isinstance(score, (int, float)):
+        if not _utils.safe_is_instance(score, (int, float)):
             raise ParseError(f"Score value '{score}' is not a number.")
         results[i] = float(score)
     if len(rankings) != expected_number:
@@ -192,7 +192,7 @@ def parse_json_hash(text):
         responses: _t.Dict[str, _t.Any] = json.loads(json_text)
     except json.JSONDecodeError as e:
         raise ParseError(f"JSON parse error: {e}")
-    if not isinstance(responses, dict) or not all([isinstance(x, dict) for x in responses.values()]):
+    if not _utils.safe_is_instance(responses, dict) or not all([_utils.safe_is_instance(x, dict) for x in responses.values()]):
         raise ParseError("The response must be a JSON hash of hashes")
     return responses
 
@@ -206,7 +206,7 @@ def parse_json_list(text):
         responses: _t.List[str] = json.loads(json_text)
     except json.JSONDecodeError as e:
         raise ParseError(f"JSON parse error: {e}")
-    if not isinstance(responses, list) or not all([isinstance(x, str) for x in responses]):
+    if not _utils.safe_is_instance(responses, list) or not all([_utils.safe_is_instance(x, str) for x in responses]):
         raise ParseError("The response must be a JSON list of strings")
     return responses
 
