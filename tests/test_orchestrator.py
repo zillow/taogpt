@@ -146,11 +146,19 @@ def test_record_criticism_to_expandable_steps(logger):
     expandable.choices = []
     expandable.choices.append(plan_step)
     orchestrator.chain.append(plan_step)
+    expected = f"""[Prior approach#1] {plan_step.description_with_header}
+--
+[[This approach has been tried and failed with following error:
+
+* error 1
+* error 2
+
+]]
+"""
     errors = {'error 1', 'error 2'}
     orchestrator.record_criticisms(errors)
     assert len(expandable.collected_criticisms) == 1
     assert expandable.collected_criticisms[0] == errors
-    expected = f"""* error 1\n* error 2"""
     gathered = expandable.gather_choices_with_criticisms()
     assert len(gathered) == 1
     gathered[0] = gathered[0].replace("* error 2\n* error 1", "* error 1\n* error 2")

@@ -371,9 +371,10 @@ class Orchestrator(Executor):
             raise Backtrack(f'We are on a dead path with {fail_votes * 100:.1f}% of votes', blame=step)
 
     def record_criticisms(self, criticisms: [str]):
-        for step in self._chain:
+        for step in reversed(self._chain):
             if isinstance(step, ExpandableStep):
-                step.record_criticism(criticisms)
+                step.record_criticism(self.prompts, criticisms)
+                break
 
     def ask_user(self, questions: [str], input_fn=input) -> str:
         # for now just use the console input

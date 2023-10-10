@@ -198,7 +198,7 @@ class StepByStepPlan(TaoReplyStep):
 
     def __repr_local__(self) -> str:
         prev = self.previous.step_id if self.previous is not None else None
-        desc = ','.join([step.__class__.__name__ for step in self._steps])
+        desc = ';'.join([_utils.safe_subn(step.description, 10) for step in self._steps.values()])
         return f"step_id={self.step_id},[{desc}],prev={prev}"
 
     def __post_init__(self):
@@ -340,7 +340,8 @@ class ExpandableStep(Step):
         return "A step-by-step plan"
 
     def __repr_local__(self) -> str:
-        return f"{repr(self.choices)},ptr={self._ptr}"
+        desc = ','.join([step.__class__.__name__ for step in self.choices] if self.choices is not None else [])
+        return f"[{desc}],ptr={self._ptr}"
 
     def __post_init__(self):
         super().__post_init__()
@@ -355,11 +356,14 @@ class ExpandableStep(Step):
     def collected_criticisms(self):
         return self._all_criticisms
 
-    def record_criticism(self, additional_criticisms: [str]):
+    def record_criticism(self, promptDb: PromptDb, additional_criticisms: [str]):
         assert self._ptr >= 0
         if not self._ptr in self._all_criticisms:
             self._all_criticisms[self._ptr] = set()
         self._all_criticisms[self._ptr].update(additional_criticisms)
+        criticism_list = [f'* {c}' for c in additional_criticisms]
+        note = promptDb.orchestrator_criticisms.format(criticisms='\n'.join(criticism_list))
+        self.choices[self._ptr].description += note
 
     def _expansion_reason(self) -> str:
         return 'expand_choices'
@@ -377,7 +381,7 @@ class ExpandableStep(Step):
             self.choices = []
         if len(self.choices) > 0:
             prior_plans_and_criticisms = self.gather_choices_with_criticisms()
-            criticism = prompt_db.orchestrator_critics.format(criticisms='\n\n---\n'.join(prior_plans_and_criticisms))
+            criticism = prompt_db.orchestrator_failed_approaches.format(criticisms='\n\n---\n'.join(prior_plans_and_criticisms))
             prompts.append((ROLE_ORCHESTRATOR, criticism))
         while self.n_expanded < upto_branches:
             n_retries = 0
@@ -405,12 +409,9 @@ class ExpandableStep(Step):
     def gather_choices_with_criticisms(self):
         prior: Step
         prior_plans_and_criticisms = []
-        for i, prior in enumerate(self.choices):
-            # desc_with_criticism = f"[Prior approach {i + 1}] {prior.description}"
-            desc_with_criticism = f""
-            if i in self._all_criticisms:
-                # desc_with_criticism += "\n\ncriticism:\n"
-                desc_with_criticism += '\n'.join([f"* {s.strip()}" for s in self._all_criticisms[i]])
+        for i in sorted(self._all_criticisms.keys()):
+            prior = self.choices[i]
+            desc_with_criticism = f"[Prior approach#{i + 1}] {prior.description_with_header}"
             prior_plans_and_criticisms.append(desc_with_criticism)
         return prior_plans_and_criticisms
 
