@@ -15,14 +15,10 @@ Scoring criteria:
 * The approaches which lead to incorrect results should get a score of 0.
 * The assumption implied/used should be correct.
 * The questions asked by Tao should be relevant and not trivial.
-* For `HERE_IS_MY_STEP_BY_STEP_PLAN` approaches:
-  * Worship Occam's razor. Prefer simpler, linear, decomposable steps without looping if possible. Loops are less 
-    friendly to the top-down tree search problem solving method. Tao will backtrack by himself when things go wrong, 
-    so no need to mention it in the step-by-step plan.
-  * Think abstract. Prefer **elegant, generic, and high-level** plans. Avoid detailed, low-level, overly 
-    specific steps. For example, prefer "Find and set missing elements to fill-in values" over "Set 2nd and 5th 
-    elements to 22".
-  * **Do NOT worry too much about the details in the plan**; Tao can work on the details later.
+* Among `HERE_IS_MY_STEP_BY_STEP_PLAN` strategies, choose simple, generic, and high-level over detailed, specific, 
+  and low-level ones. Because it is impossible to backtrack and try different values in detailed plans in case of 
+  errors. Likewise, choose linear, decomposable steps over looping. For example, choose "Find and set missing 
+  elements to fill-in values" instead of "Set 2nd and 5th elements to 22". Tao is good at handling details himself.
 * Try to avoid identical scores (except 0's;) you can use decimal points (e.g. 9.5) to distinguish two different 
   approaches.
 * Among similar approaches, mark others as duplicates of the best one; note: an approach can only duplicate another 
@@ -33,6 +29,7 @@ Response must be in valid JSON like this:
 ```json
 {{
   "1": {{"score": 9.8, "reason": "your reasoning"}},
-  "2": {{"score": 9.65, "duplicate_of": 1, "reason": "your explanation"}}
+  "2": {{"score": 9.65, "duplicate_of": 1, "reason": "your explanation"}},
+  "3": {{"score": 7.5, "reason": "workable but too detail, over specific"}}
 }}
 ```

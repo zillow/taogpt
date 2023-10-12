@@ -11,8 +11,8 @@ If you see any errors or inconsistencies, response with the list of **specific**
 
 ```json
 [
-  "<issue 1>",
-  "<issue 2>",
+  "<issue 1 with details>",
+  "<issue 2 with details>",
   // ...
 ]
 ```
@@ -38,29 +38,31 @@ following template **strictly** so the orchestrator can parse it and show the qu
 
 ## Strategy: Step-by-step Plan
 
-In this strategy, the problem task is turned into a top-down, step-by-step plan of which you and Orchestrator will 
-solve using tree traversal and backtracking.
+In this strategy, the problem task is turned into a top-down, high-level, step-by-step plan of which you and 
+Orchestrator will solve using tree traversal and backtracking.
 
-* Think abstract and worship Occam's razor. Prefer elegant, generic steps. Avoid overly specific and detailed steps; 
-  you will be working on the steps later. For example, prefer "Set suitable value to missing elements" over "Set 2nd and 5th elements to 22".
+* Think abstract. Come up with generic, and high-level. Avoid detailed, specific, fixed-value, and low-level ones. 
+  Because it is impossible to backtrack and try different values in detailed plans in case of errors. Likewise, 
+  choose linear, decomposable steps over looping. For example, choose "Find and set missing elements to fill-in 
+  values" instead of "Set 2nd and 5th elements to 22".
 * Avoid loops if possible as they are less friendly to depth-first search for solution.
-* Cherish verifiability.
+* Worship Occam's razor.
 
-Do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
+Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
 
-Follow this markdown template **strictly**:
+Follow this markdown template:
 
 `````markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
 
 ```json
 {{
-  "1": {{"description": "<brief description>"}},
+  "1": {{"description": "<high-level description without details>"}},
   "2": {{
-        "description": "<brief description>",
+        "description": "<high-level description without details>",
         "sub_steps": {{
-            "1": {{"description": "<brief description>"}},
-            "2": {{"description": "<brief description>"}}
+            "1": {{"description": "<high-level description without details>"}},
+            "2": {{"description": "<high-level description without details>"}}
         }}
        }},
   // ...

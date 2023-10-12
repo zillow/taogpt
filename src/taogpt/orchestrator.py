@@ -68,6 +68,15 @@ class Orchestrator(Executor):
     def chain(self) -> _t.List[Step]:
         return self._chain
 
+    @property
+    def current_step_name(self) -> str:
+        step: Step
+        for step in reversed(self.chain):
+            step_name = step.step_name
+            if _utils.str_or_blank(step_name) != '':
+                return step_name
+        return 'start or unknown'
+
     def start(self, task: str | Step):
         self.log_configs()
         if _utils.safe_is_instance(task, str):
@@ -143,7 +152,7 @@ class Orchestrator(Executor):
             self._halt_on_initial_steps(last_step)
             retryable = last_step.retryable(self.config)
             if retryable:
-                last_step.backtrack(backtrack)
+                last_step.backtrack(self.prompts, backtrack)
                 self._chain.append(last_step)
                 cls = last_step.__class__.__name__
                 desc = _utils.safe_subn(last_step.description)
@@ -161,7 +170,12 @@ class Orchestrator(Executor):
 
     def _loop(self):
         while True:
-            new_step = self._chain[-1].eval(self)
+            last_step = self._chain[-1]
+            if _utils.safe_is_instance(last_step, FinalAnswerStep):
+                if self.config.check_final:
+                    self.check_final_solution(last_step)
+                    return
+            new_step = last_step.eval(self)
             while new_step is not None:
                 self._chain.append(new_step) # note: we don't necessary eval the new resulting step
                 if _utils.safe_is_instance(new_step, DirectAnswerStep) and new_step.is_final_step \
@@ -202,14 +216,19 @@ class Orchestrator(Executor):
         step = self._chain[-1]
         if start_solving:
             work_prompt = self.prompts.orchestrator_proceed
+            first_expansion = self.config.initial_expansion if start_solving else self.config.first_expansion
+            work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
+                                         first_expansion=first_expansion,
+                                         max_expansion=self.config.max_search_expansion,
+                                         first_problem_solving_step=start_solving)
+            return work_next_step
         else:
-            current = self.current_step_description
+            current = self.current_step_name
             prompts = self.show_conversation_thread()
             direct_answer = self.prompts.tao_template_direct_step_answer
             work_prompt = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
             prompts.append((ROLE_ORCHESTRATOR, work_prompt))
-            if current is not None:
-                prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_at_step.format(current_step=current)))
+            prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_at_step.format(current_step=current)))
             prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_next_step))
 
             n_retries = 0
@@ -228,29 +247,25 @@ class Orchestrator(Executor):
                     assert decision is not None
                     assert answer is not None
                     if decision == NEXT_I_WANT_TO_WORK_AT:
-                        prev_step = self.set_current_step_description(answer) or "unknown"
-                        work_prompt = self.prompts.orchestrator_proceed_to_step.format(prev_step=prev_step, step=answer)
-                        return ProceedStep(
+                        work_prompt = self.prompts.orchestrator_proceed_to_step.format(
+                            prev_step=current, step=answer)
+                        proceed = ProceedStep(
                             step,
                             work_prompt,
                             role=ROLE_ORCHESTRATOR,
                             first_expansion=self.config.first_expansion,
                             max_expansion=self.config.max_search_expansion,
                             first_problem_solving_step=start_solving,
-                            choices=[parse_to_step(step, plan, working_on=self.current_step_description)]
+                            choices=[parse_to_step(step, plan, working_on=answer)]
                         )
+                        proceed.set_step_name(answer)
+                        return proceed
                     else:
-                        return parse_to_step(step, answer)
+                        return parse_to_step(step, answer, working_on='final step')
                 except Exception as e:
                     n_retries += 1
                     self.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
                                             self.prompts.orchestrator_parse_error)
-        first_expansion = self.config.initial_expansion if start_solving else self.config.first_expansion
-        work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
-                                     first_expansion=first_expansion,
-                                     max_expansion=self.config.max_search_expansion,
-                                     first_problem_solving_step=start_solving)
-        return work_next_step
 
     def is_first_solving_expansion(self):
         for i, step in enumerate(self.chain):
@@ -315,7 +330,7 @@ class Orchestrator(Executor):
         system_prompt = self.prompts.sage_intro
 
         def _select(_: int, step: StepABC) -> bool:
-            return _utils.safe_is_instance(step, (PresentTaskStep, AnalysisStep, FinalAnswerStep))
+            return _utils.safe_is_instance(step, (PresentTaskStep, FinalAnswerStep))
 
         prompts = self.show_conversation_thread(selector=_select)
         sage_prompt = self.prompts.sage_final_check
@@ -375,10 +390,10 @@ class Orchestrator(Executor):
     def record_criticisms(self, criticisms: [str]):
         for step in reversed(self._chain):
             if _utils.safe_is_instance(step, ExpandableStep):
-                step.record_criticism(self.prompts, criticisms)
-                break
+                step: ExpandableStep
+                step.record_criticism(criticisms)
 
-    def ask_user(self, questions: [str], input_fn=input) -> str:
+    def ask_user(self, questions: [str], input_fn=input) -> {str: str}:
         # for now just use the console input
         return ask_questions(input_fn, questions, self.config.ask_user_questions_in_one_prompt)
 
@@ -462,29 +477,27 @@ class Orchestrator(Executor):
             prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
             self.logger.log(f"\n***RETRY***\n{message}")
 
-def ask_questions(input_fn, questions: [str], one_prompt: bool):
+def ask_questions(input_fn, questions: [str], one_prompt: bool) -> {str: str}:
     if one_prompt:
         user_prompt = "Tao wants to ask:\n"
         user_prompt += "\n".join([f"{i+1}. {questions[i]}" for i in range(len(questions))])
-        user_prompt += '\n(Reply "cancel" to cancel.)'
+        user_prompt += '\n(Reply format: "1. answer to question 1; 2. ...". Reply "cancel" to cancel.)'
+        ui_prompt = user_prompt
+        while True:
+            reply = input_fn(ui_prompt).strip()
+            if reply.lower() == 'cancel':
+                raise KeyboardInterrupt("User cancelled")
+            answers = [re.sub(r"\d+\.\s*", '', s) for s in re.split(r";\s+\d+\.\s+", "1. a1; 2. a2; 3. a3;")]
+            if len(answers) != len(questions):
+                ui_prompt = f"ERROR: there're {len(questions)} but found {len(answers)} answers."
+                continue
+            return {q: a for q, a in zip(questions, answers)}
+    answers = dict()
+    for i in range(len(questions)):
+        user_prompt = f'{questions[i]}\n(Reply "cancel" to cancel.)'
         reply = input_fn(user_prompt).strip()
         if reply.lower() == 'cancel':
             raise KeyboardInterrupt("User cancelled")
-        return reply
-    reply = ""
-    for i in range(len(questions)):
-        reply_text = questions[i]
-        if reply_text.strip() == 'cancel':
-            raise KeyboardInterrupt("User cancelled request.")
-        user_prompt = f'{questions[i]} (Reply "cancel" to cancel.)'
-        reply_lines = input_fn(user_prompt).split('\n')
-        bullet = f"{i + 1}. "
-        indent = ' ' * len(bullet)
-        reply_text = f"{bullet}{reply_lines[0]}"
-        for i in range(1, len(reply_lines)):
-            if reply_lines[i].strip().lower() == 'cancel':
-                raise KeyboardInterrupt("User cancelled")
-            reply_text += '\n' + indent + reply_lines[i].strip()
-        reply += reply_text + '\n'
-    return reply
+        answers[questions[i]] = reply
+    return answers
 

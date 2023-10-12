@@ -25,16 +25,19 @@ class Step(StepABC):
     def step_title(self) -> str:
         return ''
 
-    def set_step_name(self, name: str|None):
+    def set_step_name(self, name: str|None, forced=False):
         name = _utils.str_or_blank(name)
         if name == '':
             return
-        if self._step_name is None:
+        if self._step_name is None or forced:
             self._step_name = name
-            if not self.description.strip().startswith("[at step"):
-                self.description = f"[at step {name}]\n\n{self.description}"
+            self._prepend_step_name_header(name)
         else:
             raise RuntimeError(f"step name has already been set to {self._step_name}")
+
+    def _prepend_step_name_header(self, name):
+        if not self.description.strip().startswith("[at step"):
+            self.description = f"[at step: {name}]\n\n{self.description}"
 
     @property
     def step_name(self) -> str|None:
@@ -71,19 +74,11 @@ class Step(StepABC):
         returned = self.eval_only(executor)
         return returned
 
-    def backtrack(self, backtrack: Backtrack | None):
+    def backtrack(self, prompt_db: PromptDb, backtrack: Backtrack | None):
         pass
 
     def eval_only(self, executor) -> Step | None:
         return None
-
-
-@_dc.dataclass(repr=False)
-class UserReplyStep(Step):
-
-    @property
-    def step_title(self) -> str:
-        return 'Here are the answers'
 
 
 @_dc.dataclass(repr=False)
@@ -113,14 +108,16 @@ class AnalysisStep(Step):
             self.description = prompt_db.orchestrator_ask_init_analysis
         system_prompt = prompt_db.tao_intro
         prompts: _t.List[(str, str)] = executor.show_conversation_thread()
+        llm = executor.sage_llm if executor.config.use_sage_llm_for_initial_expansion else executor.llm
         n_retries = 0
         while n_retries < executor.config.max_retries:
             try:
-                desc = executor.llm.ask(system_prompt, prompts,
-                                                      reason='request_analysis',
-                                                      temperature=0.0,
-                                                      step_id=f"{self.step_id}/{n_retries}",
-                                                      log_request=n_retries == 0)
+                desc = llm.ask(
+                    system_prompt, prompts,
+                    reason='request_analysis',
+                    temperature=0.0,
+                    step_id=f"{self.step_id}/{n_retries}",
+                    log_request=n_retries == 0)
                 self.description = desc
                 self.role = ROLE_TAO
                 self._analyzed = True
@@ -165,9 +162,11 @@ class DirectAnswerStep(TaoReplyStep):
     def eval_only(self, executor) -> Step | None:
         if not _utils.is_blank(self.next_step) and not self.is_final_step:
             prompt_db: PromptDb  = executor.prompts
-            prev_step = executor.set_current_step_description(self.next_step) or "unknown"
+            prev_step = self.step_name or "start or unknown"
             work_prompt = prompt_db.orchestrator_proceed_to_step.format(prev_step=prev_step, step=self.next_step)
-            return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
+            next = ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
+            next.set_step_name(self.next_step)
+            return next
         return None
 
 
@@ -212,9 +211,11 @@ class StepByStepPlan(TaoReplyStep):
     def eval_only(self, executor) -> Step | None:
         # when evaluating this node, we are always at the first step
         prompt_db: PromptDb  = executor.prompts
-        prev_step = executor.set_current_step_description(self.first_step) or "unknown"
+        prev_step = executor.current_step_name
         work_prompt = prompt_db.orchestrator_proceed_to_step.format(prev_step=prev_step, step=self.first_step)
-        return ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
+        next = ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
+        next.set_step_name(self.first_step)
+        return next
 
 
 @_dc.dataclass(repr=False)
@@ -257,10 +258,11 @@ class AskQuestionStep(TaoReplyStep):
 
     @property
     def step_title(self) -> str:
-        return AskQuestionStep.TYPE_SPEC
+        return AskQuestionStep.TYPE_SPEC if self._questions is None else 'Tao asked and user replied:'
 
     def __post_init__(self):
         super().__post_init__()
+        self._questions: [str] = None
         self._need_consolidate = False
 
     @property
@@ -276,12 +278,19 @@ class AskQuestionStep(TaoReplyStep):
             self.description = self.consolidate_questions(
                 executor, prompts, self.description)
             self._need_consolidate = False
-        questions = parse_ordered_list(self.description)
-        reply = executor.ask_user(questions)
-        reply = _utils.str_or_blank(reply)
-        if reply == '':
+        if self._questions is None:
+            self._questions = parse_ordered_list(self.description)
+            answers = executor.ask_user(self._questions)
+            new_text = ''
+            for q, a in answers:
+                q_lines = '\n'.split(q)
+                q_lines = '\n'.join([f"> {line}" for line in q_lines])
+                new_text += q_lines + '\n'
+                new_text += a.strip() + '\n'
+            self.description = new_text
+            self.set_step_name(self.step_name, forced=True) # reset the "[at step: ...]" header
+            self.role = ROLE_USER
             return None
-        return UserReplyStep(self, reply, ROLE_USER)
 
     @staticmethod
     def consolidate_questions(executor: taogpt.Executor,
@@ -348,27 +357,17 @@ class ExpandableStep(Step):
         super().__post_init__()
         self._ptr = 0
         self.n_expanded = 0
-        self._all_criticisms: {int: {str}} = dict()
+        self._new_criticisms: {int: {str}} = dict()
         if self.choices is not None:
             for next_step in self.choices:
                 next_step.previous = self
 
     @property
-    def collected_criticisms(self):
-        return self._all_criticisms
-
-    def record_criticism(self, promptDb: PromptDb, additional_criticisms: [str]):
-        assert self._ptr >= 0
-        if not self._ptr in self._all_criticisms:
-            self._all_criticisms[self._ptr] = set()
-        self._all_criticisms[self._ptr].update(additional_criticisms)
-        c: str
-        criticism_list = [f'* {c}' if not c.startswith('* ') else c for c in additional_criticisms]
-        note = promptDb.orchestrator_criticisms.format(criticisms='\n'.join(criticism_list))
-        self.choices[self._ptr].description += note
-
     def _expansion_reason(self) -> str:
         return 'expand_choices'
+
+    def _prepend_step_name_header(self, name):
+        pass
 
     def expand_choices(self, executor: Executor, upto_branches: int):
         upto_branches = min(upto_branches, executor.config.max_search_expansion)
@@ -377,15 +376,19 @@ class ExpandableStep(Step):
         direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
             else prompt_db.tao_template_direct_step_answer
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
-        prompts: _t.List[(str, str)] = executor.show_conversation_thread()
-        prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
+        base_prompts: _t.List[(str, str)] = executor.show_conversation_thread()
+        base_prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
         if self.choices is None:
             self.choices = []
-        if len(self.choices) > 0:
-            prior_plans_and_criticisms = self.gather_choices_with_criticisms()
-            criticism = prompt_db.orchestrator_failed_approaches.format(criticisms='\n\n---\n'.join(prior_plans_and_criticisms))
-            prompts.append((ROLE_ORCHESTRATOR, criticism))
+        llm = executor.sage_llm if self.first_problem_solving_step \
+                                   and executor.config.use_sage_llm_for_initial_expansion else executor.llm
         while self.n_expanded < upto_branches:
+            prompts = base_prompts.copy()
+            if len(self.choices) > 0:
+                prior_plans = [f"[Prior approach#{i + 1}] {prior.description_with_header}"
+                               for i, prior in enumerate(self.choices)]
+                prior_desc = prompt_db.orchestrator_prior_approaches.format(prior='\n\n---\n'.join(prior_plans))
+                prompts.append((ROLE_ORCHESTRATOR, prior_desc))
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
             plan: str|None = None
@@ -393,13 +396,14 @@ class ExpandableStep(Step):
                 try:
                     temperature = executor.config.first_try_temperature if self.n_expanded == 0 \
                         else executor.config.alternative_temperature
-                    plan = executor.llm.ask(system_prompt, prompts_to_be_sent,
-                                            reason=self._expansion_reason(),
-                                            step_id=f"{self.step_id}/{self.n_expanded}",
-                                            temperature=temperature,
-                                            log_request=(len(self.choices) == 0 and n_retries == 0),
-                                            collapse_contents={'tao_templates': tao_templates})
-                    choice = parse_to_step(self, plan, working_on=executor.current_step_description)
+                    plan = llm.ask(
+                        system_prompt, prompts_to_be_sent,
+                        reason=self._expansion_reason,
+                        step_id=f"{self.step_id}/{self.n_expanded}",
+                        temperature=temperature,
+                        log_request=(len(self.choices) == 0 and n_retries == 0),
+                        collapse_contents={'tao_templates': tao_templates})
+                    choice = parse_to_step(self, plan, working_on=self.step_name)
                     self.choices.append(choice)
                     self.n_expanded += 1
                     break
@@ -407,15 +411,6 @@ class ExpandableStep(Step):
                     n_retries += 1
                     executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent,
                                                 plan, prompt_db.orchestrator_expand_parse_error)
-
-    def gather_choices_with_criticisms(self):
-        prior: Step
-        prior_plans_and_criticisms = []
-        for i in sorted(self._all_criticisms.keys()):
-            prior = self.choices[i]
-            desc_with_criticism = f"[Prior approach#{i + 1}] {prior.description_with_header}"
-            prior_plans_and_criticisms.append(desc_with_criticism)
-        return prior_plans_and_criticisms
 
     def rank_choices(self, executor: Executor, n_existing_choices: int = 0):
         question_indices = [i for i in range(n_existing_choices, len(self.choices))
@@ -430,7 +425,11 @@ class ExpandableStep(Step):
         direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
             else prompt_db.tao_template_direct_step_answer
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
-        prompts = executor.show_conversation_thread()
+
+        def _select_except_self(_: int, step: StepABC) -> bool:
+            return step != self
+
+        prompts = executor.show_conversation_thread(selector=_select_except_self)
 
         def _fix_desc_heading(desc: str):
             if desc.strip().startswith('# '):
@@ -517,7 +516,21 @@ class ExpandableStep(Step):
         return self.n_expanded <= config.max_search_expansion \
             or self._ptr < len(self.choices) # consume existing expansions
 
-    def backtrack(self, backtrack: Backtrack | None):
+    def collected_criticisms(self):
+        return self._new_criticisms
+
+    def record_criticism(self, additional_criticisms: [str]):
+        assert self._ptr >= 0
+        if not self._ptr in self._new_criticisms:
+            self._new_criticisms[self._ptr] = set()
+        self._new_criticisms[self._ptr].update(additional_criticisms)
+
+    def backtrack(self, prompt_db: PromptDb, backtrack: Backtrack | None):
+        for i, criticisms in self._new_criticisms.items():
+            criticism_list = [f'* {c}' if not c.startswith('* ') else c for c in criticisms]
+            note = prompt_db.orchestrator_criticisms.format(criticisms='\n'.join(criticism_list))
+            self.choices[i].description += '\n' + note
+        self._new_criticisms.clear()
         if self._ptr < self.max_expansion:
             self._ptr += 1
             return
@@ -525,11 +538,6 @@ class ExpandableStep(Step):
         raise Backtrack("No more alternative", blame=self)
 
     def eval_only(self, executor: Executor) -> Step | None:
-        step: Step
-        for step in reversed(executor.chain):
-            if step.step_name is not None:
-                executor.set_current_step_description(step.step_name)
-                break
         old_length = self.n_expanded
         if (self.choices is None or self._ptr >= len(self.choices)) and old_length < self.max_expansion:
             incr = self.first_expansion if old_length == 0 else self.incremental_expansion
@@ -553,6 +561,7 @@ class ProceedStep(ExpandableStep):
     def step_title(self) -> str:
         return ""
 
+    @property
     def _expansion_reason(self) -> str:
         return "proceed_to_next"
 

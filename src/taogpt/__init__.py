@@ -62,6 +62,7 @@ class Config:
     max_tokens: int = 10000
     max_tokens_for_sage_llm: int | None = None
     max_retries: int = 3
+    use_sage_llm_for_initial_expansion: bool = True
 
     # user interactions
     ask_user_questions_in_one_prompt: bool = False
@@ -70,9 +71,6 @@ class Config:
 
 
 class Executor(_abc.ABC):
-
-    def __init__(self):
-        self._current_step: str|None = None
 
     @property
     @_abc.abstractmethod
@@ -116,20 +114,16 @@ class Executor(_abc.ABC):
     def record_criticisms(self, criticisms: [str]):
         pass
 
-    def ask_user(self, questions: [str]) -> str:
+    def ask_user(self, questions: [str]) -> {str: str}:
         raise NotImplementedError('No user agent feature in the base')
 
     def ask_genie(self, codes: [str], step: StepABC) -> [str]:
         raise NotImplementedError('No ask genie agent feature in the base')
 
-    def set_current_step_description(self, next_step: str) -> str:
-        last_step = self._current_step
-        self._current_step = next_step
-        return last_step
-
     @property
-    def current_step_description(self) -> str:
-        return self._current_step
+    @_abc.abstractmethod
+    def current_step_name(self) -> str:
+        pass
 
     def handle_parse_error(self,
                            e: Exception,

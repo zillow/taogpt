@@ -27,9 +27,7 @@ I need to ask some questions.
                 return answers[1]
             return "Don't know"
 
-        answer_text = ask_questions(_ask, question_list, False)
-        assert answer_text == f"""1. Yes
-2. Lobsters,
-   lots of them.\n"""
-        answer_list = parse_ordered_list(answer_text)
-        assert [a.replace('\n', ' ') for a in answers] == answer_list
+        answers = ask_questions(_ask, question_list, False)
+        assert len(answers) == 2
+        assert answers[questions[0]] == 'Yes'
+        assert answers[questions[1]] == 'Lobsters,\nlots of them.'

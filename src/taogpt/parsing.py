@@ -115,7 +115,8 @@ def parse_final_response(text: str) -> (bool, str):
             raise ParseError(f"the 'ok' field of {concern} is not a JSON boolean.")
         overall_correctness = (overall_correctness and item_correctness)
         if not item_correctness:
-            reason = f": {judgement['reason']}" if 'reason' in judgement else ''
+            reason = judgement.get('reason', judgement.get('finding', ''))
+            reason = f": {reason}" if reason == '' else ''
             concerns.append(f"* {concern}{reason}")
     return overall_correctness, '\n'.join(concerns)
 
