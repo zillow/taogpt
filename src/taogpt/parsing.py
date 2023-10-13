@@ -116,7 +116,7 @@ def parse_final_response(text: str) -> (bool, str):
         overall_correctness = (overall_correctness and item_correctness)
         if not item_correctness:
             reason = judgement.get('reason', judgement.get('finding', ''))
-            reason = f": {reason}" if reason == '' else ''
+            reason = f": {reason}" if reason != '' else ''
             concerns.append(f"* {concern}{reason}")
     return overall_correctness, '\n'.join(concerns)
 

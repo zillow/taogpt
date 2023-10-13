@@ -136,9 +136,21 @@ class MarkdownLogger:
 def exec_then_eval(code, global_scope: _t.Dict[str, _t.Any]):
     block = _ast.parse(code, mode='exec')
     # assumes last node is an expression
-    last = _ast.Expression(block.body.pop().value)
+    last_statement = None
+    try:
+        last_statement = block.body.pop()
+        last = _ast.Expression(last_statement.value)
+    except AttributeError as e:
+        print(str(e))
+        if "'If' object has no attribute 'value'" in str(e):
+            raise SyntaxError("Trying to return value from the last `if` statement, "
+                              "but `if` statement does not have return value.")
+        if last_statement is not None: # still need to execute it
+            block.body.append(last_statement)
+        last = None
     exec(compile(block, '<string>', mode='exec'), global_scope, global_scope)
-    return eval(compile(last, '<string>', mode='eval'), global_scope, global_scope)
+    return eval(compile(last, '<string>', mode='eval'), global_scope, global_scope) \
+        if last is not None else 'Python Genie: no return value from last statement'
 
 
 # credit: https://stackoverflow.com/questions/64209815/python-how-can-i-save-the-output-of-eval-in-a-variable

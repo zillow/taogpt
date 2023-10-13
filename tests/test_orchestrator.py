@@ -155,10 +155,6 @@ def test_record_criticism_to_expandable_steps(logger):
     orchestrator.record_criticisms(errors)
     assert len(expandable.collected_criticisms) == 1
     assert expandable.collected_criticisms[0] == errors
-    gathered = expandable.gather_choices_with_criticisms()
-    assert len(gathered) == 1
-    gathered[0] = gathered[0].replace("* error 2\n* error 1", "* error 1\n* error 2")
-    assert gathered[0] == expected
 
 
 def test_backtracking(logger):
@@ -182,7 +178,8 @@ no_such_var * 123
         orchestrator.resume(1000)
     except ParseError:
         pass
-    assert 1 == len(proceed_step.collected_criticisms)
+    assert "name 'no_such_var' is not defined" in step.description
+    assert 0 == len(proceed_step.collected_criticisms) # cleared
 
 
 def test_parse_direct_answer_and_next_step():

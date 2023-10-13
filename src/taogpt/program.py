@@ -4,6 +4,7 @@ import time
 import typing as _t
 from _collections import defaultdict
 import math as _math
+import json as _json
 
 import taogpt
 import taogpt.llm_model
@@ -205,8 +206,13 @@ class StepByStepPlan(TaoReplyStep):
     def __post_init__(self):
         super().__post_init__()
         self._steps = parse_step_by_step_plan(self.description)
-        why = f" [{self._steps[0].why}]" if _utils.str_or_blank(self._steps[0].why) != '' else ''
-        self.first_step = f"{self._steps[0].description}{why}"
+        self.first_step = f"{self._steps[0].description}"
+        # erase sub_steps
+        step_def = {i+1: {'description': step.description} for i, step in self._steps.items()}
+        self.description = f"""```json
+{_json.dumps(step_def, indent=2)}
+```
+"""
 
     def eval_only(self, executor) -> Step | None:
         # when evaluating this node, we are always at the first step
@@ -370,7 +376,6 @@ class ExpandableStep(Step):
         pass
 
     def expand_choices(self, executor: Executor, upto_branches: int):
-        upto_branches = min(upto_branches, executor.config.max_search_expansion)
         prompt_db: PromptDb  = executor.prompts
         system_prompt = prompt_db.tao_intro
         direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
@@ -516,6 +521,7 @@ class ExpandableStep(Step):
         return self.n_expanded <= config.max_search_expansion \
             or self._ptr < len(self.choices) # consume existing expansions
 
+    @property
     def collected_criticisms(self):
         return self._new_criticisms
 
