@@ -67,9 +67,10 @@ def safe_subn(text: str | None, n=20, default='') -> str:
 class MarkdownLogger:
     H1_RE = _re.compile(r"^# +(.+)")
 
-    def __init__(self, log_path: str|_Path):
+    def __init__(self, log_path: str|_Path, log_debug=False):
         self._log_path = _Path(log_path)
         self._log = open(self._log_path, 'w')
+        self._log_debug = log_debug
 
     def close(self):
         if self._log is not None:
@@ -123,8 +124,17 @@ class MarkdownLogger:
             self.log(message, demote_h1=True)
             self.close_message_section()
 
+    def log_debug(self, markup):
+        if not self._log_debug:
+            return
+        self.new_message_section('debug', 'DEBUG')
+        self.log(markup, demote_h1=False)
+        self.close_message_section()
+
     def new_message_section(self, role, step_index):
         color = role_color_map.get(role, 'white')
+        if role == 'debug':
+            color = 'aliceblue'
         self.log(f'<div style="background-color:{color}; padding: 5px; border-bottom: 1px dotted grey">\n'
                  f'<div>[{step_index}] <b>{role}</b>:</div>\n')
 

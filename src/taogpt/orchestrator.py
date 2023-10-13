@@ -157,7 +157,7 @@ class Orchestrator(Executor):
                 cls = last_step.__class__.__name__
                 desc = _utils.safe_subn(last_step.description)
                 self.logger.log(f'---\n<div style="color: white; background-color: black">\n')
-                self.logger.log(f"# BACKTRACK to {cls}:{desc}@{last_step.step_id}\n")
+                self.logger.log(f"# BACKTRACK to {cls}:{desc}@{last_step.step_id}. Why: {str(backtrack)}\n")
                 self.logger.log(f"</div>\n")
                 break
         if len(self._chain) == 0: # empty, nothing to backtrack

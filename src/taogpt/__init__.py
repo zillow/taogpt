@@ -125,6 +125,10 @@ class Executor(_abc.ABC):
     def current_step_name(self) -> str:
         pass
 
+    @property
+    def log_debug_enabled(self) -> bool:
+        return self._log_debug
+
     def handle_parse_error(self,
                            e: Exception,
                            n_retries: int,

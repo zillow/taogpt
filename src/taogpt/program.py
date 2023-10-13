@@ -545,11 +545,15 @@ class ExpandableStep(Step):
         raise Backtrack("No more alternative", blame=self)
 
     def eval_only(self, executor: Executor) -> Step | None:
+        logger = executor.logger
         old_length = self.n_expanded
         if (self.choices is None or self._ptr >= len(self.choices)) and old_length < self.max_expansion:
             incr = self.first_expansion if old_length == 0 else self.incremental_expansion
+            logger.log_debug(f"{self.step_id}/'{self.step_name}' expanding from {self.n_expanded} by {incr} to:"
+                    f" {self._ptr + incr}. max={self.max_expansion}")
             self.expand_choices(executor, upto_branches=self._ptr + incr)
-            if self.n_expanded - old_length > 1: # todo: keep n_expanded
+            if self.n_expanded - old_length > 1:
+                logger.log_debug(f"{self.step_id}/'{self.step_name}' ranking choices from {old_length}")
                 self.rank_choices(executor, n_existing_choices=old_length)
             if self.first_problem_solving_step and executor.config.pause_after_initial_solving_expansion:
                 raise Pause("Pause after initial solving expansion", self)
@@ -558,6 +562,7 @@ class ExpandableStep(Step):
         if self._ptr < len(self.choices):
             return self.choices[self._ptr]
         else:
+            logger.log_debug(f"{self.step_id}/'{self.step_name}' no more options: {self._ptr}/{len(self.choices)}")
             raise Backtrack('No more options', blame=self)
 
 
