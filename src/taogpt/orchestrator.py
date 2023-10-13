@@ -487,9 +487,9 @@ def ask_questions(input_fn, questions: [str], one_prompt: bool) -> {str: str}:
             reply = input_fn(ui_prompt).strip()
             if reply.lower() == 'cancel':
                 raise KeyboardInterrupt("User cancelled")
-            answers = [re.sub(r"\d+\.\s*", '', s) for s in re.split(r";\s+\d+\.\s+", "1. a1; 2. a2; 3. a3;")]
+            answers = [re.sub(r"\d+\.\s*", '', s) for s in re.split(r";\s+\d+\.\s+", reply)]
             if len(answers) != len(questions):
-                ui_prompt = f"ERROR: there're {len(questions)} but found {len(answers)} answers."
+                ui_prompt = f"ERROR: there are {len(questions)} but found {len(answers)} answers.\n{ui_prompt}"
                 continue
             return {q: a for q, a in zip(questions, answers)}
     answers = dict()

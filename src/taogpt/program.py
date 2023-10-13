@@ -285,17 +285,18 @@ class AskQuestionStep(TaoReplyStep):
                 executor, prompts, self.description)
             self._need_consolidate = False
         if self._questions is None:
-            self._questions = parse_ordered_list(self.description)
-            answers = executor.ask_user(self._questions)
+            questions = parse_ordered_list(self.description)
+            answers: _t.Dict[str, str] = executor.ask_user(questions)
             new_text = ''
-            for q, a in answers:
-                q_lines = '\n'.split(q)
-                q_lines = '\n'.join([f"> {line}" for line in q_lines])
+            for q, a in answers.items():
+                q_lines = q.split('\n')
+                q_lines = '\n'.join([f"> {line}\n" for line in q_lines])
                 new_text += q_lines + '\n'
-                new_text += a.strip() + '\n'
+                new_text += a.strip() + '\n\n'
             self.description = new_text
             self.set_step_name(self.step_name, forced=True) # reset the "[at step: ...]" header
             self.role = ROLE_USER
+            self._questions = questions
             return None
 
     @staticmethod
