@@ -9,7 +9,8 @@ from taogpt.runner import solve_problem
 # The skeleton is created by the GPT-4
 parser = argparse.ArgumentParser(
     prog='taogpt',
-    description='command-line tool to ask Tao to solve a task'
+    description='command-line tool to ask Tao to solve a task',
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
 
 # hyperparameters
