@@ -110,14 +110,14 @@ class Orchestrator(Executor):
 
     def resume(self, additional_tokens: int=None,
                unblock_initial_expansion: bool=False,
-               additional_tokens_for_smarter_llm: int=None):
+               additional_sage_tokens: int=None):
         if additional_tokens is not None:
             self.config.max_tokens += additional_tokens
             self.logger.log(f"**resume**: extend token allowance by {additional_tokens} to {self.config.max_tokens}")
-        if additional_tokens_for_smarter_llm is not None:
-            self.config.max_tokens_for_sage_llm += additional_tokens_for_smarter_llm
+        if additional_sage_tokens is not None:
+            self.config.max_tokens_for_sage_llm += additional_sage_tokens
             self.logger.log(f"**resume**: extend token allowance for sage "
-                            f"LLM by {additional_tokens_for_smarter_llm} to {self.config.max_tokens_for_sage_llm}")
+                            f"LLM by {additional_sage_tokens} to {self.config.max_tokens_for_sage_llm}")
         if unblock_initial_expansion:
             self.config.pause_after_initial_solving_expansion = False
         self._execute_with_backtracking()

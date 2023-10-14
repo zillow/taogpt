@@ -1,14 +1,14 @@
-Date: 2023/10/09
+Date: 2023/10/13
 
 **Configurations for Orchestrator**
 
-LLM: gpt-3.5-turbo-16k (gpt-4-32k@len(ctx)>3000)
+LLM: gpt-4
 
-Sage LLM: gpt-3.5-turbo-16k (gpt-4-32k@len(ctx)>3000)
+Sage LLM: gpt-4
 
 ```json
 {
-  "initial_expansion": 2,
+  "initial_expansion": 1,
   "first_expansion": 1,
   "first_try_temperature": 0.0,
   "alternative_temperature": 0.7,
@@ -19,9 +19,10 @@ Sage LLM: gpt-3.5-turbo-16k (gpt-4-32k@len(ctx)>3000)
   "max_tokens": 10000,
   "max_tokens_for_sage_llm": 10000,
   "max_retries": 3,
-  "ask_user_questions_in_one_prompt": true,
-  "ask_user_before_execute_codes": false,
-  "pause_after_initial_solving_expansion": true
+  "use_sage_llm_for_initial_expansion": true,
+  "ask_user_questions_in_one_prompt": false,
+  "ask_user_before_execute_codes": true,
+  "pause_after_initial_solving_expansion": false
 }
 ```
         
@@ -64,9 +65,13 @@ Do not try to solve the problem yet, just provide analysis.
 
 Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a valid mathematical expression asking for the value of x modulo (y - z), given the values of x, y, and z.
+The problem statement seems to be clear and doesn't contain any fundamental errors, invalid assumptions, or contradictions. It's asking for the modulus of x with respect to (y - z). 
 
-**Text lengths**: context=568 + reply:215=783 **Total tokens**: 171
+The modulus operation, also known as the remainder operation, is a mathematical operation that returns the remainder of the division of one number by another. In this case, we are asked to find the remainder of the division of x by (y - z).
+
+However, it's important to note that the result of (y - z) must not be zero, as division by zero is undefined in mathematics. In this case, y = 7 and z = 4, so (y - z) is not zero, and the problem is solvable.
+
+**Text lengths**: context=568 + reply:635=1203 **Total tokens**: 275
 
 # SEND TO LLM for proceed_to_next/2/0
 
@@ -93,7 +98,11 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 
 
 
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a valid mathematical expression asking for the value of x modulo (y - z), given the values of x, y, and z.
+The problem statement seems to be clear and doesn't contain any fundamental errors, invalid assumptions, or contradictions. It's asking for the modulus of x with respect to (y - z). 
+
+The modulus operation, also known as the remainder operation, is a mathematical operation that returns the remainder of the division of one number by another. In this case, we are asked to find the remainder of the division of x by (y - z).
+
+However, it's important to note that the result of (y - z) must not be zero, as division by zero is undefined in mathematics. In this case, y = 7 and z = 4, so (y - z) is not zero, and the problem is solvable.
 
 
 </div>
@@ -116,8 +125,8 @@ If you see any errors or inconsistencies, response with the list of **specific**
 
 ```json
 [
-  "<issue 1>",
-  "<issue 2>",
+  "<issue 1 with details>",
+  "<issue 2 with details>",
   // ...
 ]
 ```
@@ -143,29 +152,31 @@ following template **strictly** so the orchestrator can parse it and show the qu
 
 ## Strategy: Step-by-step Plan
 
-In this strategy, the problem task is turned into a top-down, step-by-step plan of which you and Orchestrator will 
-solve using tree traversal and backtracking.
+In this strategy, the problem task is turned into a top-down, high-level, step-by-step plan of which you and 
+Orchestrator will solve using tree traversal and backtracking.
 
-* Think abstract and worship Occam's razor. Prefer elegant, generic steps. Avoid overly specific and detailed steps; 
-  you will be working on the steps later. For example, prefer "Set suitable value to missing elements" over "Set 2nd and 5th elements to 22".
+* Think abstract. Come up with generic, and high-level. Avoid detailed, specific, fixed-value, and low-level ones. 
+  Because it is impossible to backtrack and try different values in detailed plans in case of errors. Likewise, 
+  choose linear, decomposable steps over looping. For example, choose "Find and set missing elements to fill-in 
+  values" instead of "Set 2nd and 5th elements to 22".
 * Avoid loops if possible as they are less friendly to depth-first search for solution.
-* Cherish verifiability.
+* Worship Occam's razor.
 
-Do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
+Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
 
-Follow this markdown template **strictly**:
+Follow this markdown template:
 
 `````markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
 
 ```json
 {
-  "1": {"description": "<brief description>"},
+  "1": {"description": "<high-level description without details>"},
   "2": {
-        "description": "<brief description>",
+        "description": "<high-level description without details>",
         "sub_steps": {
-            "1": {"description": "<brief description>"},
-            "2": {"description": "<brief description>"}
+            "1": {"description": "<high-level description without details>"},
+            "2": {"description": "<high-level description without details>"}
         }
        },
   // ...
@@ -210,6 +221,9 @@ Follow this template:
 ```
 
 
+Important notes:
+* Respect the original task problem! Do NOT alter inadvertently.
+
 
 
 
@@ -232,101 +246,6 @@ Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
 
 
-Let me calculate the value of x mod (y - z) using Python.
-
-**Text lengths**: context=4041 + reply:88=4129 **Total tokens**: 995
-
-
-***RETRY***
-Your Orchestrator cannot parse your response due to **error**: No python code snippet inside markdown fenced block..
-
-Please respond again following the template. In particular, make sure to **start with** one of the 
-headings `# I_WILL_ANSWER_DIRECTLY`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, `# LET_ME_ASK_THE_PYTHON_GENIE`, 
-`# BACKTRACK_ON_ERROR`, or `# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED` based on which strategy you have 
-chosen in the above response.
-
-# SEND TO LLM for proceed_to_next/2/0
-
-<div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
-<div>[-1] <b>system</b>:</div>
-
-... system_prompt [text of length 211] ...
-
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[0] <b>user</b>:</div>
-
-What's x mod (y - z) where x = 10, y = 7, z = 4.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[1] <b>Tao</b>:</div>
-
-***Problem Analysis***
-
-
-
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a valid mathematical expression asking for the value of x modulo (y - z), given the values of x, y, and z.
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>orchestrator</b>:</div>
-
-[..tao_templates:3218..]
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>orchestrator</b>:</div>
-
-Tao, please proceed to solve the problem following the "Problem Solving Instructions" above. Be sure to start with 
-one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`,
-`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, or `# FINAL_ANSWER`.
-
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[4] <b>Tao</b>:</div>
-
-***LET_ME_ASK_THE_PYTHON_GENIE***
-
-
-
-Let me calculate the value of x mod (y - z) using Python.
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[5] <b>orchestrator</b>:</div>
-
-Your Orchestrator cannot parse your response due to **error**: No python code snippet inside markdown fenced block..
-
-Please respond again following the template. In particular, make sure to **start with** one of the 
-headings `# I_WILL_ANSWER_DIRECTLY`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, `# LET_ME_ASK_THE_PYTHON_GENIE`, 
-`# BACKTRACK_ON_ERROR`, or `# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED` based on which strategy you have 
-chosen in the above response.
-
-
-</div>
-
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
-
-***LET_ME_ASK_THE_PYTHON_GENIE***
-
-
-
-Let me calculate the value of x mod (y - z) using Python.
-
 ```python
 x = 10
 y = 7
@@ -336,221 +255,7 @@ result = x % (y - z)
 result
 ```
 
-**Text lengths**: context=4593 + reply:151=4744 **Total tokens**: 1168
-
-# SEND TO LLM for proceed_to_next/2/1
-
-<div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
-<div>[-1] <b>system</b>:</div>
-
-... system_prompt [text of length 211] ...
-
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[0] <b>user</b>:</div>
-
-What's x mod (y - z) where x = 10, y = 7, z = 4.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[1] <b>Tao</b>:</div>
-
-***Problem Analysis***
-
-
-
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a valid mathematical expression asking for the value of x modulo (y - z), given the values of x, y, and z.
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>orchestrator</b>:</div>
-
-[..tao_templates:3218..]
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>orchestrator</b>:</div>
-
-Tao, please proceed to solve the problem following the "Problem Solving Instructions" above. Be sure to start with 
-one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`,
-`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, or `# FINAL_ANSWER`.
-
-
-
-</div>
-
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.7
-
-***LET_ME_ASK_THE_PYTHON_GENIE***
-
-
-
-```python
-x = 10
-y = 7
-z = 4
-
-result = x % (y - z)
-result
-```
-
-**Text lengths**: context=4041 + reply:92=4133 **Total tokens**: 1009
-
-# SEND TO LLM for rank_choices/2/0
-
-<div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
-<div>[-1] <b>system</b>:</div>
-
-Your name is Sage. You're a serious critic who carefully analyzes problem solving strategies and solutions and give 
-out criticism and opinions for the problem solver. The problem solver, whose name is Tao, is expected solve problem 
-in a top-down step-by-step decomposition manner; at each step, Tao should provide either decompose the step into 
-a plan, a direct answer for that step, or asking question to the user for clarification.
-
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[0] <b>user</b>:</div>
-
-What's x mod (y - z) where x = 10, y = 7, z = 4.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[1] <b>Tao</b>:</div>
-
-***Problem Analysis***
-
-
-
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a valid mathematical expression asking for the value of x modulo (y - z), given the values of x, y, and z.
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>orchestrator</b>:</div>
-
-Tao, please proceed to solve the problem following the "Problem Solving Instructions" above. Be sure to start with 
-one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`,
-`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, or `# FINAL_ANSWER`.
-
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>orchestrator</b>:</div>
-
-Tao has proposed the following different approaches:
-
-***[Approach 1] LET_ME_ASK_THE_PYTHON_GENIE***
-
-
-
-Python Genie, Python Genie, run the Python snippet underneath:
-
-Let me calculate the value of x mod (y - z) using Python.
-
-```python
-x = 10
-y = 7
-z = 4
-
-result = x % (y - z)
-result
-```
-
----
-
-***[Approach 2] LET_ME_ASK_THE_PYTHON_GENIE***
-
-
-
-Python Genie, Python Genie, run the Python snippet underneath:
-
-```python
-x = 10
-y = 7
-z = 4
-
-result = x % (y - z)
-result
-```
-
----
-
-Based on proposed problem solving approaches, the state of execution, and the partial answers which can be seen in
-the conversation thread, we want to determine if we are on the good track to solve the task problem and score 
-the proposed approaches in the range of [0.0, 10.0], the higher the score the more preferable.
-
-Scoring criteria: 
-* If the original task problem contains error and not solvable or we are at a dead-end or infinite loop trying to 
-  solve the original, then all approaches except `BACKTRACK_ON_ERROR` get 0 scores.
-* Direct answers that are incorrect should get a score of 0.
-* The approaches which lead to incorrect results should get a score of 0.
-* The assumption implied/used should be correct.
-* The questions asked by Tao should be relevant and not trivial.
-* For `HERE_IS_MY_STEP_BY_STEP_PLAN` approaches:
-  * Worship Occam's razor. Prefer simple, linear, decomposable steps without looping if possible. Loops are less 
-    friendly to the top-down tree search problem solving method. The problem solver will choose the backtracking 
-    approach automatically when things go wrong, so no need to mention in the step-by-step plan.
-  * Think abstract. Prefer **elegant, generic, and high-level** plans. Avoid detailed low-level ones. Avoid overly 
-    specific steps. For example, prefer "Find and set missing elements to fill-in values" and avoid "Set 2nd and 5th 
-    elements to 22".
-  * Don't worry about the details; we will work on the details later.
-* Try to avoid identical scores (except 0's;) you can use decimal points (e.g. 9.5) to 
-  distinguish two different approaches. 
-* Among similar approaches, mark others as duplicates of the best one; note: an approach can only duplicate another 
-  approach if the two are of same kinds, e.g. two direct answers.
-
-Response must be in valid JSON like this:
-
-```json
-{
-  "1": {"score": 9.8, "reason": "your reasoning"},
-  "2": {"score": 9.65, "duplicate_of": 1, "reason": "your explanation"}
-}
-```
-
-
-</div>
-
-JSON Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
-
-```json
-{
-  "1": {
-    "score": 10,
-    "reason": "The proposed approach is correct and will give the correct answer."
-  },
-  "2": {
-    "score": 9.5,
-    "duplicate_of": 1,
-    "reason": "The proposed approach is correct and will give the correct answer."
-  }
-}
-```
-
-**Text lengths**: context=3496 + reply:226=3722 **Total tokens**: 938
-
-
-**Sorted indices**: [0] **scores**:
-1. score 10.0
-
-
-**resume**: extend token allowance by 10000 to 20000
-
-**resume**: extend token allowance for sage LLM by 0 to 10000
+**Text lengths**: context=4821 + reply:92=4913 **Total tokens**: 1183
 
 # SEND TO LLM for next_step/4
 
@@ -577,32 +282,23 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 
 
 
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a valid mathematical expression asking for the value of x modulo (y - z), given the values of x, y, and z.
+The problem statement seems to be clear and doesn't contain any fundamental errors, invalid assumptions, or contradictions. It's asking for the modulus of x with respect to (y - z). 
 
+The modulus operation, also known as the remainder operation, is a mathematical operation that returns the remainder of the division of one number by another. In this case, we are asked to find the remainder of the division of x by (y - z).
 
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>orchestrator</b>:</div>
-
-Tao, please proceed to solve the problem following the "Problem Solving Instructions" above. Be sure to start with 
-one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`,
-`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, or `# FINAL_ANSWER`.
-
+However, it's important to note that the result of (y - z) must not be zero, as division by zero is undefined in mathematics. In this case, y = 7 and z = 4, so (y - z) is not zero, and the problem is solvable.
 
 
 </div>
 
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>Tao</b>:</div>
+<div>[2] <b>Tao</b>:</div>
 
 ***LET_ME_ASK_THE_PYTHON_GENIE***
 
 
 
 Python Genie, Python Genie, run the Python snippet underneath:
-
-Let me calculate the value of x mod (y - z) using Python.
 
 ```python
 x = 10
@@ -617,7 +313,7 @@ result
 </div>
 
 <div style="background-color:lightsteelblue; padding: 5px; border-bottom: 1px dotted grey">
-<div>[4] <b>python</b>:</div>
+<div>[3] <b>python</b>:</div>
 
 ***The Python Genie Replies***
 
@@ -631,7 +327,7 @@ result
 </div>
 
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[5] <b>orchestrator</b>:</div>
+<div>[4] <b>orchestrator</b>:</div>
 
 ***Problem Solving Instructions***
 
@@ -648,8 +344,8 @@ If you see any errors or inconsistencies, response with the list of **specific**
 
 ```json
 [
-  "<issue 1>",
-  "<issue 2>",
+  "<issue 1 with details>",
+  "<issue 2 with details>",
   // ...
 ]
 ```
@@ -675,29 +371,31 @@ following template **strictly** so the orchestrator can parse it and show the qu
 
 ## Strategy: Step-by-step Plan
 
-In this strategy, the problem task is turned into a top-down, step-by-step plan of which you and Orchestrator will 
-solve using tree traversal and backtracking.
+In this strategy, the problem task is turned into a top-down, high-level, step-by-step plan of which you and 
+Orchestrator will solve using tree traversal and backtracking.
 
-* Think abstract and worship Occam's razor. Prefer elegant, generic steps. Avoid overly specific and detailed steps; 
-  you will be working on the steps later. For example, prefer "Set suitable value to missing elements" over "Set 2nd and 5th elements to 22".
+* Think abstract. Come up with generic, and high-level. Avoid detailed, specific, fixed-value, and low-level ones. 
+  Because it is impossible to backtrack and try different values in detailed plans in case of errors. Likewise, 
+  choose linear, decomposable steps over looping. For example, choose "Find and set missing elements to fill-in 
+  values" instead of "Set 2nd and 5th elements to 22".
 * Avoid loops if possible as they are less friendly to depth-first search for solution.
-* Cherish verifiability.
+* Worship Occam's razor.
 
-Do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
+Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
 
-Follow this markdown template **strictly**:
+Follow this markdown template:
 
 `````markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
 
 ```json
 {
-  "1": {"description": "<brief description>"},
+  "1": {"description": "<high-level description without details>"},
   "2": {
-        "description": "<brief description>",
+        "description": "<high-level description without details>",
         "sub_steps": {
-            "1": {"description": "<brief description>"},
-            "2": {"description": "<brief description>"}
+            "1": {"description": "<high-level description without details>"},
+            "2": {"description": "<high-level description without details>"}
         }
        },
   // ...
@@ -745,7 +443,18 @@ Follow this template:
 ```
 
 
+Important notes:
+* Respect the original task problem! Do NOT alter inadvertently.
 
+
+
+
+</div>
+
+<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
+<div>[5] <b>orchestrator</b>:</div>
+
+We're currently at step "start or unknown".
 
 
 </div>
@@ -788,16 +497,19 @@ Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
 
 
-The value of x mod (y - z), where x = 10, y = 7, and z = 4, is 1.
+The result of the operation x mod (y - z) where x = 10, y = 7, z = 4 is 1. This is because the modulus operation returns the remainder of the division of x by (y - z), which in this case is 10 mod (7 - 4) = 10 mod 3 = 1.
 
-**Text lengths**: context=5369 + reply:81=5450 **Total tokens**: 1363
+**Text lengths**: context=5805 + reply:236=6041 **Total tokens**: 1482
 
 # SEND TO LLM for check_final_solution/5/0
 
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
-... system_prompt [text of length 436] ...
+Your name is Sage. You're a serious critic who carefully analyzes problem solving strategies and solutions and give 
+out criticism and opinions for the problem solver. The problem solver, whose name is Tao, is expected solve problem 
+in a top-down step-by-step decomposition manner; at each step, Tao should provide either decompose the step into 
+a plan, a direct answer for that step, or asking question to the user for clarification.
 
 
 </div>
@@ -813,40 +525,27 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>Tao</b>:</div>
 
-***Problem Analysis***
-
-
-
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a valid mathematical expression asking for the value of x modulo (y - z), given the values of x, y, and z.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>Tao</b>:</div>
-
 ***Tao's Final Answer***
 
 
 
-The value of x mod (y - z), where x = 10, y = 7, and z = 4, is 1.
+[at step: final step]
+
+The result of the operation x mod (y - z) where x = 10, y = 7, z = 4 is 1. This is because the modulus operation returns the remainder of the division of x by (y - z), which in this case is 10 mod (7 - 4) = 10 mod 3 = 1.
 
 
 </div>
 
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>Sage</b>:</div>
+<div>[2] <b>Sage</b>:</div>
 
-Tao has presented the above final solution for the task problem. Is the final answer presented correct? Please judge 
-on any applicable individual concerns such as calculation, completeness, syntax (for answers with codes), rule 
-conformance, etc..
-
-Response must be in valid JSON like this:
+Is the solution correct? Please come up with as many applicable things to verify as you can, extract relevant 
+content, if any, for  each item, carefully verify each item. Respond using the following JSON template:
 
 ```json
 {
-  "<concern 1>": {"ok": false, "reason": "<explanation>"},
-  "<concern 2>": {"ok": false, "reason": "<explanation>"},
+  "<verify step 1>": {"content": "<extract relevant content>", "finding": "<what you find>", "ok": false},
+  "<verify step 2>": {"content": "<extract relevant content>", "finding": "<what you find>", "ok": false},
   // ...
 }
 ```
@@ -854,24 +553,14 @@ Response must be in valid JSON like this:
 
 </div>
 
-JSON Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
 ```json
 {
-  "calculation": {
-    "ok": true
-  },
-  "completeness": {
-    "ok": true
-  },
-  "syntax": {
-    "ok": true
-  },
-  "rule conformance": {
-    "ok": true
-  }
+  "Verify the calculation of y - z": {"content": "y = 7, z = 4", "finding": "The subtraction is correct, 7 - 4 equals 3.", "ok": true},
+  "Verify the modulus operation": {"content": "x = 10, y - z = 3", "finding": "The modulus operation is correct, 10 mod 3 equals 1.", "ok": true}
 }
 ```
 
-**Text lengths**: context=1242 + reply:127=1369 **Total tokens**: 349
+**Text lengths**: context=1204 + reply:297=1501 **Total tokens**: 410
 

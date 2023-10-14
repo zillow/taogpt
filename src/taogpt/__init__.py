@@ -67,7 +67,7 @@ class Config:
     # user interactions
     ask_user_questions_in_one_prompt: bool = False
     ask_user_before_execute_codes: bool = True
-    pause_after_initial_solving_expansion: bool = False
+    pause_after_initial_solving_expansion: bool = True
 
 
 class Executor(_abc.ABC):

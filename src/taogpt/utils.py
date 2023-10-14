@@ -196,8 +196,7 @@ def exec_code_and_collect_outputs(prompt: str, codes: str, global_scope: _t.Dict
 ```python
 {codes}
 ```
-Reply "yes" to execute this code snippet, or "no" to cancel.
-        """)
+Reply "yes" to execute this code snippet, or "no" to cancel: """)
         if answer.strip().lower() == 'yes':
             break
         elif answer.strip().lower() == 'no':
