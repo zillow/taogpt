@@ -425,7 +425,7 @@ class ExpandableStep(Step):
             if self.consolidate_questions(self.choices, question_indices):
                 indices = list(range(n_existing_choices)) + question_indices
                 self.choices = [self.choices[i] for i in indices]
-                executor.logger.log(f"\n**Questions consolidated, final indices**: {indices}\n\n")
+                executor.logger.log_debug(f"\n**Questions consolidated, final indices**: {indices}\n\n")
         prompt_db: PromptDb  = executor.prompts
         system_prompt = prompt_db.sage_intro
         direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
@@ -479,7 +479,7 @@ class ExpandableStep(Step):
                                                 response, prompt_db.orchestrator_parse_error)
         final_score_repr = '\n'.join([f"{k}. score {v}" for k, v in rankings_one_based.items()])
         indices = self.sort_rankings(rankings_one_based, n_existing_choices)
-        executor.logger.log(f"\n**Sorted indices**: {indices} **scores**:\n{final_score_repr}\n\n")
+        executor.logger.log_debug(f"\n**Sorted indices**: {indices} **scores**:\n{final_score_repr}\n\n")
         if len(indices) == 0:
             raise Backtrack(f"No valid plan found for this step.", self)
         if n_existing_choices is not None and n_existing_choices > 0:

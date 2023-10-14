@@ -5,6 +5,7 @@ import math as _math
 import datetime as _datetime
 import json as _json
 
+import taogpt.logging
 from . import UnsolvableError, MarkdownLogger, TokenUsageError
 from .llm_model import *
 from .program import *
@@ -19,7 +20,7 @@ class Orchestrator(Executor):
                  config: Config,
                  llm: LLM,
                  prompts: PromptDb,
-                 markdown_logger: _utils.MarkdownLogger,
+                 markdown_logger: taogpt.logging.MarkdownLogger,
                  sage_llm: LLM | None = None):
         super().__init__()
         self._config = type(config)(**_dc.asdict(config))
@@ -97,8 +98,8 @@ class Orchestrator(Executor):
         if logger is None:
             logger = self.logger
         today = _datetime.date.today().strftime('%Y/%m/%d')
-        logger.log(f"Date: {today}")
-        logger.log(f"**Configurations for {self.__class__.__name__}**")
+        logger.log(f"Date: {today}", role='debug')
+        logger.log(f"**Configurations for {self.__class__.__name__}**", role='debug')
         llm_repr = repr(self.llm)
         sage_llm_repr = repr(self.sage_llm)
         logger.log(f"LLM: {llm_repr}")
@@ -106,7 +107,7 @@ class Orchestrator(Executor):
         logger.log(f"""```json
 {_json.dumps(_dc.asdict(self.config), indent=2)}
 ```
-        """)
+        """, role='debug')
 
     def resume(self, additional_tokens: int=None,
                unblock_initial_expansion: bool=False,
@@ -226,8 +227,8 @@ class Orchestrator(Executor):
             current = self.current_step_name
             prompts = self.show_conversation_thread()
             direct_answer = self.prompts.tao_template_direct_step_answer
-            work_prompt = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
-            prompts.append((ROLE_ORCHESTRATOR, work_prompt))
+            tao_templates = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
+            prompts.append((ROLE_ORCHESTRATOR, tao_templates))
             prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_at_step.format(current_step=current)))
             prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_next_step))
 
@@ -242,7 +243,7 @@ class Orchestrator(Executor):
                                             step_id=f"{step.step_id}",
                                             temperature=0.0 if n_retries == 0 else self.config.alternative_temperature,
                                             log_request=n_retries == 0,
-                                            collapse_contents=dict())
+                                            collapse_contents={'tao_templates': tao_templates})
                     decision, (answer, plan) = parse_next_step_reply(response)
                     assert decision is not None
                     assert answer is not None

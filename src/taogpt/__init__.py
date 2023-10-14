@@ -5,7 +5,7 @@ import dataclasses as _dc
 import typing as _t
 
 from taogpt.prompts import PromptDb
-from taogpt.utils import MarkdownLogger
+from taogpt.logging import MarkdownLogger
 
 
 class LLM:

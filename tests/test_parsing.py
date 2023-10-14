@@ -2,8 +2,8 @@ from taogpt import parsing
 from taogpt.program import ExpandableStep
 from taogpt.constants import *
 from taogpt.prompts import PromptDb
-from taogpt.utils import eval_and_collect, extract_fenced_blocks, restore_fenced_block
-
+from taogpt.utils import eval_and_collect
+from taogpt.parsing import extract_fenced_blocks, restore_fenced_block
 
 _REGULAR_RANKINGS = """This is what I think:
 ```json

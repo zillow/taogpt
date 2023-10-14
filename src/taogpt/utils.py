@@ -1,19 +1,12 @@
 from __future__ import annotations
 
-import random as _random
-import re
 import typing as _t
-import re as _re
 from io import StringIO as _StringIO
 import sys as _sys
 import ast as _ast
 
-from pathlib import Path as _Path
 from dataclasses import  MISSING as _MISSING
 from typing import Generic, TypeVar
-from taogpt.constants import (
-    role_color_map
-)
 
 _T = TypeVar('_T')
 
@@ -60,86 +53,17 @@ def is_blank(text: str) -> bool:
     return text is None or str_or_blank(text) == ''
 
 
-def safe_subn(text: str | None, n=20, default='') -> str:
-    return text[:n].strip() if text is not None else default
-
-
-class MarkdownLogger:
-    H1_RE = _re.compile(r"^# +(.+)")
-
-    def __init__(self, log_path: str|_Path, log_debug=False):
-        self._log_path = _Path(log_path)
-        self._log = open(self._log_path, 'w')
-        self._log_debug = log_debug
-
-    def close(self):
-        if self._log is not None:
-            self._log.close()
-            self._log = None
-
-    def __delete__(self, instance):
-        if instance._log is not None:
-            instance._log.close()
-
-    def log(self, *msgs, demote_h1=False):
-        try:
-            msg = ''
-            for msg in msgs:
-                if demote_h1:
-                    msg = MarkdownLogger.demote_h1(msg)
-                self._log.write(msg)
-            if len(msg) > 0 and msg[-1] != '\n':
-                self._log.write('\n') # assume markdown file paragraph
-            self._log.write('\n')
-        finally:
-            self._log.flush()
-
-    @staticmethod
-    def demote_h1(message: str):
-        original = message
-        try:
-            fenced_blocks, message = extract_fenced_blocks(message)
-        except SyntaxError:
-            return original
-        lines = message.split(('\n'))
-        for i in range(len(lines)):
-            line = lines[i]
-            matches: re.Match = MarkdownLogger.H1_RE.match(line)
-            lines[i] = f"***{matches.group(1)}***\n\n" if matches is not None else line
-        result = '\n'.join(lines)
-        return restore_fenced_block(result, fenced_blocks)
-
-    def log_conversation(self, conversation: [(str, str)], skip_system_message=1, title='Final path history'):
-        if title:
-            self.log('<div style="background-color: beige; text-align: center; padding: 5px">\n\n')
-            self.log(f'# {title}')
-            self.log('</div>')
-        system_message_count = 0
-        for i, (role, message) in enumerate(conversation):
-            self.new_message_section(role, i)
-            if role == 'system':
-                system_message_count += 1
-                if system_message_count <= skip_system_message:
-                    continue
-            self.log(message, demote_h1=True)
-            self.close_message_section()
-
-    def log_debug(self, markup):
-        if not self._log_debug:
-            return
-        self.new_message_section('debug', 'DEBUG')
-        self.log(markup, demote_h1=False)
-        self.close_message_section()
-
-    def new_message_section(self, role, step_index):
-        color = role_color_map.get(role, 'white')
-        if role == 'debug':
-            color = 'aliceblue'
-        self.log(f'<div style="background-color:{color}; padding: 5px; border-bottom: 1px dotted grey">\n'
-                 f'<div>[{step_index}] <b>{role}</b>:</div>\n')
-
-    def close_message_section(self):
-        self.log('\n</div>')
+def safe_subn(text: str | None, n=20, default='', escape_new_line=True, append='...') -> str:
+    if text is None:
+        return ''
+    text = text.strip()
+    if escape_new_line:
+        text = text.replace("\n", r"\n").replace("\t", r" ")
+    orig_len = len(text)
+    text = text[:n].strip() if text is not None else default
+    if orig_len > len(text):
+        text += append
+    return text
 
 
 # credit: https://stackoverflow.com/questions/39379331/python-exec-a-code-block-and-eval-the-last-line
@@ -202,38 +126,6 @@ Reply "yes" to execute this code snippet, or "no" to cancel: """)
         elif answer.strip().lower() == 'no':
             raise KeyboardInterrupt("User cancelled the request")
     return eval_and_collect(codes, global_scope or dict())
-
-
-_markdown_fenced_block_re = re.compile(r"```+", flags=re.DOTALL | re.IGNORECASE)
-
-
-def extract_fenced_blocks(text):
-    fenced_blocks = dict()
-    key_prefix = f"fenced_{_random.randint(1000, 10000000)}_"
-    while True:
-        match = _markdown_fenced_block_re.search(text, 0)
-        if match is not None:
-            open_pos = match.span()[0]
-            n_backquotes = len(match.group(0))
-            pattern = re.compile('`' * n_backquotes)
-            match = pattern.search(text, open_pos + n_backquotes)
-            if match is not None:
-                end_pos = match.span()[1]
-                key = f"{key_prefix}{len(fenced_blocks)}"
-                original = text[open_pos:end_pos]
-                fenced_blocks[key] = original
-                text = text.replace(original, key) # ok to replace all
-            else:
-                raise SyntaxError("Missing closing fenced block backquote marks.")
-        else:
-            break
-    return fenced_blocks, text
-
-
-def restore_fenced_block(text: str, fenced_blocks: _t.Dict[str, str]):
-    for key, original in fenced_blocks.items():
-        text = text.replace(key, original)
-    return text
 
 
 def safe_is_instance(obj, class_or_tuple):

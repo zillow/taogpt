@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import random as _random
 import re
 import json
 import typing as _t
@@ -12,7 +14,6 @@ from taogpt.constants import (
     FINAL_ANSWER,
     UNSOLVABLE
 )
-from taogpt.utils import extract_fenced_blocks, restore_fenced_block
 
 _all_step_types = '|'.join([
     WILL_ANSWER_DIRECTLY,
@@ -242,3 +243,35 @@ _python_response_re = re.compile(r"```python\n+(.+?)```", flags=re.DOTALL | re.I
 
 def parse_python_snippets(text: str) -> [str]:
     return [m.group(1) for m in _python_response_re.finditer(text)]
+
+
+_markdown_fenced_block_re = re.compile(r"```+", flags=re.DOTALL | re.IGNORECASE)
+
+
+def extract_fenced_blocks(text):
+    fenced_blocks = dict()
+    key_prefix = f"fenced_{_random.randint(1000, 10000000)}_"
+    while True:
+        match = _markdown_fenced_block_re.search(text, 0)
+        if match is not None:
+            open_pos = match.span()[0]
+            n_backquotes = len(match.group(0))
+            pattern = re.compile('`' * n_backquotes)
+            match = pattern.search(text, open_pos + n_backquotes)
+            if match is not None:
+                end_pos = match.span()[1]
+                key = f"{key_prefix}{len(fenced_blocks)}"
+                original = text[open_pos:end_pos]
+                fenced_blocks[key] = original
+                text = text.replace(original, key) # ok to replace all
+            else:
+                raise SyntaxError("Missing closing fenced block backquote marks.")
+        else:
+            break
+    return fenced_blocks, text
+
+
+def restore_fenced_block(text: str, fenced_blocks: _t.Dict[str, str]):
+    for key, original in fenced_blocks.items():
+        text = text.replace(key, original)
+    return text

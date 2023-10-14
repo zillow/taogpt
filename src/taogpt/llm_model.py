@@ -6,6 +6,8 @@ import time as _time
 import math as _math
 import tiktoken as _tiktoken
 from langchain.chat_models import ChatOpenAI as _ChatOpenAI
+
+import taogpt.logging
 from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_TAO, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
 import taogpt.utils as _utils
 from . import LLM
@@ -36,7 +38,7 @@ class LangChainLLM(LLM):
 
     def __init__(self,
                  llm: _ChatOpenAI,
-                 logger: _utils.MarkdownLogger,
+                 logger: taogpt.logging.MarkdownLogger,
                  approx_token_factor: float=None,
                  long_context_token_threshold: int=None,
                  long_context_llm: _ChatOpenAI=None,
@@ -95,7 +97,7 @@ class LangChainLLM(LLM):
             reason=None, step_id = None, log_request = True,
             temperature: float|None=None,
             collapse_contents: {str:str}=None) -> str:
-        self._logger.log(f"# SEND TO LLM for {reason}/{step_id}\n")
+        self._logger.start_conversation_chain(f"# SEND TO LLM for {reason}/{step_id}")
         from langchain.schema.messages import ChatMessage, SystemMessage
 
         if temperature is not None:
@@ -110,10 +112,10 @@ class LangChainLLM(LLM):
             context_tokens += self.count_tokens(system_prompt)
             self._logger.new_message_section(ROLE_SYSTEM, -1)
             if system_prompt not in self.collapsed_contents:
-                self._logger.log(system_prompt, demote_h1=True)
+                self._logger.log(system_prompt, demote_h1=True, role=ROLE_SYSTEM)
                 self.collapsed_contents.add(system_prompt)
             else:
-                self._logger.log(f"... system_prompt [text of length {len(system_prompt)}] ...")
+                self._logger.log(f"... system_prompt [text of length {len(system_prompt)}] ...", role=ROLE_SYSTEM)
             self._logger.close_message_section()
             messages.append(SystemMessage(content=system_prompt))
 
@@ -124,9 +126,9 @@ class LangChainLLM(LLM):
             self._logger.new_message_section(role, i)
             if len(message) > 500:
                 deduped_msg = self.deduplicate_for_logging(message, collapse_contents)
-                self._logger.log(deduped_msg, demote_h1=True)
+                self._logger.log(deduped_msg, demote_h1=True, role=role)
             else:
-                self._logger.log(message, demote_h1=True)
+                self._logger.log(message, demote_h1=True, role=role)
             context_tokens += self.count_tokens(message)
             context_len += len(message)
             self._logger.close_message_section()
@@ -158,7 +160,7 @@ class LangChainLLM(LLM):
 
             eff_tokens = f" (eff. tokens: {token_count * token_factor})" if token_factor != 1.0 else ''
             self._logger.log(f"**Text lengths**: context={context_len} + reply:{reply_len}={total_len}"
-                             f" **Total tokens**: {token_count}{eff_tokens}\n")
+                             f" **Total tokens**: {token_count}{eff_tokens}\n", role='debug')
             self._total_tokens += token_count
             return reply.content
         except Exception as e:
