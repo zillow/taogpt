@@ -235,6 +235,21 @@ class FinalAnswerStep(TaoReplyStep):
     def step_title(self) -> str:
         return "Tao's Final Answer"
 
+    def eval_only(self, executor) -> Step | None:
+        if not executor.config.check_final:
+            return None
+
+        system_prompt = executor.prompts.sage_intro
+
+        def _select(_: int, step: StepABC) -> bool:
+            return _utils.safe_is_instance(step, (PresentTaskStep, FinalAnswerStep))
+
+        prompts = executor.show_conversation_thread(selector=_select)
+        sage_prompt = executor.prompts.sage_final_check
+        prompts.append((ROLE_SAGE, sage_prompt))
+        executor.check_execution_state(system_prompt, prompts, self, parse_final_response,
+                                       reason='check_final_solution')
+
 
 @_dc.dataclass(repr=False)
 class AskPythonGenieStep(TaoReplyStep):
@@ -381,12 +396,8 @@ class ExpandableStep(Step):
 
     def expand_choices(self, executor: Executor, upto_branches: int):
         prompt_db: PromptDb  = executor.prompts
-        system_prompt = prompt_db.tao_intro
-        direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
-            else prompt_db.tao_template_direct_step_answer
-        tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
-        base_prompts: _t.List[(str, str)] = executor.show_conversation_thread()
-        base_prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
+        collapse_contents = dict()
+        system_prompt, base_prompts = self.build_prompts(executor, collapse_contents)
         if self.choices is None:
             self.choices = []
         llm = executor.sage_llm if self.first_problem_solving_step \
@@ -411,8 +422,8 @@ class ExpandableStep(Step):
                         step_id=f"{self.step_id}/{self.n_expanded}",
                         temperature=temperature,
                         log_request=(len(self.choices) == 0 and n_retries == 0),
-                        collapse_contents={'tao_templates': tao_templates})
-                    choice = parse_to_step(self, plan, working_on=self.step_name)
+                        collapse_contents=collapse_contents)
+                    choice = self.parse_reply(plan, prompt_db, executor.config)
                     self.choices.append(choice)
                     self.n_expanded += 1
                     break
@@ -420,6 +431,22 @@ class ExpandableStep(Step):
                     n_retries += 1
                     executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent,
                                                 plan, prompt_db.orchestrator_expand_parse_error)
+
+    def parse_reply(self, plan, prompt_db: PromptDb, config: Config):
+        choice = parse_to_step(self, plan, working_on=self.step_name)
+        return choice
+
+    def build_prompts(self, executor: Executor, collapse_contents: {str: str}) \
+            -> _t.Tuple[str, _t.List[_t.Tuple[str, str]]]:
+        prompt_db = executor.prompts
+        system_prompt = prompt_db.tao_intro
+        direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
+            else prompt_db.tao_template_direct_step_answer
+        tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
+        base_prompts: _t.List[(str, str)] = executor.show_conversation_thread()
+        base_prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
+        collapse_contents['tao_templates'] = tao_templates
+        return system_prompt, base_prompts
 
     def rank_choices(self, executor: Executor, n_existing_choices: int = 0):
         question_indices = [i for i in range(n_existing_choices, len(self.choices))
@@ -579,6 +606,75 @@ class ProceedStep(ExpandableStep):
     @property
     def _expansion_reason(self) -> str:
         return "proceed_to_next"
+
+
+@_dc.dataclass(repr=False)
+class NextStep(ExpandableStep):
+
+    @property
+    def step_title(self) -> str:
+        return ""
+
+    @property
+    def _expansion_reason(self) -> str:
+        return "next_step"
+
+    def build_prompts(self, executor: Executor, collapse_contents: {str: str}) \
+            -> _t.Tuple[str, _t.List[_t.Tuple[str, str]]]:
+        prompt_db = executor.prompts
+        system_prompt = prompt_db.tao_templates
+        prompts = executor.show_conversation_thread()
+        direct_answer = prompt_db.tao_template_direct_step_answer
+        tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
+        prompts.append((ROLE_ORCHESTRATOR, tao_templates))
+        if self.step_name is not None:
+            prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_at_step.format(current_step=self.step_name)))
+        next_step_prompt = prompt_db.orchestrator_next_step
+        prompts.append((ROLE_ORCHESTRATOR, next_step_prompt))
+        collapse_contents['tao_template'] = system_prompt
+        collapse_contents['next_step_prompt'] = next_step_prompt
+        return system_prompt, prompts
+
+    def parse_reply(self, plan: str, prompt_db: PromptDb, config: Config):
+        decision, (answer, plan) = parse_next_step_reply(plan)
+        assert decision is not None
+        assert answer is not None
+        if decision == NEXT_I_WANT_TO_WORK_AT:
+            work_prompt = prompt_db.orchestrator_proceed_to_step.format(
+                prev_step=self.step_name, step=answer)
+            proceed = ProceedStep(
+                self,
+                work_prompt,
+                role=ROLE_ORCHESTRATOR,
+                first_expansion=config.first_expansion,
+                max_expansion=config.max_search_expansion,
+                choices=[parse_to_step(self, plan, working_on=answer)]
+            )
+            proceed.set_step_name(answer)
+            return proceed
+        else:
+            return parse_to_step(self, answer, working_on=self.step_name)
+
+
+@_dc.dataclass(repr=False)
+class SummarizeStep(ExpandableStep):
+
+    @property
+    def step_title(self) -> str:
+        return "Tao's final answer"
+
+    @property
+    def _expansion_reason(self) -> str:
+        return "summarize"
+
+    def build_prompts(self, executor: Executor, collapse_contents: {str: str}) \
+            -> _t.Tuple[str, _t.List[_t.Tuple[str, str]]]:
+        system_prompt = executor.prompts.sage_intro
+        prompts = executor.show_conversation_thread()
+        summarize_prompt = executor.prompts.orchestrator_summarize
+        prompts.append((ROLE_ORCHESTRATOR, summarize_prompt))
+        collapse_contents['summarize'] = summarize_prompt
+        return system_prompt, prompts
 
 
 @_dc.dataclass(repr=False)

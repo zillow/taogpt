@@ -29,7 +29,7 @@ def test_check_final_solution_success(logger):
         return text
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
-    orchestrator.check_final_solution(step)
+    step.eval(orchestrator)
     assert len(llm.conversation_sequence) == 1
     assert llm.conversation_sequence[-1][0] == 'check_final_solution'
 
@@ -50,7 +50,7 @@ def test_check_final_solution_failed(logger):
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
     try:
-        orchestrator.check_final_solution(step)
+        step.eval(orchestrator)
         assert False, "expecting Backtrack not raised"
     except Backtrack:
         pass
@@ -73,7 +73,7 @@ def test_check_final_solution_parse_error(logger):
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
     try:
-        orchestrator.check_final_solution(step)
+        step.eval(orchestrator)
         assert False, "expecting ParseError not raised"
     except ParseError:
         pass

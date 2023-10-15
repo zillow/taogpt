@@ -171,27 +171,18 @@ class Orchestrator(Executor):
 
     def _loop(self):
         while True:
-            last_step = self._chain[-1]
-            if _utils.safe_is_instance(last_step, FinalAnswerStep):
-                if self.config.check_final:
-                    self.check_final_solution(last_step)
-                    return
-            new_step = last_step.eval(self)
-            while new_step is not None:
-                self._chain.append(new_step) # note: we don't necessary eval the new resulting step
-                if _utils.safe_is_instance(new_step, DirectAnswerStep) and new_step.is_final_step \
-                        or _utils.safe_is_instance(new_step, FinalAnswerStep):
-                    self.summarize_final_answer()
-                    return
-                self.check_token_usages()
-                new_step = new_step.eval(self)
-            new_step = self.next_step()
-            self._chain.append(new_step)
-            if _utils.safe_is_instance(new_step, DirectAnswerStep) and new_step.is_final_step\
-                    or _utils.safe_is_instance(new_step, FinalAnswerStep):
-                self.summarize_final_answer()
-                return
             self.check_token_usages()
+            last_step = self._chain[-1]
+            if _utils.safe_is_instance(last_step, DirectAnswerStep) and last_step.is_final_step:
+                self.summarize_final_answer()
+                continue
+            new_step = last_step.eval(self)
+            if _utils.safe_is_instance(last_step, FinalAnswerStep): # and successfully eval/checked
+                return
+            if new_step is not None:
+                self._chain.append(new_step)
+            else:
+                self.next_step()
 
     def check_token_usages(self):
         if 0 < self.config.max_tokens <= self.llm.total_tokens:
@@ -211,7 +202,7 @@ class Orchestrator(Executor):
                 conversation.extend(step.show_in_thread(with_header=with_header))
         return conversation
 
-    def next_step(self) -> Step:
+    def next_step(self):
         system_prompt = self.prompts.tao_intro
         start_solving = self.is_first_solving_expansion()
         step = self._chain[-1]
@@ -222,52 +213,13 @@ class Orchestrator(Executor):
                                          first_expansion=first_expansion,
                                          max_expansion=self.config.max_search_expansion,
                                          first_problem_solving_step=start_solving)
-            return work_next_step
+            self._chain.append(work_next_step)
         else:
-            current = self.current_step_name
-            prompts = self.show_conversation_thread()
-            direct_answer = self.prompts.tao_template_direct_step_answer
-            tao_templates = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
-            prompts.append((ROLE_ORCHESTRATOR, tao_templates))
-            if current != '':
-                prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_at_step.format(current_step=current)))
-            prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_next_step))
-
-            n_retries = 0
-            prompts_to_be_sent = prompts.copy()
-            response: str = ''
-            while n_retries < self.config.max_retries:
-                try:
-                    response = self.llm.ask(system_prompt,
-                                            prompts_to_be_sent,
-                                            reason='next_step',
-                                            step_id=f"{step.step_id}",
-                                            temperature=0.0 if n_retries == 0 else self.config.alternative_temperature,
-                                            log_request=n_retries == 0,
-                                            collapse_contents={'tao_templates': tao_templates})
-                    decision, (answer, plan) = parse_next_step_reply(response)
-                    assert decision is not None
-                    assert answer is not None
-                    if decision == NEXT_I_WANT_TO_WORK_AT:
-                        work_prompt = self.prompts.orchestrator_proceed_to_step.format(
-                            prev_step=current, step=answer)
-                        proceed = ProceedStep(
-                            step,
-                            work_prompt,
-                            role=ROLE_ORCHESTRATOR,
-                            first_expansion=self.config.first_expansion,
-                            max_expansion=self.config.max_search_expansion,
-                            first_problem_solving_step=start_solving,
-                            choices=[parse_to_step(step, plan, working_on=answer)]
-                        )
-                        proceed.set_step_name(answer)
-                        return proceed
-                    else:
-                        return parse_to_step(step, answer, working_on='final step')
-                except Exception as e:
-                    n_retries += 1
-                    self.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
-                                            self.prompts.orchestrator_parse_error)
+            ask_next_step = NextStep(step, '', role=ROLE_ORCHESTRATOR,
+                                     first_expansion=self.config.first_expansion,
+                                     max_expansion=self.config.max_search_expansion)
+            ask_next_step.set_step_name(self.current_step_name)
+            self._chain.append(ask_next_step)
 
     def is_first_solving_expansion(self):
         for i, step in enumerate(self.chain):
@@ -276,12 +228,10 @@ class Orchestrator(Executor):
                 return False
         return True
 
-    def summarize_final_answer(self) -> FinalAnswerStep:
+    def summarize_final_answer(self):
         last_step = self.chain[-1]
         if _utils.safe_is_instance(last_step, FinalAnswerStep):
-            if self.config.check_final:
-                self.check_final_solution(last_step)
-            return last_step
+            return
 
         is_direct_answer_only = False
         if _utils.safe_is_instance(last_step, DirectAnswerStep):
@@ -291,42 +241,16 @@ class Orchestrator(Executor):
                     break
                 elif _utils.safe_is_instance(self._chain[i], (DirectAnswerStep, PythonGenieReplyStep, StepByStepPlan)):
                     break
-            if is_direct_answer_only:
+            if is_direct_answer_only: # replace
                 final_answer_step = FinalAnswerStep(self._chain[-2], last_step.description, ROLE_TAO)
                 self._chain[-1] = final_answer_step
-                if self.config.check_final:
-                    self.check_final_solution(self._chain[-1])
-                return final_answer_step
+                return
 
-        system_prompt = self.prompts.sage_intro
-        prompts = self.show_conversation_thread()
-        summarize_prompt = self.prompts.orchestrator_summarize
-        prompts.append((ROLE_ORCHESTRATOR, summarize_prompt))
-        prompts_to_be_sent = prompts.copy()
-        n_retries= 0
-        ex: Exception|None = None
-        response: str|None = None
-        while n_retries < self.config.max_retries:
-            try:
-                response = self.llm.ask(system_prompt, prompts_to_be_sent,
-                                        reason='summarize',
-                                        step_id=f"summarize/{n_retries}",
-                                        temperature=0.0,
-                                        collapse_contents=dict(),
-                                        log_request=n_retries == 0)
-                final_answer_step = FinalAnswerStep(self._chain[-1], response, ROLE_TAO)
-                self._chain.append(final_answer_step)
-                if self.config.check_final:
-                    self.check_final_solution(self._chain[-1])
-                return final_answer_step
-            except Backtrack as e:
-                raise e
-            except Exception as e:
-                ex = e
-                n_retries += 1
-                self.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
-                                        self.prompts.orchestrator_parse_error)
-        raise ex
+        summarize_step = SummarizeStep(self.chain[-1], '', role=ROLE_ORCHESTRATOR,
+                                       first_expansion=self.config.first_expansion,
+                                       max_expansion=self.config.max_search_expansion)
+        summarize_step.set_step_name(self.current_step_name)
+        self._chain.append(summarize_step)
 
     def check_final_solution(self, step: Step):
         system_prompt = self.prompts.sage_intro
