@@ -5,6 +5,7 @@ import sys
 
 from taogpt import Config
 from taogpt.runner import solve_problem
+from taogpt.utils import set_openai_credentials_from_json
 
 # The skeleton is created by the GPT-4
 parser = argparse.ArgumentParser(
@@ -55,6 +56,9 @@ parser.add_argument('--long-sage-llm', type=str, choices=['gpt-4-32k', 'gpt-3.5-
 parser.add_argument('--long-context-threshold', type=int, default=3000,
                     help='Number of tokens before switching to long-context LLM')
 
+parser.add_argument('-C', '--openai-credential-json', type=str, default=None,
+                    help='File path of JSON hash containing `key` and `url` '
+                         'corresponding to "OPENAI_API_KEY" and "OPENAI_API_BASE" respectively')
 parser.add_argument('-D', '--debug', type=bool, default=False, help='Enable debugging')
 
 # last positional argument as the string of task
@@ -84,6 +88,8 @@ def cli_main() -> int:
         with open(user_task[1:], 'r') as f:
             user_task = '\n'.join(f.readlines())
 
+    if args.openai_credential_json is not None:
+        set_openai_credentials_from_json(args.openai_credential_json)
     key = os.environ.get("OPENAI_API_KEY", None)
     if llm.startswith('gpt-') and (key is None or key == ''):
         raise PermissionError("Must set OPENAI_API_KEY environment variable.")

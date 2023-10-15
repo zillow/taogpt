@@ -4,6 +4,7 @@ import typing as _t
 from io import StringIO as _StringIO
 import sys as _sys
 import ast as _ast
+import json as _json
 
 from dataclasses import  MISSING as _MISSING
 from typing import Generic, TypeVar
@@ -145,3 +146,11 @@ def safe_is_instance(obj, class_or_tuple):
     check_classes = [cls.__qualname__ if isinstance(cls, type) else cls for cls in class_or_tuple]
     mro_classes = [cls.__qualname__ for cls in obj.__class__.mro()]
     return any(check_class in mro_classes for check_class in check_classes)
+
+
+def set_openai_credentials_from_json(path):
+    import os
+    with open(path, 'r') as f:
+        credentials = _json.load(f)
+    os.environ["OPENAI_API_KEY"] = credentials['key']
+    os.environ["OPENAI_API_BASE"] = credentials['url']
