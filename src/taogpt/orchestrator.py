@@ -76,7 +76,7 @@ class Orchestrator(Executor):
             step_name = step.step_name
             if _utils.str_or_blank(step_name) != '':
                 return step_name
-        return 'start or unknown'
+        return ''
 
     def start(self, task: str | Step):
         self.log_configs()
@@ -229,7 +229,8 @@ class Orchestrator(Executor):
             direct_answer = self.prompts.tao_template_direct_step_answer
             tao_templates = self.prompts.tao_templates.format(examples='', direct_answer_template=direct_answer)
             prompts.append((ROLE_ORCHESTRATOR, tao_templates))
-            prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_at_step.format(current_step=current)))
+            if current != '':
+                prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_at_step.format(current_step=current)))
             prompts.append((ROLE_ORCHESTRATOR, self.prompts.orchestrator_next_step))
 
             n_retries = 0

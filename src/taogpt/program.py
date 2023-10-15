@@ -218,7 +218,10 @@ class StepByStepPlan(TaoReplyStep):
         # when evaluating this node, we are always at the first step
         prompt_db: PromptDb  = executor.prompts
         prev_step = executor.current_step_name
-        work_prompt = prompt_db.orchestrator_proceed_to_step.format(prev_step=prev_step, step=self.first_step)
+        if prev_step != '':
+            work_prompt = prompt_db.orchestrator_proceed_to_step.format(prev_step=prev_step, step=self.first_step)
+        else:
+            work_prompt = ''
         next = ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
         next.set_step_name(self.first_step)
         return next
