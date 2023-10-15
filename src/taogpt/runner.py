@@ -5,15 +5,20 @@ from io import TextIOBase as _TextIOBase
 
 from langchain.chat_models import ChatOpenAI
 
-from taogpt import Pause, MarkdownLogger, PromptDb
+from taogpt import Pause, MarkdownLogger, PromptDb, Config
 from taogpt.llm_model import LangChainLLM
 from taogpt.orchestrator import Orchestrator
+from io import TextIOBase as _TextIO
 
 
-def solve_problem(user_task, log_path, config, llm, long_llm, long_sage_llm, sage_llm, long_context_token_threshold,
-                  console_out, debug):
+def solve_problem(user_task: str, log_path: str, config: Config,
+                  llm: str, long_llm: str, long_sage_llm: str, sage_llm: str,
+                  long_context_token_threshold: int,
+                  user_input_fn: _t.Callable[[str], str], console_out: _TextIO,
+                  debug=False):
     executor = create_orchestrator(config, log_path, llm, long_llm, sage_llm, long_sage_llm,
-                                   long_context_token_threshold, console_out, debug)
+                                   long_context_token_threshold, console_out, debug=debug)
+    executor.set_input_fn(user_input_fn)
     pause: _t.Optional[Pause] = None
     try:
         executor.start(user_task)
@@ -42,8 +47,10 @@ def log_final_chain(executor, log_path, file_name='taogpt_results.final.md', con
     logger.log(f"**total tokens**: {executor.llm.total_tokens}")
 
 
-def create_orchestrator(config, log_path, llm, long_llm, sage_llm, long_sage_llm, long_context_token_threshold,
-                        log_to_stdout, debug):
+def create_orchestrator(config: Config, log_path: str,
+                        llm: str, long_llm: str, sage_llm: str, long_sage_llm: str,
+                        long_context_token_threshold: int,
+                        log_to_stdout: _TextIO, debug=False):
     llm = _fix_model_name(llm, required=True)
     sage_llm = _fix_model_name(sage_llm)
     long_llm = _fix_model_name(long_llm)

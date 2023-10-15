@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc as _abc
 import dataclasses as _dc
 import typing as _t
+from threading import local
 
 from taogpt.prompts import PromptDb
 from taogpt.logging import MarkdownLogger
@@ -40,6 +41,17 @@ class LLM:
                 break
         return message
 
+    def merge_collapsed_contents(self, collapse_contents: _t.Dict[str, str]):
+        # preferring supplied content name over generated content name
+        supplied = {content: key for key, content in collapse_contents.items()}
+        evict_keys = set()
+        for existing_key, content in self.collapsed_contents.items():
+            if content in supplied and existing_key != supplied[content]:
+                evict_keys.add(existing_key)
+        for key in evict_keys:
+            self.collapsed_contents.pop(key)
+        self.collapsed_contents.update(collapse_contents)
+
     def __repr__(self) -> str:
         return self.model_id
 
@@ -68,9 +80,22 @@ class Config:
     ask_user_questions_in_one_prompt: bool = False
     ask_user_before_execute_codes: bool = True
     pause_after_initial_solving_expansion: bool = True
+    pause_after_final_answer_rejected: bool = True
 
 
 class Executor(_abc.ABC):
+
+    def __init__(self, input_fn: _t.Callable[[str], str]=None, **kwargs):
+        self._input_fn = local()
+        if input_fn is not None:
+            self._input_fn.callback = input_fn
+
+    def set_input_fn(self, input_fn: _t.Callable[[str], str]):
+        self._input_fn.callback = input_fn
+
+    @property
+    def input_fn(self) -> _t.Callable[[str], str]:
+        return self._input_fn.callback
 
     @property
     @_abc.abstractmethod
@@ -114,7 +139,7 @@ class Executor(_abc.ABC):
     def record_criticisms(self, criticisms: [str]):
         pass
 
-    def ask_user(self, questions: [str]) -> {str: str}:
+    def ask_questions(self, questions: [str]) -> {str: str}:
         raise NotImplementedError('No user agent feature in the base')
 
     def ask_genie(self, codes: [str], step: StepABC) -> [str]:
@@ -124,10 +149,6 @@ class Executor(_abc.ABC):
     @_abc.abstractmethod
     def current_step_name(self) -> str:
         pass
-
-    @property
-    def log_debug_enabled(self) -> bool:
-        return self._log_debug
 
     def handle_parse_error(self,
                            e: Exception,

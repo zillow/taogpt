@@ -1,15 +1,15 @@
-Date: 2023/10/13
+Date: 2023/10/15
 
 **Configurations for Orchestrator**
 
-LLM: gpt-4
+LLM: gpt-3.5-turbo
 
-Sage LLM: gpt-4
+Sage LLM: gpt-4 (gpt-4-32k@len(ctx)>3000)
 
 ```json
 {
   "initial_expansion": 1,
-  "first_expansion": 1,
+  "first_expansion": 2,
   "first_try_temperature": 0.0,
   "alternative_temperature": 0.7,
   "max_search_expansion": 4,
@@ -17,18 +17,20 @@ Sage LLM: gpt-4
   "analyze_first": true,
   "check_final": true,
   "max_tokens": 10000,
-  "max_tokens_for_sage_llm": 10000,
+  "max_tokens_for_sage_llm": 3333,
   "max_retries": 3,
   "use_sage_llm_for_initial_expansion": true,
   "ask_user_questions_in_one_prompt": false,
   "ask_user_before_execute_codes": true,
-  "pause_after_initial_solving_expansion": false
+  "pause_after_initial_solving_expansion": true,
+  "pause_after_final_answer_rejected": true
 }
 ```
         
 
-# SEND TO LLM for request_analysis/1/0
 
+
+# SEND TO LLM for request_analysis/1/0
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
@@ -63,22 +65,21 @@ Do not try to solve the problem yet, just provide analysis.
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 140.0
 
-The problem statement seems to be clear and doesn't contain any fundamental errors, invalid assumptions, or contradictions. It's asking for the modulus of x with respect to (y - z). 
+The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a simple mathematical problem asking for the modulus of x with respect to (y - z). The modulus operation, often denoted as 'mod', is the remainder or signed remainder of a division, after one number is divided by another (called the modulus of the operation). 
 
-The modulus operation, also known as the remainder operation, is a mathematical operation that returns the remainder of the division of one number by another. In this case, we are asked to find the remainder of the division of x by (y - z).
+In this case, we are asked to find the modulus of 10 with respect to (7 - 4). The operation is well-defined as long as y - z is not equal to 0, because division by zero is undefined in mathematics. Since y - z equals 3 in this case, the problem is solvable.
 
-However, it's important to note that the result of (y - z) must not be zero, as division by zero is undefined in mathematics. In this case, y = 7 and z = 4, so (y - z) is not zero, and the problem is solvable.
+**Text lengths**: context=568 + reply:628=1196 **Total tokens**: 266
 
-**Text lengths**: context=568 + reply:635=1203 **Total tokens**: 275
+
 
 # SEND TO LLM for proceed_to_next/2/0
-
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
-... system_prompt [text of length 211] ...
+[..system/1:211..]
 
 
 </div>
@@ -98,11 +99,9 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 
 
 
-The problem statement seems to be clear and doesn't contain any fundamental errors, invalid assumptions, or contradictions. It's asking for the modulus of x with respect to (y - z). 
+The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a simple mathematical problem asking for the modulus of x with respect to (y - z). The modulus operation, often denoted as 'mod', is the remainder or signed remainder of a division, after one number is divided by another (called the modulus of the operation). 
 
-The modulus operation, also known as the remainder operation, is a mathematical operation that returns the remainder of the division of one number by another. In this case, we are asked to find the remainder of the division of x by (y - z).
-
-However, it's important to note that the result of (y - z) must not be zero, as division by zero is undefined in mathematics. In this case, y = 7 and z = 4, so (y - z) is not zero, and the problem is solvable.
+In this case, we are asked to find the modulus of 10 with respect to (7 - 4). The operation is well-defined as long as y - z is not equal to 0, because division by zero is undefined in mathematics. Since y - z equals 3 in this case, the problem is solvable.
 
 
 </div>
@@ -234,13 +233,13 @@ Important notes:
 
 Tao, please proceed to solve the problem following the "Problem Solving Instructions" above. Be sure to start with 
 one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`,
-`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, or `# FINAL_ANSWER`.
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `# HERE_IS_MY_STEP_BY_STEP_PLAN`.
 
 
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 43.0
 
 ***LET_ME_ASK_THE_PYTHON_GENIE***
 
@@ -251,18 +250,25 @@ x = 10
 y = 7
 z = 4
 
-result = x % (y - z)
-result
+modulus = x % (y - z)
+modulus
 ```
 
-**Text lengths**: context=4821 + reply:92=4913 **Total tokens**: 1183
+**Text lengths**: context=4796 + reply:94=4890 **Total tokens**: 1170
 
-# SEND TO LLM for next_step/4
+**resume**: extend token allowance by 0 to 10000
 
+**resume**: extend token allowance for sage LLM by 0 to 3333
+
+
+
+# SEND TO LLM for next_step/5/0
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
-... system_prompt [text of length 211] ...
+Your name is Tao. You are a diligent problem solver working with a mechanical orchestrator.
+
+Instead of jumping to conclusions, you work to solve the problem in a recursive, top-down fashion—one step at a time.
 
 
 </div>
@@ -282,11 +288,9 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 
 
 
-The problem statement seems to be clear and doesn't contain any fundamental errors, invalid assumptions, or contradictions. It's asking for the modulus of x with respect to (y - z). 
+The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a simple mathematical problem asking for the modulus of x with respect to (y - z). The modulus operation, often denoted as 'mod', is the remainder or signed remainder of a division, after one number is divided by another (called the modulus of the operation). 
 
-The modulus operation, also known as the remainder operation, is a mathematical operation that returns the remainder of the division of one number by another. In this case, we are asked to find the remainder of the division of x by (y - z).
-
-However, it's important to note that the result of (y - z) must not be zero, as division by zero is undefined in mathematics. In this case, y = 7 and z = 4, so (y - z) is not zero, and the problem is solvable.
+In this case, we are asked to find the modulus of 10 with respect to (7 - 4). The operation is well-defined as long as y - z is not equal to 0, because division by zero is undefined in mathematics. Since y - z equals 3 in this case, the problem is solvable.
 
 
 </div>
@@ -305,8 +309,8 @@ x = 10
 y = 7
 z = 4
 
-result = x % (y - z)
-result
+modulus = x % (y - z)
+modulus
 ```
 
 
@@ -327,7 +331,7 @@ result
 </div>
 
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[4] <b>orchestrator</b>:</div>
+<div>[5] <b>orchestrator</b>:</div>
 
 ***Problem Solving Instructions***
 
@@ -452,19 +456,15 @@ Important notes:
 </div>
 
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[5] <b>orchestrator</b>:</div>
-
-We're currently at step "start or unknown".
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
 <div>[6] <b>orchestrator</b>:</div>
 
 Tao, which step you want to work on next? You can choose one of the options below.
 
 1) Finish the task by summarizing the final answer. Use the `# FINAL_ANSWER` strategy.
+   Note: this is the final answer presented to the user. Therefore make sure to include **full and complete**
+   information requested by the user, except file contents, but leave out details created during the solving session that
+   the user do not need. If you use any files written during the problem solving above, to save spaces, you don't need
+   to repeat the file contents; instead you can refer to the files by path as `file:file_name_path`.
 2) Finish the task by giving up. Use the `# BACKTRACK_ON_ERROR` strategy.
 3) Choose the next step to work on. You can choose the next step and get start working on it using the following 
    template. You're encouraged to choose from the steps planned earlier but you can also take a detour from the 
@@ -491,18 +491,19 @@ Tao, which step you want to work on next? You can choose one of the options belo
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 40.0
 
 ***FINAL_ANSWER***
 
 
 
-The result of the operation x mod (y - z) where x = 10, y = 7, z = 4 is 1. This is because the modulus operation returns the remainder of the division of x by (y - z), which in this case is 10 mod (7 - 4) = 10 mod 3 = 1.
+The value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4` is `1`.
 
-**Text lengths**: context=5805 + reply:236=6041 **Total tokens**: 1482
+**Text lengths**: context=6208 + reply:89=6297 **Total tokens**: 1522
 
-# SEND TO LLM for check_final_solution/5/0
 
+
+# SEND TO LLM for check_final_solution/6/0
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
@@ -529,9 +530,7 @@ What's x mod (y - z) where x = 10, y = 7, z = 4.
 
 
 
-[at step: final step]
-
-The result of the operation x mod (y - z) where x = 10, y = 7, z = 4 is 1. This is because the modulus operation returns the remainder of the division of x by (y - z), which in this case is 10 mod (7 - 4) = 10 mod 3 = 1.
+The value of `x mod (y - z)` where `x = 10`, `y = 7`, and `z = 4` is `1`.
 
 
 </div>
@@ -553,14 +552,14 @@ content, if any, for  each item, carefully verify each item. Respond using the f
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 105.0
 
 ```json
 {
-  "Verify the calculation of y - z": {"content": "y = 7, z = 4", "finding": "The subtraction is correct, 7 - 4 equals 3.", "ok": true},
-  "Verify the modulus operation": {"content": "x = 10, y - z = 3", "finding": "The modulus operation is correct, 10 mod 3 equals 1.", "ok": true}
+  "Verify the calculation of y - z": {"content": "y = 7, z = 4", "finding": "The calculation is correct, 7 - 4 equals 3.", "ok": true},
+  "Verify the calculation of x mod (y - z)": {"content": "x = 10, y - z = 3", "finding": "The calculation is correct, 10 mod 3 equals 1.", "ok": true}
 }
 ```
 
-**Text lengths**: context=1204 + reply:297=1501 **Total tokens**: 410
+**Text lengths**: context=1034 + reply:302=1336 **Total tokens**: 369
 

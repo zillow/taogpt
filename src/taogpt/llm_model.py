@@ -97,13 +97,12 @@ class LangChainLLM(LLM):
     def _ask(self,  system_prompt: str, conversation: _t.List[_t.Tuple[str, str]],
             reason=None, step_id = None, log_request = True,
             temperature: float|None=None,
-            collapse_contents: {str:str}=None) -> str:
+            collapse_contents: _t.Dict[str, str]=None) -> str:
         self._logger.start_conversation_chain(f"# SEND TO LLM for {reason}/{step_id}")
         from langchain.schema.messages import ChatMessage, SystemMessage
 
         if temperature is not None:
             self.llm.temperature = temperature
-        self.collapsed_contents.update(collapse_contents or dict())
         messages: [ChatMessage] = []
         context_len = 0
         context_tokens = 0
@@ -167,6 +166,9 @@ class LangChainLLM(LLM):
             print(e)
             _time.sleep(3)
             raise e
+        finally:
+            if collapse_contents is not None:
+                self.merge_collapsed_contents(collapse_contents)
 
     def count_tokens(self, text: str) -> int:
         text = _utils.str_or_blank(text)

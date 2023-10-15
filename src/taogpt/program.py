@@ -75,7 +75,7 @@ class Step(StepABC):
         returned = self.eval_only(executor)
         return returned
 
-    def backtrack(self, prompt_db: PromptDb, backtrack: Backtrack | None):
+    def backtrack(self, executor: Executor, backtrack: Backtrack | None):
         pass
 
     def eval_only(self, executor) -> Step | None:
@@ -239,15 +239,13 @@ class FinalAnswerStep(TaoReplyStep):
         if not executor.config.check_final:
             return None
 
-        system_prompt = executor.prompts.sage_intro
-
         def _select(_: int, step: StepABC) -> bool:
             return _utils.safe_is_instance(step, (PresentTaskStep, FinalAnswerStep))
 
         prompts = executor.show_conversation_thread(selector=_select)
         sage_prompt = executor.prompts.sage_final_check
         prompts.append((ROLE_SAGE, sage_prompt))
-        executor.check_execution_state(system_prompt, prompts, self, parse_final_response,
+        executor.check_execution_state(executor.prompts.sage_intro, prompts, self, parse_final_response,
                                        reason='check_final_solution')
 
 
@@ -304,7 +302,7 @@ class AskQuestionStep(TaoReplyStep):
             self._need_consolidate = False
         if self._questions is None:
             questions = parse_ordered_list(self.description)
-            answers: _t.Dict[str, str] = executor.ask_user(questions)
+            answers: _t.Dict[str, str] = executor.ask_questions(questions)
             new_text = ''
             for q, a in answers.items():
                 q_lines = q.split('\n')
@@ -562,17 +560,26 @@ class ExpandableStep(Step):
             self._new_criticisms[self._ptr] = set()
         self._new_criticisms[self._ptr].update(additional_criticisms)
 
-    def backtrack(self, prompt_db: PromptDb, backtrack: Backtrack | None):
+    def backtrack(self, executor: Executor, backtrack: Backtrack | None):
         for i, criticisms in self._new_criticisms.items():
             criticism_list = [f'* {c}' if not c.startswith('* ') else c for c in criticisms]
-            note = prompt_db.orchestrator_criticisms.format(criticisms='\n'.join(criticism_list))
+            note = executor.prompts.orchestrator_criticisms.format(criticisms='\n'.join(criticism_list))
             self.choices[i].description += '\n' + note
         self._new_criticisms.clear()
+        self._ptr += 1
+        self.on_backtrack(executor)
         if self._ptr < self.max_expansion:
-            self._ptr += 1
             return
         # should not happen due to the retryable(), this is just defensive
         raise Backtrack("No more alternative", blame=self)
+
+    def on_backtrack(self, executor: Executor):
+        last_choice = self.choices[self._ptr - 1] # was incremented in backtrack()
+        if executor.config.pause_after_final_answer_rejected and _utils.safe_is_instance(last_choice, FinalAnswerStep):
+            raise Pause(f"""{last_choice.description_with_header}
+
+Looks like the final answer was rejected by Sage. Do you want to backtrack and try alternative?
+Reply 'yes' to backtrack, 'no' to cancel problem solving session.""", self)
 
     def eval_only(self, executor: Executor) -> Step | None:
         logger = executor.logger
@@ -622,7 +629,7 @@ class NextStep(ExpandableStep):
     def build_prompts(self, executor: Executor, collapse_contents: {str: str}) \
             -> _t.Tuple[str, _t.List[_t.Tuple[str, str]]]:
         prompt_db = executor.prompts
-        system_prompt = prompt_db.tao_templates
+        system_prompt = prompt_db.tao_intro
         prompts = executor.show_conversation_thread()
         direct_answer = prompt_db.tao_template_direct_step_answer
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)

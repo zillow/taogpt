@@ -50,8 +50,8 @@ class MarkdownLogger:
                     msg = MarkdownLogger.demote_h1(msg)
                 self._log.write(msg)
                 if self._console_out is not None:
-                    print(_utils.safe_subn(msg, n=200) if role in self._limit_console_for_roles else msg,
-                          file=self._console_out)
+                    print(_utils.safe_subn(msg, n=200, escape_new_line=False)
+                          if role in self._limit_console_for_roles else msg, file=self._console_out)
             if len(msg) > 0 and msg[-1] != '\n':
                 self._log.write('\n') # assume markdown file paragraph
             self._log.write('\n')

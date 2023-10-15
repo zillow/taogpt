@@ -21,9 +21,10 @@ class Orchestrator(Executor):
                  llm: LLM,
                  prompts: PromptDb,
                  markdown_logger: taogpt.logging.MarkdownLogger,
-                 sage_llm: LLM | None = None):
-        super().__init__()
-        self._config = type(config)(**_dc.asdict(config))
+                 sage_llm: LLM | None = None,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self._config = Config(**_dc.asdict(config))
         self._llm = llm
         self._prompts = prompts
         self._markdown_logger = markdown_logger
@@ -153,7 +154,7 @@ class Orchestrator(Executor):
             self._halt_on_initial_steps(last_step)
             retryable = last_step.retryable(self.config)
             if retryable:
-                last_step.backtrack(self.prompts, backtrack)
+                last_step.backtrack(self, backtrack)
                 self._chain.append(last_step)
                 cls = last_step.__class__.__name__
                 desc = _utils.safe_subn(last_step.description)
@@ -166,14 +167,15 @@ class Orchestrator(Executor):
 
     def _halt_on_initial_steps(self, last: StepABC):
         if _utils.safe_is_instance(last, (PresentTaskStep, AnalysisStep)):
-            self._chain.append(last)
+            self._chain.append(_utils.cast(last, Step))
             raise UnsolvableError('Tao cannot solve the problem.')
 
     def _loop(self):
         while True:
             self.check_token_usages()
             last_step = self._chain[-1]
-            if _utils.safe_is_instance(last_step, DirectAnswerStep) and last_step.is_final_step:
+            if _utils.safe_is_instance(last_step, DirectAnswerStep) \
+                    and _utils.cast(last_step, DirectAnswerStep).is_final_step:
                 self.summarize_final_answer()
                 continue
             new_step = last_step.eval(self)
@@ -216,7 +218,7 @@ class Orchestrator(Executor):
             self._chain.append(work_next_step)
         else:
             ask_next_step = NextStep(step, '', role=ROLE_ORCHESTRATOR,
-                                     first_expansion=self.config.first_expansion,
+                                     first_expansion=1,
                                      max_expansion=self.config.max_search_expansion)
             ask_next_step.set_step_name(self.current_step_name)
             self._chain.append(ask_next_step)
@@ -247,22 +249,10 @@ class Orchestrator(Executor):
                 return
 
         summarize_step = SummarizeStep(self.chain[-1], '', role=ROLE_ORCHESTRATOR,
-                                       first_expansion=self.config.first_expansion,
+                                       first_expansion=1,
                                        max_expansion=self.config.max_search_expansion)
         summarize_step.set_step_name(self.current_step_name)
         self._chain.append(summarize_step)
-
-    def check_final_solution(self, step: Step):
-        system_prompt = self.prompts.sage_intro
-
-        def _select(_: int, step: StepABC) -> bool:
-            return _utils.safe_is_instance(step, (PresentTaskStep, FinalAnswerStep))
-
-        prompts = self.show_conversation_thread(selector=_select)
-        sage_prompt = self.prompts.sage_final_check
-        prompts.append((ROLE_SAGE, sage_prompt))
-        self.check_execution_state(system_prompt, prompts, step, parse_final_response,
-                                   reason='check_final_solution')
 
     def check_execution_state(self,
                               system_prompt: str,
@@ -319,9 +309,9 @@ class Orchestrator(Executor):
                 step: ExpandableStep
                 step.record_criticism(criticisms)
 
-    def ask_user(self, questions: [str], input_fn=input) -> {str: str}:
+    def ask_questions(self, questions: [str]) -> {str: str}:
         # for now just use the console input
-        return ask_questions(input_fn, questions, self.config.ask_user_questions_in_one_prompt)
+        return ask_questions(self.input_fn, questions, self.config.ask_user_questions_in_one_prompt)
 
     def ask_genie(self, codes: [str], step: StepABC) -> [str]:
         self._verify_python_scope()

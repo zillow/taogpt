@@ -6,35 +6,35 @@ import sys as _sys
 import ast as _ast
 import json as _json
 
-from dataclasses import  MISSING as _MISSING
-from typing import Generic, TypeVar
 
-_T = TypeVar('_T')
+_T = _t.TypeVar('_T')
 
 
-# credit: https://stackoverflow.com/questions/61237131/how-to-make-attribute-in-dataclass-read-only
-class Frozen(Generic[_T]):
-    __slots__ = (
-        '_default',
-        '_private_name',
-    )
+def safe_is_instance(obj, class_or_tuple: _t.Type|_t.Iterable[_t.Type]) -> bool:
+    """
+    When using autoreload (in Jupyter notebook), `isinstance` is not safe. This walk up the hierarchy
+    and check using `__qualname__`.
+    :param obj:
+    :param class_or_tuple:
+    :return:
+    """
+    if isinstance(obj, class_or_tuple): # try using the default one
+        return True
 
-    def __init__(self, default: _T = _MISSING):
-        self._default = default
+    if not isinstance(class_or_tuple, (tuple, list, set)):
+        class_or_tuple = (class_or_tuple, )
 
-    def __set_name__(self, owner, name):
-        self._private_name = '_' + name
+    check_classes = [cls.__qualname__ if isinstance(cls, type) else cls for cls in class_or_tuple]
+    mro_classes = [cls.__qualname__ for cls in obj.__class__.mro()]
+    return any(check_class in mro_classes for check_class in check_classes)
 
-    def __get__(self, obj, objtype=None) -> _T:
-        value = getattr(obj, self._private_name, self._default)
-        return value
 
-    def __set__(self, obj, value):
-        if hasattr(obj, self._private_name):
-            msg = f'Attribute `{self._private_name[1:]}` is immutable!'
-            raise TypeError(msg) from None
-
-        setattr(obj, self._private_name, value)
+def cast(obj, to_class: _t.Type[_T], raise_cast_error=True) -> _t.Optional[_T]:
+    if obj is not None and safe_is_instance(obj, to_class):
+        if raise_cast_error:
+            raise TypeError(f"Instance of {type(obj)} cannot be casted to {to_class}")
+        return None
+    return obj
 
 
 def str_or_blank(s: str) -> str:
@@ -127,25 +127,6 @@ Reply "yes" to execute this code snippet, or "no" to cancel: """)
         elif answer.strip().lower() == 'no':
             raise KeyboardInterrupt("User cancelled the request")
     return eval_and_collect(codes, global_scope or dict())
-
-
-def safe_is_instance(obj, class_or_tuple):
-    """
-    When using autoreload (in Jupyter notebook), `isinstance` is not safe. This walk up the hierarchy
-    and check using `__qualname__`.
-    :param obj:
-    :param class_or_tuple:
-    :return:
-    """
-    if isinstance(obj, class_or_tuple): # try using the default one
-        return True
-
-    if not isinstance(class_or_tuple, (tuple, list, set)):
-        class_or_tuple = (class_or_tuple, )
-
-    check_classes = [cls.__qualname__ if isinstance(cls, type) else cls for cls in class_or_tuple]
-    mro_classes = [cls.__qualname__ for cls in obj.__class__.mro()]
-    return any(check_class in mro_classes for check_class in check_classes)
 
 
 def set_openai_credentials_from_json(path):
