@@ -31,12 +31,12 @@ class MockLLM(LLM):
     def ask(self, system_prompt: str, conversation: _t.List[_t.Tuple[str, str]], reason=None,
             temperature: float=None, log_request=True, collapse_contents: {str: str}=None,
             step_id='0', **_) -> str:
-        collapse_contents = collapse_contents or dict()
+        self.collapsed_contents.update(collapse_contents or dict())
         self._logger.log(f"# SEND TO LLM for {reason}/{step_id}\n")
         if len(str_or_blank(system_prompt)) > 0:
-            self._total_tokens += self.send('system', system_prompt, -1, collapse_contents)
+            self._total_tokens += self.send('system', system_prompt, -1)
         for i, (role, message) in enumerate(conversation):
-            self._total_tokens += self.send(role, message, i, collapse_contents)
+            self._total_tokens += self.send(role, message, i)
         self._n_requests += 1
         self.conversation_sequence.append((reason, step_id))
         reply = f"reply#{self._n_requests}"
@@ -45,11 +45,11 @@ class MockLLM(LLM):
         self._total_tokens += len(self.encoder.encode(reply))
         return reply
 
-    def send(self, role, message, i, collapse_contents: {str: str}):
+    def send(self, role, message, i):
         tokens = len(self.encoder.encode(message))
         self._logger.new_message_section(role, i)
         self._logger.log(f"**{role} >>> said**:\n")
-        deduped_msg = self.deduplicate_for_logging(message, collapse_contents)
+        deduped_msg = self.deduplicate_for_logging(message, role=role)
         self._logger.log(deduped_msg, demote_h1=True)
         self._logger.close_message_section()
         return tokens

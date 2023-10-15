@@ -70,6 +70,7 @@ class LangChainLLM(LLM):
         return f"{self.model_id}{long_ctx}"
 
     def reset(self):
+        super().reset()
         self._total_tokens = 0
 
     def __delete__(self, instance):
@@ -102,7 +103,7 @@ class LangChainLLM(LLM):
 
         if temperature is not None:
             self.llm.temperature = temperature
-        collapse_contents = collapse_contents or dict()
+        self.collapsed_contents.update(collapse_contents or dict())
         messages: [ChatMessage] = []
         context_len = 0
         context_tokens = 0
@@ -111,11 +112,8 @@ class LangChainLLM(LLM):
             context_len += len(system_prompt)
             context_tokens += self.count_tokens(system_prompt)
             self._logger.new_message_section(ROLE_SYSTEM, -1)
-            if system_prompt not in self.collapsed_contents:
-                self._logger.log(system_prompt, demote_h1=True, role=ROLE_SYSTEM)
-                self.collapsed_contents.add(system_prompt)
-            else:
-                self._logger.log(f"... system_prompt [text of length {len(system_prompt)}] ...", role=ROLE_SYSTEM)
+            content_to_be_logged = self.deduplicate_for_logging(system_prompt, ROLE_SYSTEM)
+            self._logger.log(content_to_be_logged, demote_h1=True, role=ROLE_SYSTEM)
             self._logger.close_message_section()
             messages.append(SystemMessage(content=system_prompt))
 
@@ -125,7 +123,7 @@ class LangChainLLM(LLM):
             effective_role = LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[role]
             self._logger.new_message_section(role, i)
             if len(message) > 500:
-                deduped_msg = self.deduplicate_for_logging(message, collapse_contents)
+                deduped_msg = self.deduplicate_for_logging(message, role=role)
                 self._logger.log(deduped_msg, demote_h1=True, role=role)
             else:
                 self._logger.log(message, demote_h1=True, role=role)
@@ -152,11 +150,13 @@ class LangChainLLM(LLM):
                 is_json = 'JSON '
             except json.JSONDecodeError:
                 pass
-            self._logger.log(f"{is_json}Reply: **{type(reply)}** temperature={temperature}\n")
-            self._logger.log(reply_content_logged, demote_h1=True)
             reply_len = len(reply.content)
             total_len = context_len + reply_len
-            token_count = context_tokens + self.count_tokens(reply.content)
+            reply_tokens = self.count_tokens(reply.content)
+            token_count = context_tokens + reply_tokens
+            self._logger.log(f"{is_json}Reply: temperature={temperature}, "
+                             f"eff. reply tokens: {reply_tokens * token_factor}\n")
+            self._logger.log(reply_content_logged, demote_h1=True)
 
             eff_tokens = f" (eff. tokens: {token_count * token_factor})" if token_factor != 1.0 else ''
             self._logger.log(f"**Text lengths**: context={context_len} + reply:{reply_len}={total_len}"

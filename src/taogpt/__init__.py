@@ -11,7 +11,7 @@ from taogpt.logging import MarkdownLogger
 class LLM:
 
     def __init__(self):
-        self.collapsed_contents: {str} = set()
+        self.collapsed_contents: {str: str} = dict()
 
     @property
     @_abc.abstractmethod
@@ -27,18 +27,18 @@ class LLM:
         pass
 
     def reset(self):
-        pass
+        self.collapsed_contents.clear()
 
-    def deduplicate_for_logging(self, message, collapse_contents):
-        content_to_be_logged: str = message
-        for key, collapsible in collapse_contents.items():
-            if collapsible in content_to_be_logged:
-                if collapsible in self.collapsed_contents:
-                    content_to_be_logged = content_to_be_logged.replace(
-                        collapsible, f"[..{key}:{len(collapsible)}..]")
-                self.collapsed_contents.add(collapsible)
+    def deduplicate_for_logging(self, message, role: str):
+        for key, collapsible in self.collapsed_contents.items():
+            if collapsible == message:
+                return f"[..{key}:{len(message)}..]"
+        for i in range(1, 1000):
+            key = f"{role}/{i}"
+            if key not in self.collapsed_contents:
+                self.collapsed_contents[key] = message
                 break
-        return content_to_be_logged
+        return message
 
     def __repr__(self) -> str:
         return self.model_id
