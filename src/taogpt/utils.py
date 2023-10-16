@@ -29,11 +29,8 @@ def safe_is_instance(obj, class_or_tuple: _t.Type|_t.Iterable[_t.Type]) -> bool:
     return any(check_class in mro_classes for check_class in check_classes)
 
 
-def cast(obj, to_class: _t.Type[_T], raise_cast_error=True) -> _t.Optional[_T]:
-    if obj is not None and safe_is_instance(obj, to_class):
-        if raise_cast_error:
-            raise TypeError(f"Instance of {type(obj)} cannot be casted to {to_class}")
-        return None
+def cast(obj, to_class: _t.Type[_T]) -> _T:
+    _ = to_class
     return obj
 
 

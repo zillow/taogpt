@@ -96,6 +96,7 @@ def main() -> int:
     if llm.startswith('gpt-') and (key is None or key == ''):
         raise PermissionError("Must set OPENAI_API_KEY environment variable.")
 
+    os.makedirs(log_path, exist_ok=True)
     solve_problem(user_task, log_path, config, llm, long_llm, long_sage_llm, sage_llm, long_context_token_threshold,
                   input, log_to_stdout, debug)
     return 0

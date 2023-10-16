@@ -240,7 +240,7 @@ class FinalAnswerStep(TaoReplyStep):
             return None
 
         def _select(_: int, step: StepABC) -> bool:
-            return _utils.safe_is_instance(step, (PresentTaskStep, FinalAnswerStep))
+            return _utils.safe_is_instance(step, (PresentTaskStep, AskQuestionStep, FinalAnswerStep))
 
         prompts = executor.show_conversation_thread(selector=_select)
         sage_prompt = executor.prompts.sage_final_check
@@ -297,9 +297,7 @@ class AskQuestionStep(TaoReplyStep):
     def eval_only(self, executor) -> Step | None:
         if self._need_consolidate:
             prompts: _t.List[(str, str)] = executor.show_conversation_thread()[:-1]
-            self.description = self.consolidate_questions(
-                executor, prompts, self.description)
-            self._need_consolidate = False
+            self.consolidate_questions(executor, prompts)
         if self._questions is None:
             questions = parse_ordered_list(self.description)
             answers: _t.Dict[str, str] = executor.ask_questions(questions)
@@ -315,11 +313,9 @@ class AskQuestionStep(TaoReplyStep):
             self._questions = questions
             return None
 
-    @staticmethod
-    def consolidate_questions(executor: taogpt.Executor,
-                              conversation_chain: _t.List[(str, str)],
-                              question_text: str) -> str:
-        conversation_chain.append((ROLE_TAO, question_text))
+    def consolidate_questions(self, executor: taogpt.Executor,
+                              conversation_chain: _t.List[(str, str)]) -> str:
+        conversation_chain.append((ROLE_TAO, self.description))
         conversation_chain.append((ROLE_ORCHESTRATOR, executor.prompts.orchestrator_summarize_questions))
         llm: taogpt.LLM = executor.llm
         n_retries = 0
@@ -327,6 +323,8 @@ class AskQuestionStep(TaoReplyStep):
             try:
                 reply = llm.ask(executor.prompts.tao_intro,
                                 conversation_chain, reason='consolidate_questions', temperature=0.0)
+                self.description = reply
+                self._need_consolidate = False
                 return reply
             except Exception as e:
                 n_retries += 1
@@ -448,12 +446,17 @@ class ExpandableStep(Step):
 
     def rank_choices(self, executor: Executor, n_existing_choices: int = 0):
         question_indices = [i for i in range(n_existing_choices, len(self.choices))
-                            if _utils.safe_is_instance(self.choices[i], AskPythonGenieStep)]
-        if len(question_indices) > 0:
-            if self.consolidate_questions(self.choices, question_indices):
-                indices = list(range(n_existing_choices)) + question_indices
+                            if _utils.safe_is_instance(self.choices[i], AskQuestionStep)]
+        if len(question_indices) > 1:
+            indices = list(range(n_existing_choices, len(self.choices)))
+            merged_question_index = self.consolidate_questions(self.choices, indices)
+            if merged_question_index >= 0:
                 self.choices = [self.choices[i] for i in indices]
                 executor.logger.log_debug(f"\n**Questions consolidated, final indices**: {indices}\n\n")
+                _utils.cast(self.choices[merged_question_index], AskQuestionStep)\
+                    .consolidate_questions(executor, executor.show_conversation_thread()[:-1])
+            if len(self.choices) - n_existing_choices <= 1:
+                return # nothing left to rank, skip ranking
         prompt_db: PromptDb  = executor.prompts
         system_prompt = prompt_db.sage_intro
         direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
@@ -515,7 +518,7 @@ class ExpandableStep(Step):
         self.choices = [self.choices[i] for i in indices]
 
     @staticmethod
-    def consolidate_questions(choices, indices) -> bool:
+    def consolidate_questions(choices, indices: _t.List[int]) -> int:
         question_indices = [i for i in indices if _utils.safe_is_instance(choices[i], AskQuestionStep)]
         if len(question_indices) > 1:
             merged_question: AskQuestionStep = choices[question_indices[0]]
@@ -524,8 +527,8 @@ class ExpandableStep(Step):
                 merged_question.description += '\n\n---\n\n' + choices[question_index].description
                 indices.remove(question_index)
             merged_question.need_consolidate_multiple_questions(True)
-            return True
-        return False
+            return question_indices[0]
+        return -1
 
     @staticmethod
     def sort_rankings(rankings_one_based, n_existing_choices):
@@ -668,7 +671,7 @@ class SummarizeStep(ExpandableStep):
 
     @property
     def step_title(self) -> str:
-        return "Tao's final answer"
+        return "Summarize"
 
     @property
     def _expansion_reason(self) -> str:
@@ -676,7 +679,7 @@ class SummarizeStep(ExpandableStep):
 
     def build_prompts(self, executor: Executor, collapse_contents: {str: str}) \
             -> _t.Tuple[str, _t.List[_t.Tuple[str, str]]]:
-        system_prompt = executor.prompts.sage_intro
+        system_prompt = executor.prompts.tao_intro
         prompts = executor.show_conversation_thread()
         summarize_prompt = executor.prompts.orchestrator_summarize
         prompts.append((ROLE_ORCHESTRATOR, summarize_prompt))

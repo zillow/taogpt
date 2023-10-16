@@ -2,6 +2,7 @@ import pathlib as _p
 import re
 import typing as _t
 from io import TextIOBase as _TextIOBase
+import pickle as _pickle
 
 from langchain.chat_models import ChatOpenAI
 
@@ -14,7 +15,7 @@ from io import TextIOBase as _TextIO
 def solve_problem(user_task: str, log_path: str, config: Config,
                   llm: str, long_llm: str, long_sage_llm: str, sage_llm: str,
                   long_context_token_threshold: int,
-                  user_input_fn: _t.Callable[[str], str], console_out: _TextIO,
+                  user_input_fn: _t.Callable[[str], str], console_out: _t.Optional[_TextIO],
                   debug=False):
     executor = create_orchestrator(config, log_path, llm, long_llm, sage_llm, long_sage_llm,
                                    long_context_token_threshold, console_out, debug=debug)
@@ -40,17 +41,25 @@ def solve_problem(user_task: str, log_path: str, config: Config,
     log_final_chain(executor, log_path, console_out=console_out)
 
 
-def log_final_chain(executor, log_path, file_name='taogpt_results.final.md', console_out: _TextIOBase=None):
+def log_final_chain(executor, log_path,
+                    file_name='taogpt_results.final.md',
+                    pickle_file='taogpt_states.pkl',
+                    console_out: _TextIOBase=None):
     logger = MarkdownLogger(_p.Path(log_path) / file_name, console_out=console_out)
     executor.log_configs(logger)
     logger.log_conversation(executor.show_conversation_thread(with_header=True))
     logger.log(f"**total tokens**: {executor.llm.total_tokens}")
+    with open(_p.Path(log_path) / pickle_file, 'wb') as f:
+        _pickle.dump(dict(config=executor.config,
+                          llm=executor.llm.model_id,
+                          sage_llm=executor.sage_llm.model_id if executor.sage_llm is not None else None,
+                          chain=executor.chain), f)
 
 
 def create_orchestrator(config: Config, log_path: str,
                         llm: str, long_llm: str, sage_llm: str, long_sage_llm: str,
                         long_context_token_threshold: int,
-                        log_to_stdout: _TextIO, debug=False):
+                        log_to_stdout: _t.Optional[_TextIO], debug=False):
     llm = _fix_model_name(llm, required=True)
     sage_llm = _fix_model_name(sage_llm)
     long_llm = _fix_model_name(long_llm)
