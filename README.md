@@ -375,6 +375,26 @@ Safe travels!
 
 </div>
 
+### Comparing to GPT-4 answer using system default prompt
+
+Default prompt: "You're a helpful assistant."
+
+<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
+
+**user**:
+
+I want to travel to Moscow. Find me a travel route.
+
+</div>
+
+<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
+
+**gpt-4**: 
+
+I'm sorry for the confusion, but I actually can't help with travel routes or booking travel as my current capabilities are limited to mathematical calculations. I recommend using travel websites or applications which can assist in finding the most suitable route and means of travel to Moscow from your current location. They can provide real-time data, cost estimates, different transportation alternatives, and more.
+
+</div>
+
 # Installation
 
 ### Install via pip

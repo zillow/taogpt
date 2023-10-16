@@ -16,6 +16,14 @@ Please note, the situation might change due to COVID-19, so always make sure to 
 
 # GPT-4 default system prompt (2023/10/16)
 
+**user**: I want to travel to Moscow. Find me a travel route.
+
+**gpt-4**: I'm sorry for the confusion, but I actually can't help with travel routes or booking travel as my current capabilities are limited to mathematical calculations. I recommend using travel websites or applications which can assist in finding the most suitable route and means of travel to Moscow from your current location. They can provide real-time data, cost estimates, different transportation alternatives, and more.
+
+# GPT-4 default system prompt (2023/10/16)
+
+This try with an additional clue.
+
 **user**: I want to travel to Moscow. Find me a travel route. I'm afraid of flying.
 
 **gpt-4**: I'm sorry for any misunderstanding, but I currently can't provide travel routes or means of
