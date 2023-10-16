@@ -1,4 +1,4 @@
-# TaoGPT: Template-guided Autoregressive Orchestrator for General Problem Teckling 
+# TaoGPT: Template-guided Autoregressive Orchestrator for General Problem Tackling 
 <div style="text-align: center">
 
 ### (which incidentally runs on ChatGPT 4)
