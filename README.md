@@ -9,11 +9,17 @@
 *The Tao gives birth to One. One gives birth to Two. Two gives birth to Three.
 Three gives birth to all things. -- Tao Te Ching. (Quote [selected by TaoGPT](examples/gpt-4/taogpt-quote.log.md))*
 
+In the infinite dance of cosmos, Tao emerges as a mindful problem solver. His path mirrors the Tao Te Ching's 
+philosophy, reflecting a journey that is patient, meticulous, and in harmony with the natural world. He seeks not 
+hasty conclusions but embraces a recursive, top-down approach that unfolds like a blooming flower, revealing the 
+solution one layer at a time. Tao's method is not just a process, it's a meditation, echoing the rhythm of life and 
+the universe, embodying the wisdom of balance and equanimity. 
+-- [Self-pitch by TaoGPT](/examples/gpt-4/taogpt-self-pitch.final.md)
 </div>
 
 ## Introduction
 
-(*This section [is written by TaoGPT](examples/gpt-4/taogpt-describe.log.md).*)
+(*This section [is written by TaoGPT](examples/gpt-4/taogpt-self-describe.log.md).*)
 
 The problem-solving system is a collaborative platform designed to tackle complex problems in a structured and systematic manner. It leverages the unique strengths of three key components: Tao, Orchestrator, and Sage.
 
@@ -27,9 +33,9 @@ The interaction between Tao, Orchestrator, and Sage is a crucial aspect of this 
 
 This system is designed to facilitate effective problem-solving by breaking down complex problems into manageable steps, encouraging critical analysis, and promoting collaboration.
 
-## Example
+## Examples
 
-This example shows TaoGPT solves a travel planning task going through:
+This a final problem solving chain showing TaoGPT tackling a travel planning task. The steps go through:
 
 1. Analyze the task problem;
 2. Ask user some questions for clarification;
