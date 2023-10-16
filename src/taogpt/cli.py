@@ -68,7 +68,7 @@ parser.add_argument('user_task', type=str, nargs='?', default=None,
                     help='User task in markdown text. '
                          'If the string starts with "@", it is the path to a text file to be read.')
 
-def cli_main() -> int:
+def main() -> int:
     args = parser.parse_args()
     config_fields = {f.name for f in dataclasses.fields(Config)}
     config: Config = Config(**{f: v for f, v in vars(args).items() if f in config_fields})
@@ -102,4 +102,4 @@ def cli_main() -> int:
 
 
 if __name__ == '__main__':
-    cli_main()
+    main()
