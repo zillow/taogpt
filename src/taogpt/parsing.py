@@ -248,7 +248,7 @@ def parse_python_snippets(text: str) -> [str]:
 _markdown_fenced_block_re = re.compile(r"```+", flags=re.DOTALL | re.IGNORECASE)
 
 
-def extract_fenced_blocks(text):
+def extract_fenced_blocks(text) -> _t.Tuple[_t.Dict[str, str], str]:
     fenced_blocks = dict()
     key_prefix = f"fenced_{_random.randint(1000, 10000000)}_"
     while True:
@@ -275,3 +275,30 @@ def restore_fenced_block(text: str, fenced_blocks: _t.Dict[str, str]):
     for key, original in fenced_blocks.items():
         text = text.replace(key, original)
     return text
+
+
+_markdown_fenced_block_content_re = re.compile(r'(?P<snippet>```(?P<type>[^\n]*?)\n(?P<content>.*?)```)',
+                                               flags=re.DOTALL)
+
+def extract_fenced_content(text) -> _t.Tuple[_t.Optional[str], _t.Optional[str], _t.Optional[str]]:
+    match = _markdown_fenced_block_content_re.search(text)
+    if match is not None:
+        return match.group('type'), match.group('content').strip(), match.group('snippet').strip()
+    return None, None, None
+
+
+def gather_file_contents(sections: _t.Dict[str, str]) -> _t.Dict[str, _t.Tuple[str, str, str, str]]:
+    results: _t.Dict[str, _t.Tuple[str, str, str, str]] = dict()
+    for section, markdown_full_content in sections.items():
+        match = re.match(r"FILE:?\s*(.+)", section)
+        if match is None:
+            continue
+        file_path = match.group(1)
+        if file_path == '':
+            raise ParseError(f"No file path for file section '{section}'")
+        content_type, content, snippet = extract_fenced_content(markdown_full_content)
+        if content is None:
+            raise ParseError(f"No content (in markdown fenced block) for section '{section}'")
+        markdown_full_content = markdown_full_content.replace(snippet, '')
+        results[file_path] = (content_type, content, snippet, markdown_full_content)
+    return results

@@ -3,7 +3,7 @@ from taogpt.program import ExpandableStep
 from taogpt.constants import *
 from taogpt.prompts import PromptDb
 from taogpt.utils import eval_and_collect
-from taogpt.parsing import extract_fenced_blocks, restore_fenced_block
+from taogpt.parsing import extract_fenced_blocks, restore_fenced_block, extract_fenced_content
 
 _REGULAR_RANKINGS = """This is what I think:
 ```json
@@ -348,3 +348,38 @@ Let's backtrack and correct this error.
     assert sub_text.strip() != text.strip()
     restored = restore_fenced_block(sub_text, extracted)
     assert restored == text
+
+
+def test_extract_markdown_content_with_file_type():
+    actual_snippet = """```python
+x = 123
+z = x * y
+```"""
+    content_type, content, snippet = extract_fenced_content(f"""
+{actual_snippet}
+    """)
+    assert content_type == 'python'
+    assert content == "x = 123\nz = x * y"
+    assert snippet == actual_snippet
+
+
+def test_extract_markdown_content_without_file_type():
+    actual_snippet = """```
+z = x * y
+```"""
+    content_type, content, snippet = extract_fenced_content(f"""
+{actual_snippet}
+    """)
+    assert content_type == ''
+    assert content == "z = x * y"
+    assert snippet == actual_snippet
+
+
+def test_extract_no_markdown_content():
+    content_type, content, snippet = extract_fenced_content(f"""
+z = x * y
+    """)
+    assert content_type is None
+    assert content is None
+    assert snippet is None
+

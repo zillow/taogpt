@@ -6,7 +6,7 @@ import pickle as _pickle
 
 from langchain.chat_models import ChatOpenAI
 
-from taogpt import Pause, MarkdownLogger, PromptDb, Config
+from taogpt import Pause, MarkdownLogger, PromptDb, Config, GeneratedFile
 from taogpt.llm_model import LangChainLLM
 from taogpt.orchestrator import Orchestrator
 from io import TextIOBase as _TextIO
@@ -28,7 +28,7 @@ def solve_problem(user_task: str, log_path: str, config: Config,
     while pause is not None:
         resume: _t.Optional[str] = None
         while resume is None or re.match(r"\d+|no", resume) is None:
-            resume = input(f"{str(pause)}\nReply amount of tokens to add and continue, 'no' to cancel: ") \
+            resume = input(f"{str(pause)}\nReply amount of tokens to add (0 is OK) and continue, 'no' to cancel: ") \
                 .strip().lower()
         if resume == 'no':
             break
@@ -54,6 +54,12 @@ def log_final_chain(executor, log_path,
                           llm=executor.llm.model_id,
                           sage_llm=executor.sage_llm.model_id if executor.sage_llm is not None else None,
                           chain=executor.chain), f)
+    for path, file in GeneratedFile.collect_files(executor.chain).items():
+        full_path = _p.Path(log_path) / path
+        full_path.parent.mkdir(exist_ok=True)
+        with open(full_path, 'w') as f:
+            f.write(file.content)
+
 
 
 def create_orchestrator(config: Config, log_path: str,

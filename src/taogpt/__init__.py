@@ -171,16 +171,10 @@ class StepABC(_abc.ABC):
     def step_id(self) -> int:
         pass
 
-    # @property
-    # @_abc.abstractmethod
-    # def description(self) -> str:
-    #     pass
-    #
-    # @description.setter
-    # @_abc.abstractmethod
-    # def description(self, value: str) -> str:
-    #     pass
-    #
+    @property
+    def collected_files(self) -> _t.Dict[str, GeneratedFile]:
+        return dict()
+
     @property
     @_abc.abstractmethod
     def description_with_header(self) -> str:
@@ -210,3 +204,18 @@ class TokenUsageError(Pause):
 class UnsolvableError(RuntimeError):
     def __init__(self, reason: str):
         super().__init__(reason)
+
+@_dc.dataclass
+class GeneratedFile:
+    content_type: str
+    content: str
+    markdown_snippet: str
+    description: str
+
+    @staticmethod
+    def collect_files(chain: _t.List[StepABC]) -> _t.Dict[str, GeneratedFile]:
+        files = dict()
+        for step in chain:
+            for path, file in step.collected_files.items():
+                files[path] = file # override previous ones
+        return files

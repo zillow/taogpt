@@ -407,18 +407,28 @@ pip install path/to/taogpt/
 
 # Usages
 
+## Command-line interface
+
 To show help:
 
 ```shell
 taogpt --help
 ```
 
-Example command-line invocation with simple arithmetics problem:
+Example command-line invocation with a simple arithmetic problem:
 
 ```shell
-mkdir /tmp/taogpt_outputs # or specify your own
+mkdir /tmp/taogpt_outputs # directory where output files go to.
 taogpt -p /tmp/taogpt_outputs -llm gpt-3.5 --sage-llm=gpt-4 "What's x mod (y - z) where x = 10, y = 7, z = 4."
 ```
+
+A file logging the problem solving progress and a file with the final step chain are written to the output directory;
+they are Markdown files viewable by any Markdown viewer. The directory also contain any Tao-generated files (which 
+appear as sections with `### FILE: <path>` heading in the direct answer responses) organized by directory paths.
+
+## Web UI interface
+
+*TBA*
 
 # Publications
 

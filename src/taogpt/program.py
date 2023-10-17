@@ -8,7 +8,7 @@ import json as _json
 
 import taogpt
 import taogpt.llm_model
-from . import StepABC, Backtrack, Pause, Executor, Config
+from . import StepABC, Backtrack, Pause, Executor, Config, GeneratedFile
 from .parsing import *
 from .constants import *
 import taogpt.utils as _utils
@@ -158,6 +158,11 @@ class DirectAnswerStep(TaoReplyStep):
         self.description = '\n\n'.join(reconstructed)
         self.description = re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=re.IGNORECASE)
         self.description = re.sub(r"#+ FILE", "### FILE", self.description, flags=re.IGNORECASE).strip()
+        extracted_contents = gather_file_contents(sections)
+        self._files: _t.Dict[str, taogpt.GeneratedFile] = {
+            file_path: taogpt.GeneratedFile(content_type, content, snippet, desc)
+            for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
+        }
         Step.__post_init__(self)
 
     def eval_only(self, executor) -> Step | None:
@@ -169,6 +174,10 @@ class DirectAnswerStep(TaoReplyStep):
             next.set_step_name(self.next_step)
             return next
         return None
+
+    @property
+    def collected_files(self) -> _t.Dict[str, GeneratedFile]:
+        return self._files
 
 
 @_dc.dataclass(repr=False)
@@ -243,6 +252,11 @@ class FinalAnswerStep(TaoReplyStep):
             return _utils.safe_is_instance(step, (PresentTaskStep, AskQuestionStep, FinalAnswerStep))
 
         prompts = executor.show_conversation_thread(selector=_select)
+        file_contents = ''
+        for path, file in GeneratedFile.collect_files(executor.chain).items():
+            file_contents += f"### FILE: {path}\n\n{file.markdown_snippet}\n\n"
+        if file_contents != '':
+            prompts.append((ROLE_TAO, file_contents))
         sage_prompt = executor.prompts.sage_final_check
         prompts.append((ROLE_SAGE, sage_prompt))
         executor.check_execution_state(executor.prompts.sage_intro, prompts, self, parse_final_response,
@@ -581,8 +595,7 @@ class ExpandableStep(Step):
         if executor.config.pause_after_final_answer_rejected and _utils.safe_is_instance(last_choice, FinalAnswerStep):
             raise Pause(f"""{last_choice.description_with_header}
 
-Looks like the final answer was rejected by Sage. Do you want to backtrack and try alternative?
-Reply 'yes' to backtrack, 'no' to cancel problem solving session.""", self)
+Looks like the final answer was rejected by Sage. Do you want to backtrack and try alternative?""", self)
 
     def eval_only(self, executor: Executor) -> Step | None:
         logger = executor.logger
