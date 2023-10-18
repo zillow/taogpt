@@ -15,6 +15,8 @@ import taogpt.utils as _utils
 from .utils import safe_subn
 from taogpt.prompts import PromptDb
 
+_CONTINUE_VOTE_QUORUM = 0.51
+
 
 @_dc.dataclass(repr=False)
 class Step(StepABC):
@@ -244,7 +246,10 @@ class FinalAnswerStep(TaoReplyStep):
     def step_title(self) -> str:
         return "Tao's Final Answer"
 
-    def eval_only(self, executor) -> Step | None:
+    def set_step_name(self, name: str | None, forced=False):
+        super().set_step_name("summarize final answer", True)
+
+    def eval_only(self, executor: Executor) -> Step | None:
         if not executor.config.check_final:
             return None
 
@@ -259,8 +264,82 @@ class FinalAnswerStep(TaoReplyStep):
             prompts.append((ROLE_TAO, file_contents))
         sage_prompt = executor.prompts.sage_final_check
         prompts.append((ROLE_SAGE, sage_prompt))
-        executor.check_execution_state(executor.prompts.sage_intro, prompts, self, parse_final_response,
-                                       reason='check_final_solution')
+        all_criticisms = self.check_final_answer(executor, prompts)
+        if len(all_criticisms) == 0:
+            return None
+
+        prompts = executor.show_conversation_thread()
+        prompts.append((ROLE_SAGE, f"```json\n{_json.dumps(all_criticisms)}\n```"))
+        blame_prompt = executor.prompts.sage_blame
+        prompts.append((ROLE_ORCHESTRATOR, blame_prompt))
+        response = executor.sage_llm.ask(executor.prompts.sage_intro, prompts, temperature=0.0,
+                                         reason="blame_step",
+                                         collapse_contents={"sage_blame_step": blame_prompt})
+        try:
+            step_and_blames = parse_json_hash(response)
+            if not isinstance(step_and_blames, dict):
+                raise ParseError(f"Expecting JSON hash, got {type(step_and_blames)}")
+        except json.JSONDecodeError as e:
+            raise ParseError(f"Invalid JSON: {str(e)}")
+        blame = self.find_first_culprit(executor, step_and_blames) or self
+        raise Backtrack(f'final answer verification failed.', blame=blame)
+
+    def check_final_answer(self,
+                           executor: Executor,
+                           prompts: [(str, str)],
+                           votes: int=None,
+                           reason='check_final_answer',
+                           collapse_contents: {str:str}=None) -> _t.Dict[str, str]:
+        system_prompt = executor.prompts.sage_intro
+        votes = votes or executor.config.votes
+        all_criticism: _t.Dict[str, str] = dict()
+        min_yes_needed = int(_math.ceil(votes * _CONTINUE_VOTE_QUORUM))
+        max_no_allowed = int(_math.ceil(votes * (1 - _CONTINUE_VOTE_QUORUM)))
+        n_success, n_true = 0, 0
+        for i in range(votes):
+            n_retries = 0
+            prompts_to_be_sent = prompts.copy()
+            response: str = ''
+            while n_retries < executor.config.max_retries:
+                try:
+                    response = executor.sage_llm.ask(
+                        system_prompt,
+                        prompts_to_be_sent,
+                        reason=reason,
+                        step_id=f"{self.step_id}/{i}",
+                        temperature=0.0 if n_success == 0 else 0.1,
+                        collapse_contents=collapse_contents,
+                        log_request=i == 0)
+                    result, criticisms = parse_final_response(response)
+                    n_success += 1
+                    if result:
+                        n_true += 1
+                    all_criticism.update(criticisms)
+                    if n_true >= min_yes_needed:
+                        break
+                    if (n_success - n_true) >= max_no_allowed:
+                        break
+                except Exception as e:
+                    n_retries += 1
+                    executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
+                                                executor.prompts.orchestrator_parse_error)
+        if n_success == 0:
+            raise RuntimeError('Sage failed to perform execution state check')
+        if (n_true / n_success) < _CONTINUE_VOTE_QUORUM:
+            return all_criticism
+        return dict()
+
+    def find_first_culprit(self, executor: Executor, blames: _t.Dict[str, str]) -> _t.Optional[Step]:
+        first_step_being_blamed: _t.Optional[Step] = None
+        for step in executor.chain:
+            if step.step_name in blames:
+                if not _utils.safe_is_instance(step, ExpandableStep):
+                    if first_step_being_blamed is None:
+                        first_step_being_blamed = step
+                    if _utils.safe_is_instance(step.previous, ExpandableStep):
+                        previous = _utils.cast(step.previous, ExpandableStep)
+                        previous.record_criticism([blames[step.step_name]])
+        return first_step_being_blamed
 
 
 @_dc.dataclass(repr=False)
@@ -564,8 +643,8 @@ class ExpandableStep(Step):
 
     def retryable(self, config):
         assert self.choices is not None
-        return self.n_expanded <= config.max_search_expansion \
-            or self._ptr < len(self.choices) # consume existing expansions
+        return self.n_expanded < config.max_search_expansion \
+            or self._ptr < len(self.choices) - 1 # consume existing expansions
 
     @property
     def collected_criticisms(self):
@@ -593,9 +672,9 @@ class ExpandableStep(Step):
     def on_backtrack(self, executor: Executor):
         last_choice = self.choices[self._ptr - 1] # was incremented in backtrack()
         if executor.config.pause_after_final_answer_rejected and _utils.safe_is_instance(last_choice, FinalAnswerStep):
-            raise Pause(f"""{last_choice.description_with_header}
+            executor.request_pause(f"""{last_choice.description_with_header}
 
-Looks like the final answer was rejected by Sage. Do you want to backtrack and try alternative?""", self)
+Looks like the final answer was rejected by Sage. Do you want to backtrack and try alternative?""")
 
     def eval_only(self, executor: Executor) -> Step | None:
         logger = executor.logger
@@ -706,14 +785,6 @@ class PresentTaskStep(Step):
     @property
     def step_title(self) -> str:
         return ""
-
-    def eval_only(self, executor) -> Step | None:
-        return ProceedStep(self,
-                           '',
-                           role=ROLE_ORCHESTRATOR,
-                           first_expansion=executor.config.first_expansion,
-                           max_expansion=executor.config.max_search_expansion,
-                           first_problem_solving_step=True)
 
 
 

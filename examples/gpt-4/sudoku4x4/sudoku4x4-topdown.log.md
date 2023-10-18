@@ -1,4 +1,4 @@
-Date: 2023/10/12
+Date: 2023/10/17
 
 **Configurations for Orchestrator**
 
@@ -12,7 +12,7 @@ Sage LLM: gpt-4 (gpt-4-32k@len(ctx)>3000)
   "first_expansion": 1,
   "first_try_temperature": 0.0,
   "alternative_temperature": 0.7,
-  "max_search_expansion": 2,
+  "max_search_expansion": 4,
   "votes": 1,
   "analyze_first": true,
   "check_final": true,
@@ -20,15 +20,17 @@ Sage LLM: gpt-4 (gpt-4-32k@len(ctx)>3000)
   "max_tokens_for_sage_llm": 10000,
   "max_retries": 3,
   "use_sage_llm_for_initial_expansion": true,
-  "ask_user_questions_in_one_prompt": true,
-  "ask_user_before_execute_codes": false,
-  "pause_after_initial_solving_expansion": true
+  "ask_user_questions_in_one_prompt": false,
+  "ask_user_before_execute_codes": true,
+  "pause_after_initial_solving_expansion": true,
+  "pause_after_final_answer_rejected": true
 }
 ```
         
 
-# SEND TO LLM for request_analysis/1/0
 
+
+# SEND TO LLM for request_analysis/1/0
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
@@ -42,15 +44,23 @@ Instead of jumping to conclusions, you work to solve the problem in a recursive,
 <div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
 <div>[0] <b>user</b>:</div>
 
-
 Solve this 4x4 Sudoku.
 
+
+
 ```text
+
 4 3 _ 1
+
 1 _ 4 3
-3 _ _ 2
+
+_ _ 1 _
+
 2 _ 3 _
+
 ```
+
+
 
 (Solve it in your head, do not write codes)
 
@@ -73,24 +83,25 @@ Do not try to solve the problem yet, just provide analysis.
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 222.0
 
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a standard 4x4 Sudoku puzzle. 
+The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a standard 4x4 Sudoku puzzle, which requires filling in the grid so that each column, each row, and each of the four 2x2 boxes (also called sub-grids or regions) contains all of the digits from 1 to 4. 
 
-In a Sudoku puzzle, the objective is to fill a grid with digits so that each column, each row, and each of the subgrids that compose the grid (also called "boxes", "blocks", or "regions") contains all of the digits from 1 to the grid size. In this case, the grid size is 4, so each row, column, and 2x2 subgrid must contain all of the digits from 1 to 4.
+The puzzle is solvable if it has a unique solution. However, without attempting to solve it, we cannot definitively say whether this particular puzzle is solvable or not. 
 
-The puzzle is solvable if there is at least one valid configuration of digits that satisfies these conditions. If there are multiple valid configurations, the puzzle is said to have multiple solutions. If there are no valid configurations, the puzzle is unsolvable.
+The only way to determine this is to attempt to solve the puzzle. If we can fill in the grid according to the rules of Sudoku and end up with a valid solution, then the puzzle is solvable. If not, then it is not solvable. 
 
-In this case, the puzzle appears to be solvable because there are no obvious contradictions, such as the same digit appearing twice in the same row, column, or subgrid. However, the actual solvability of the puzzle can only be determined by attempting to solve it.
+In Sudoku, no number can appear more than once in any row, column, or 2x2 box. From the given puzzle, it appears that these rules have been followed, which suggests that the puzzle may be solvable. However, we cannot be certain until we attempt to solve it.
 
-**Text lengths**: context=634 + reply:1028=1662 **Total tokens**: 381
+**Text lengths**: context=642 + reply:967=1609 **Total tokens**: 373
+
+
 
 # SEND TO LLM for proceed_to_next/2/0
-
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
-... system_prompt [text of length 211] ...
+[..system/1:211..]
 
 
 </div>
@@ -98,15 +109,23 @@ In this case, the puzzle appears to be solvable because there are no obvious con
 <div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
 <div>[0] <b>user</b>:</div>
 
-
 Solve this 4x4 Sudoku.
 
+
+
 ```text
+
 4 3 _ 1
+
 1 _ 4 3
-3 _ _ 2
+
+_ _ 1 _
+
 2 _ 3 _
+
 ```
+
+
 
 (Solve it in your head, do not write codes)
 
@@ -120,13 +139,13 @@ Solve this 4x4 Sudoku.
 
 
 
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a standard 4x4 Sudoku puzzle. 
+The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a standard 4x4 Sudoku puzzle, which requires filling in the grid so that each column, each row, and each of the four 2x2 boxes (also called sub-grids or regions) contains all of the digits from 1 to 4. 
 
-In a Sudoku puzzle, the objective is to fill a grid with digits so that each column, each row, and each of the subgrids that compose the grid (also called "boxes", "blocks", or "regions") contains all of the digits from 1 to the grid size. In this case, the grid size is 4, so each row, column, and 2x2 subgrid must contain all of the digits from 1 to 4.
+The puzzle is solvable if it has a unique solution. However, without attempting to solve it, we cannot definitively say whether this particular puzzle is solvable or not. 
 
-The puzzle is solvable if there is at least one valid configuration of digits that satisfies these conditions. If there are multiple valid configurations, the puzzle is said to have multiple solutions. If there are no valid configurations, the puzzle is unsolvable.
+The only way to determine this is to attempt to solve the puzzle. If we can fill in the grid according to the rules of Sudoku and end up with a valid solution, then the puzzle is solvable. If not, then it is not solvable. 
 
-In this case, the puzzle appears to be solvable because there are no obvious contradictions, such as the same digit appearing twice in the same row, column, or subgrid. However, the actual solvability of the puzzle can only be determined by attempting to solve it.
+In Sudoku, no number can appear more than once in any row, column, or 2x2 box. From the given puzzle, it appears that these rules have been followed, which suggests that the puzzle may be solvable. However, we cannot be certain until we attempt to solve it.
 
 
 </div>
@@ -258,13 +277,13 @@ Important notes:
 
 Tao, please proceed to solve the problem following the "Problem Solving Instructions" above. Be sure to start with 
 one of the headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`,
-`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, or `# FINAL_ANSWER`.
+`# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED`, or `# HERE_IS_MY_STEP_BY_STEP_PLAN`.
 
 
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 87.0
 
 ***HERE_IS_MY_STEP_BY_STEP_PLAN***
 
@@ -279,18 +298,19 @@ Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 }
 ```
 
-**Text lengths**: context=5280 + reply:336=5616 **Total tokens**: 1335
+**Text lengths**: context=5209 + reply:336=5545 **Total tokens**: 1321
 
-**resume**: extend token allowance by 10000 to 20000
+**resume**: extend token allowance by 5000 to 15000
 
-**resume**: extend token allowance for sage LLM by 500 to 10500
+**resume**: extend token allowance for sage LLM by 1666 to 11666
+
+
 
 # SEND TO LLM for proceed_to_next/4/0
-
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
-... system_prompt [text of length 211] ...
+[..system/1:211..]
 
 
 </div>
@@ -298,15 +318,23 @@ Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 <div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
 <div>[0] <b>user</b>:</div>
 
-
 Solve this 4x4 Sudoku.
 
+
+
 ```text
+
 4 3 _ 1
+
 1 _ 4 3
-3 _ _ 2
+
+_ _ 1 _
+
 2 _ 3 _
+
 ```
+
+
 
 (Solve it in your head, do not write codes)
 
@@ -316,17 +344,7 @@ Solve this 4x4 Sudoku.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>Tao</b>:</div>
 
-***Problem Analysis***
-
-
-
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a standard 4x4 Sudoku puzzle. 
-
-In a Sudoku puzzle, the objective is to fill a grid with digits so that each column, each row, and each of the subgrids that compose the grid (also called "boxes", "blocks", or "regions") contains all of the digits from 1 to the grid size. In this case, the grid size is 4, so each row, column, and 2x2 subgrid must contain all of the digits from 1 to 4.
-
-The puzzle is solvable if there is at least one valid configuration of digits that satisfies these conditions. If there are multiple valid configurations, the puzzle is said to have multiple solutions. If there are no valid configurations, the puzzle is unsolvable.
-
-In this case, the puzzle appears to be solvable because there are no obvious contradictions, such as the same digit appearing twice in the same row, column, or subgrid. However, the actual solvability of the puzzle can only be determined by attempting to solve it.
+[..Tao/1:987..]
 
 
 </div>
@@ -338,12 +356,22 @@ In this case, the puzzle appears to be solvable because there are no obvious con
 
 
 
+[at step: start working on the problem]
+
 ```json
 {
-  "1": {"description": "Fill in the missing numbers in the first row"},
-  "2": {"description": "Fill in the missing numbers in the second row"},
-  "3": {"description": "Fill in the missing numbers in the third row"},
-  "4": {"description": "Fill in the missing numbers in the fourth row"}
+  "1": {
+    "description": "Fill in the missing numbers in the first row"
+  },
+  "2": {
+    "description": "Fill in the missing numbers in the second row"
+  },
+  "3": {
+    "description": "Fill in the missing numbers in the third row"
+  },
+  "4": {
+    "description": "Fill in the missing numbers in the fourth row"
+  }
 }
 ```
 
@@ -448,7 +476,9 @@ Note: if the problem step asks for writing codes as the answer, provide the code
 
 Go with this strategy if the step is simple and you know the correct answer. You should also tell the Orchestrator 
 which step you want to work at next in the `NEXT_I_WANT_TO_WORK_AT` section. If you need to write out any file
-contents, write out the content in markdown fenced code block under its own file section.
+contents, write out the content in markdown fenced code block under its own file section. If you are writing out a 
+file, do not repeat its content in the "answer and explanation" section. Do not repeat a previous written file unless 
+you are updating its content.
 
 Important Note: if this is the **final** step, then put "None. This is the final step." in the
 `NEXT_I_WANT_TO_WORK_AT` section.
@@ -460,6 +490,8 @@ Follow this template:
 <answer and explanation>
 
 ### FILE: <file_path_name>
+<brief description of this file>
+
 <file content in markdown fenced code block>
 
 ### NEXT_I_WANT_TO_WORK_AT:
@@ -478,7 +510,7 @@ Important notes:
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
 <div>[4] <b>orchestrator</b>:</div>
 
-Tao, we are at step "start or unknown". Some critic says your answer to the step has errors while others think it's OK. 
+Tao, we are at step "start working on the problem". Some critic says your answer to the step has errors while others think it's OK. 
 Please check the steps done so far. If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, 
 otherwise proceed to step 
 
@@ -492,27 +524,26 @@ headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTR
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 92.0
 
 ***I_WILL_ANSWER_DIRECTLY***
 
 
 
-The first row of the Sudoku puzzle is `4 3 _ 1`. The missing number in this row is `2`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `2` is the only digit from 1 to 4 that is not already in the row.
-
-So, the completed first row is `4 3 2 1`.
+The first row of the Sudoku puzzle is "4 3 _ 1". The missing number in this row is 2, because each row in a Sudoku puzzle must contain all of the digits from 1 to 4 exactly once. Therefore, the completed first row is "4 3 2 1".
 
 ### NEXT_I_WANT_TO_WORK_AT:
-Fill in the missing numbers in the second row
+Fill in the missing numbers in the second row.
 
-**Text lengths**: context=6066 + reply:406=6472 **Total tokens**: 1562
+**Text lengths**: context=6308 + reply:329=6637 **Total tokens**: 1604
+
+
 
 # SEND TO LLM for proceed_to_next/6/0
-
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
-... system_prompt [text of length 211] ...
+[..system/1:211..]
 
 
 </div>
@@ -520,15 +551,23 @@ Fill in the missing numbers in the second row
 <div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
 <div>[0] <b>user</b>:</div>
 
-
 Solve this 4x4 Sudoku.
 
+
+
 ```text
+
 4 3 _ 1
+
 1 _ 4 3
-3 _ _ 2
+
+_ _ 1 _
+
 2 _ 3 _
+
 ```
+
+
 
 (Solve it in your head, do not write codes)
 
@@ -538,17 +577,7 @@ Solve this 4x4 Sudoku.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>Tao</b>:</div>
 
-***Problem Analysis***
-
-
-
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a standard 4x4 Sudoku puzzle. 
-
-In a Sudoku puzzle, the objective is to fill a grid with digits so that each column, each row, and each of the subgrids that compose the grid (also called "boxes", "blocks", or "regions") contains all of the digits from 1 to the grid size. In this case, the grid size is 4, so each row, column, and 2x2 subgrid must contain all of the digits from 1 to 4.
-
-The puzzle is solvable if there is at least one valid configuration of digits that satisfies these conditions. If there are multiple valid configurations, the puzzle is said to have multiple solutions. If there are no valid configurations, the puzzle is unsolvable.
-
-In this case, the puzzle appears to be solvable because there are no obvious contradictions, such as the same digit appearing twice in the same row, column, or subgrid. However, the actual solvability of the puzzle can only be determined by attempting to solve it.
+[..Tao/1:987..]
 
 
 </div>
@@ -560,12 +589,22 @@ In this case, the puzzle appears to be solvable because there are no obvious con
 
 
 
+[at step: start working on the problem]
+
 ```json
 {
-  "1": {"description": "Fill in the missing numbers in the first row"},
-  "2": {"description": "Fill in the missing numbers in the second row"},
-  "3": {"description": "Fill in the missing numbers in the third row"},
-  "4": {"description": "Fill in the missing numbers in the fourth row"}
+  "1": {
+    "description": "Fill in the missing numbers in the first row"
+  },
+  "2": {
+    "description": "Fill in the missing numbers in the second row"
+  },
+  "3": {
+    "description": "Fill in the missing numbers in the third row"
+  },
+  "4": {
+    "description": "Fill in the missing numbers in the fourth row"
+  }
 }
 ```
 
@@ -581,9 +620,7 @@ In this case, the puzzle appears to be solvable because there are no obvious con
 
 [at step: Fill in the missing numbers in the first row]
 
-The first row of the Sudoku puzzle is `4 3 _ 1`. The missing number in this row is `2`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `2` is the only digit from 1 to 4 that is not already in the row.
-
-So, the completed first row is `4 3 2 1`.
+The first row of the Sudoku puzzle is "4 3 _ 1". The missing number in this row is 2, because each row in a Sudoku puzzle must contain all of the digits from 1 to 4 exactly once. Therefore, the completed first row is "4 3 2 1".
 
 
 </div>
@@ -591,7 +628,7 @@ So, the completed first row is `4 3 2 1`.
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
 <div>[4] <b>orchestrator</b>:</div>
 
-[..tao_templates:3748..]
+[..tao_templates:3957..]
 
 
 </div>
@@ -603,7 +640,7 @@ Tao, we are at step "Fill in the missing numbers in the first row". Some critic 
 Please check the steps done so far. If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, 
 otherwise proceed to step 
 
-* Fill in the missing numbers in the second row
+* Fill in the missing numbers in the second row.
 
 following **strictly** the "Problem Solving Instructions" and templates above. Be sure to start with one of the 
 headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTRACK_ON_ERROR`, 
@@ -613,7 +650,7 @@ headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTR
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 105.0
 
 ***I_WILL_ANSWER_DIRECTLY***
 
@@ -621,23 +658,20 @@ Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
 [at step: Fill in the missing numbers in the second row]
 
-The second row of the Sudoku puzzle is `1 _ 4 3`. The missing number in this row is `2`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `2` is the only digit from 1 to 4 that is not already in the row.
-
-However, we need to make sure that the number `2` does not conflict with the other numbers in the same column and the same 2x2 subgrid. Looking at the first column, we see that `2` is already in the first row, so we cannot put `2` in the second position of the second row. Therefore, `2` must go in the second position of the second row.
-
-So, the completed second row is `1 2 4 3`.
+The second row of the Sudoku puzzle is "1 _ 4 3". The missing number in this row is 2, because each row in a Sudoku puzzle must contain all of the digits from 1 to 4 exactly once. Therefore, the completed second row is "1 2 4 3".
 
 ### NEXT_I_WANT_TO_WORK_AT:
 Fill in the missing numbers in the third row.
 
-**Text lengths**: context=6483 + reply:805=7288 **Total tokens**: 1776
+**Text lengths**: context=6636 + reply:388=7024 **Total tokens**: 1707
+
+
 
 # SEND TO LLM for proceed_to_next/8/0
-
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
-... system_prompt [text of length 211] ...
+[..system/1:211..]
 
 
 </div>
@@ -645,15 +679,23 @@ Fill in the missing numbers in the third row.
 <div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
 <div>[0] <b>user</b>:</div>
 
-
 Solve this 4x4 Sudoku.
 
+
+
 ```text
+
 4 3 _ 1
+
 1 _ 4 3
-3 _ _ 2
+
+_ _ 1 _
+
 2 _ 3 _
+
 ```
+
+
 
 (Solve it in your head, do not write codes)
 
@@ -663,17 +705,7 @@ Solve this 4x4 Sudoku.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>Tao</b>:</div>
 
-***Problem Analysis***
-
-
-
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a standard 4x4 Sudoku puzzle. 
-
-In a Sudoku puzzle, the objective is to fill a grid with digits so that each column, each row, and each of the subgrids that compose the grid (also called "boxes", "blocks", or "regions") contains all of the digits from 1 to the grid size. In this case, the grid size is 4, so each row, column, and 2x2 subgrid must contain all of the digits from 1 to 4.
-
-The puzzle is solvable if there is at least one valid configuration of digits that satisfies these conditions. If there are multiple valid configurations, the puzzle is said to have multiple solutions. If there are no valid configurations, the puzzle is unsolvable.
-
-In this case, the puzzle appears to be solvable because there are no obvious contradictions, such as the same digit appearing twice in the same row, column, or subgrid. However, the actual solvability of the puzzle can only be determined by attempting to solve it.
+[..Tao/1:987..]
 
 
 </div>
@@ -685,12 +717,22 @@ In this case, the puzzle appears to be solvable because there are no obvious con
 
 
 
+[at step: start working on the problem]
+
 ```json
 {
-  "1": {"description": "Fill in the missing numbers in the first row"},
-  "2": {"description": "Fill in the missing numbers in the second row"},
-  "3": {"description": "Fill in the missing numbers in the third row"},
-  "4": {"description": "Fill in the missing numbers in the fourth row"}
+  "1": {
+    "description": "Fill in the missing numbers in the first row"
+  },
+  "2": {
+    "description": "Fill in the missing numbers in the second row"
+  },
+  "3": {
+    "description": "Fill in the missing numbers in the third row"
+  },
+  "4": {
+    "description": "Fill in the missing numbers in the fourth row"
+  }
 }
 ```
 
@@ -706,9 +748,7 @@ In this case, the puzzle appears to be solvable because there are no obvious con
 
 [at step: Fill in the missing numbers in the first row]
 
-The first row of the Sudoku puzzle is `4 3 _ 1`. The missing number in this row is `2`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `2` is the only digit from 1 to 4 that is not already in the row.
-
-So, the completed first row is `4 3 2 1`.
+The first row of the Sudoku puzzle is "4 3 _ 1". The missing number in this row is 2, because each row in a Sudoku puzzle must contain all of the digits from 1 to 4 exactly once. Therefore, the completed first row is "4 3 2 1".
 
 
 </div>
@@ -722,11 +762,7 @@ So, the completed first row is `4 3 2 1`.
 
 [at step: Fill in the missing numbers in the second row]
 
-The second row of the Sudoku puzzle is `1 _ 4 3`. The missing number in this row is `2`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `2` is the only digit from 1 to 4 that is not already in the row.
-
-However, we need to make sure that the number `2` does not conflict with the other numbers in the same column and the same 2x2 subgrid. Looking at the first column, we see that `2` is already in the first row, so we cannot put `2` in the second position of the second row. Therefore, `2` must go in the second position of the second row.
-
-So, the completed second row is `1 2 4 3`.
+The second row of the Sudoku puzzle is "1 _ 4 3". The missing number in this row is 2, because each row in a Sudoku puzzle must contain all of the digits from 1 to 4 exactly once. Therefore, the completed second row is "1 2 4 3".
 
 
 </div>
@@ -734,7 +770,7 @@ So, the completed second row is `1 2 4 3`.
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
 <div>[5] <b>orchestrator</b>:</div>
 
-[..tao_templates:3748..]
+[..tao_templates:3957..]
 
 
 </div>
@@ -742,7 +778,7 @@ So, the completed second row is `1 2 4 3`.
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
 <div>[6] <b>orchestrator</b>:</div>
 
-Tao, we are at step "Fill in the missing numbers in the second row". Some critic says your answer to the step has errors while others think it's OK. 
+Tao, we are at step "Fill in the missing numbers in the second row.". Some critic says your answer to the step has errors while others think it's OK. 
 Please check the steps done so far. If there are indeed errors, respond using the `BACKTRACK_ON_ERROR` strategy, 
 otherwise proceed to step 
 
@@ -756,7 +792,7 @@ headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTR
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 327.0
 
 ***I_WILL_ANSWER_DIRECTLY***
 
@@ -764,23 +800,28 @@ Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
 [at step: Fill in the missing numbers in the third row]
 
-The third row of the Sudoku puzzle is `3 _ _ 2`. The missing numbers in this row are `1` and `4`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `1` and `4` are the only digits from 1 to 4 that are not already in the row.
+The third row of the Sudoku puzzle is "_ _ 1 _". The missing numbers in this row are 2, 3, and 4. However, we need to consider the numbers in the same column of the other rows as well. 
 
-However, we need to make sure that the numbers `1` and `4` do not conflict with the other numbers in the same column and the same 2x2 subgrid. Looking at the second column, we see that `1` is already in the second row, so we cannot put `1` in the second position of the third row. Therefore, `1` must go in the third position of the third row. And `4` must go in the second position of the third row.
+Looking at the first column, the numbers 4 and 1 are already used in the first and second rows, so the number in the first column of the third row must be 2 or 3. But since 2 is already used in the second column of the second row, the number in the first column of the third row must be 3.
 
-So, the completed third row is `3 4 1 2`.
+Looking at the second column, the numbers 3 and 2 are already used in the first and second rows, so the number in the second column of the third row must be 1 or 4. But since 1 is already used in the third column of the third row, the number in the second column of the third row must be 4.
+
+Looking at the fourth column, the numbers 1 and 3 are already used in the first and second rows, so the number in the fourth column of the third row must be 2 or 4. But since 4 is already used in the second column of the third row, the number in the fourth column of the third row must be 2.
+
+Therefore, the completed third row is "3 4 1 2".
 
 ### NEXT_I_WANT_TO_WORK_AT:
 Fill in the missing numbers in the fourth row.
 
-**Text lengths**: context=7214 + reply:887=8101 **Total tokens**: 1996
+**Text lengths**: context=6950 + reply:1270=8220 **Total tokens**: 2015
+
+
 
 # SEND TO LLM for proceed_to_next/10/0
-
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
-... system_prompt [text of length 211] ...
+[..system/1:211..]
 
 
 </div>
@@ -788,15 +829,23 @@ Fill in the missing numbers in the fourth row.
 <div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
 <div>[0] <b>user</b>:</div>
 
-
 Solve this 4x4 Sudoku.
 
+
+
 ```text
+
 4 3 _ 1
+
 1 _ 4 3
-3 _ _ 2
+
+_ _ 1 _
+
 2 _ 3 _
+
 ```
+
+
 
 (Solve it in your head, do not write codes)
 
@@ -806,17 +855,7 @@ Solve this 4x4 Sudoku.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>Tao</b>:</div>
 
-***Problem Analysis***
-
-
-
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a standard 4x4 Sudoku puzzle. 
-
-In a Sudoku puzzle, the objective is to fill a grid with digits so that each column, each row, and each of the subgrids that compose the grid (also called "boxes", "blocks", or "regions") contains all of the digits from 1 to the grid size. In this case, the grid size is 4, so each row, column, and 2x2 subgrid must contain all of the digits from 1 to 4.
-
-The puzzle is solvable if there is at least one valid configuration of digits that satisfies these conditions. If there are multiple valid configurations, the puzzle is said to have multiple solutions. If there are no valid configurations, the puzzle is unsolvable.
-
-In this case, the puzzle appears to be solvable because there are no obvious contradictions, such as the same digit appearing twice in the same row, column, or subgrid. However, the actual solvability of the puzzle can only be determined by attempting to solve it.
+[..Tao/1:987..]
 
 
 </div>
@@ -828,12 +867,22 @@ In this case, the puzzle appears to be solvable because there are no obvious con
 
 
 
+[at step: start working on the problem]
+
 ```json
 {
-  "1": {"description": "Fill in the missing numbers in the first row"},
-  "2": {"description": "Fill in the missing numbers in the second row"},
-  "3": {"description": "Fill in the missing numbers in the third row"},
-  "4": {"description": "Fill in the missing numbers in the fourth row"}
+  "1": {
+    "description": "Fill in the missing numbers in the first row"
+  },
+  "2": {
+    "description": "Fill in the missing numbers in the second row"
+  },
+  "3": {
+    "description": "Fill in the missing numbers in the third row"
+  },
+  "4": {
+    "description": "Fill in the missing numbers in the fourth row"
+  }
 }
 ```
 
@@ -849,9 +898,7 @@ In this case, the puzzle appears to be solvable because there are no obvious con
 
 [at step: Fill in the missing numbers in the first row]
 
-The first row of the Sudoku puzzle is `4 3 _ 1`. The missing number in this row is `2`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `2` is the only digit from 1 to 4 that is not already in the row.
-
-So, the completed first row is `4 3 2 1`.
+The first row of the Sudoku puzzle is "4 3 _ 1". The missing number in this row is 2, because each row in a Sudoku puzzle must contain all of the digits from 1 to 4 exactly once. Therefore, the completed first row is "4 3 2 1".
 
 
 </div>
@@ -865,11 +912,7 @@ So, the completed first row is `4 3 2 1`.
 
 [at step: Fill in the missing numbers in the second row]
 
-The second row of the Sudoku puzzle is `1 _ 4 3`. The missing number in this row is `2`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `2` is the only digit from 1 to 4 that is not already in the row.
-
-However, we need to make sure that the number `2` does not conflict with the other numbers in the same column and the same 2x2 subgrid. Looking at the first column, we see that `2` is already in the first row, so we cannot put `2` in the second position of the second row. Therefore, `2` must go in the second position of the second row.
-
-So, the completed second row is `1 2 4 3`.
+The second row of the Sudoku puzzle is "1 _ 4 3". The missing number in this row is 2, because each row in a Sudoku puzzle must contain all of the digits from 1 to 4 exactly once. Therefore, the completed second row is "1 2 4 3".
 
 
 </div>
@@ -883,11 +926,15 @@ So, the completed second row is `1 2 4 3`.
 
 [at step: Fill in the missing numbers in the third row]
 
-The third row of the Sudoku puzzle is `3 _ _ 2`. The missing numbers in this row are `1` and `4`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `1` and `4` are the only digits from 1 to 4 that are not already in the row.
+The third row of the Sudoku puzzle is "_ _ 1 _". The missing numbers in this row are 2, 3, and 4. However, we need to consider the numbers in the same column of the other rows as well. 
 
-However, we need to make sure that the numbers `1` and `4` do not conflict with the other numbers in the same column and the same 2x2 subgrid. Looking at the second column, we see that `1` is already in the second row, so we cannot put `1` in the second position of the third row. Therefore, `1` must go in the third position of the third row. And `4` must go in the second position of the third row.
+Looking at the first column, the numbers 4 and 1 are already used in the first and second rows, so the number in the first column of the third row must be 2 or 3. But since 2 is already used in the second column of the second row, the number in the first column of the third row must be 3.
 
-So, the completed third row is `3 4 1 2`.
+Looking at the second column, the numbers 3 and 2 are already used in the first and second rows, so the number in the second column of the third row must be 1 or 4. But since 1 is already used in the third column of the third row, the number in the second column of the third row must be 4.
+
+Looking at the fourth column, the numbers 1 and 3 are already used in the first and second rows, so the number in the fourth column of the third row must be 2 or 4. But since 4 is already used in the second column of the third row, the number in the fourth column of the third row must be 2.
+
+Therefore, the completed third row is "3 4 1 2".
 
 
 </div>
@@ -895,7 +942,7 @@ So, the completed third row is `3 4 1 2`.
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
 <div>[6] <b>orchestrator</b>:</div>
 
-[..tao_templates:3748..]
+[..tao_templates:3957..]
 
 
 </div>
@@ -917,7 +964,7 @@ headings: `# I_WILL_ANSWER_DIRECTLY`, `# LET_ME_ASK_THE_PYTHON_GENIE`, `# BACKTR
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 195.0
 
 ***I_WILL_ANSWER_DIRECTLY***
 
@@ -925,26 +972,26 @@ Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
 
 [at step: Fill in the missing numbers in the fourth row]
 
-The fourth row of the Sudoku puzzle is `2 _ 3 _`. The missing numbers in this row are `1` and `4`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `1` and `4` are the only digits from 1 to 4 that are not already in the row.
+The fourth row of the Sudoku puzzle is "2 _ 3 _". The missing numbers in this row are 1 and 4. However, we need to consider the numbers in the same column of the other rows as well. 
 
-However, we need to make sure that the numbers `1` and `4` do not conflict with the other numbers in the same column and the same 2x2 subgrid. Looking at the second column, we see that `4` is already in the third row, so we cannot put `4` in the second position of the fourth row. Therefore, `4` must go in the fourth position of the fourth row. And `1` must go in the second position of the fourth row.
+Looking at the second column, the numbers 3, 2, and 4 are already used in the first, second, and third rows, so the number in the second column of the fourth row must be 1.
 
-So, the completed fourth row is `2 1 3 4`.
+Looking at the fourth column, the numbers 1, 3, and 2 are already used in the first, second, and third rows, so the number in the fourth column of the fourth row must be 4.
+
+Therefore, the completed fourth row is "2 1 3 4".
 
 ### NEXT_I_WANT_TO_WORK_AT:
 None. This is the final step.
 
-**Text lengths**: context=8026 + reply:876=8902 **Total tokens**: 2214
+**Text lengths**: context=8144 + reply:724=8868 **Total tokens**: 2191
 
-# SEND TO LLM for summarize/summarize/0
 
+
+# SEND TO LLM for summarize/12/0
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
-Your name is Sage. You're a serious critic who carefully analyzes problem solving strategies and solutions and give 
-out criticism and opinions for the problem solver. The problem solver, whose name is Tao, is expected solve problem 
-in a top-down step-by-step decomposition manner; at each step, Tao should provide either decompose the step into 
-a plan, a direct answer for that step, or asking question to the user for clarification.
+[..system/1:211..]
 
 
 </div>
@@ -952,15 +999,23 @@ a plan, a direct answer for that step, or asking question to the user for clarif
 <div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
 <div>[0] <b>user</b>:</div>
 
-
 Solve this 4x4 Sudoku.
 
+
+
 ```text
+
 4 3 _ 1
+
 1 _ 4 3
-3 _ _ 2
+
+_ _ 1 _
+
 2 _ 3 _
+
 ```
+
+
 
 (Solve it in your head, do not write codes)
 
@@ -970,17 +1025,7 @@ Solve this 4x4 Sudoku.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[1] <b>Tao</b>:</div>
 
-***Problem Analysis***
-
-
-
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. It is a standard 4x4 Sudoku puzzle. 
-
-In a Sudoku puzzle, the objective is to fill a grid with digits so that each column, each row, and each of the subgrids that compose the grid (also called "boxes", "blocks", or "regions") contains all of the digits from 1 to the grid size. In this case, the grid size is 4, so each row, column, and 2x2 subgrid must contain all of the digits from 1 to 4.
-
-The puzzle is solvable if there is at least one valid configuration of digits that satisfies these conditions. If there are multiple valid configurations, the puzzle is said to have multiple solutions. If there are no valid configurations, the puzzle is unsolvable.
-
-In this case, the puzzle appears to be solvable because there are no obvious contradictions, such as the same digit appearing twice in the same row, column, or subgrid. However, the actual solvability of the puzzle can only be determined by attempting to solve it.
+[..Tao/1:987..]
 
 
 </div>
@@ -992,12 +1037,22 @@ In this case, the puzzle appears to be solvable because there are no obvious con
 
 
 
+[at step: start working on the problem]
+
 ```json
 {
-  "1": {"description": "Fill in the missing numbers in the first row"},
-  "2": {"description": "Fill in the missing numbers in the second row"},
-  "3": {"description": "Fill in the missing numbers in the third row"},
-  "4": {"description": "Fill in the missing numbers in the fourth row"}
+  "1": {
+    "description": "Fill in the missing numbers in the first row"
+  },
+  "2": {
+    "description": "Fill in the missing numbers in the second row"
+  },
+  "3": {
+    "description": "Fill in the missing numbers in the third row"
+  },
+  "4": {
+    "description": "Fill in the missing numbers in the fourth row"
+  }
 }
 ```
 
@@ -1013,9 +1068,7 @@ In this case, the puzzle appears to be solvable because there are no obvious con
 
 [at step: Fill in the missing numbers in the first row]
 
-The first row of the Sudoku puzzle is `4 3 _ 1`. The missing number in this row is `2`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `2` is the only digit from 1 to 4 that is not already in the row.
-
-So, the completed first row is `4 3 2 1`.
+The first row of the Sudoku puzzle is "4 3 _ 1". The missing number in this row is 2, because each row in a Sudoku puzzle must contain all of the digits from 1 to 4 exactly once. Therefore, the completed first row is "4 3 2 1".
 
 
 </div>
@@ -1029,11 +1082,7 @@ So, the completed first row is `4 3 2 1`.
 
 [at step: Fill in the missing numbers in the second row]
 
-The second row of the Sudoku puzzle is `1 _ 4 3`. The missing number in this row is `2`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `2` is the only digit from 1 to 4 that is not already in the row.
-
-However, we need to make sure that the number `2` does not conflict with the other numbers in the same column and the same 2x2 subgrid. Looking at the first column, we see that `2` is already in the first row, so we cannot put `2` in the second position of the second row. Therefore, `2` must go in the second position of the second row.
-
-So, the completed second row is `1 2 4 3`.
+The second row of the Sudoku puzzle is "1 _ 4 3". The missing number in this row is 2, because each row in a Sudoku puzzle must contain all of the digits from 1 to 4 exactly once. Therefore, the completed second row is "1 2 4 3".
 
 
 </div>
@@ -1041,17 +1090,7 @@ So, the completed second row is `1 2 4 3`.
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[5] <b>Tao</b>:</div>
 
-***I_WILL_ANSWER_DIRECTLY***
-
-
-
-[at step: Fill in the missing numbers in the third row]
-
-The third row of the Sudoku puzzle is `3 _ _ 2`. The missing numbers in this row are `1` and `4`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `1` and `4` are the only digits from 1 to 4 that are not already in the row.
-
-However, we need to make sure that the numbers `1` and `4` do not conflict with the other numbers in the same column and the same 2x2 subgrid. Looking at the second column, we see that `1` is already in the second row, so we cannot put `1` in the second position of the third row. Therefore, `1` must go in the third position of the third row. And `4` must go in the second position of the third row.
-
-So, the completed third row is `3 4 1 2`.
+[..Tao/2:1194..]
 
 
 </div>
@@ -1065,11 +1104,13 @@ So, the completed third row is `3 4 1 2`.
 
 [at step: Fill in the missing numbers in the fourth row]
 
-The fourth row of the Sudoku puzzle is `2 _ 3 _`. The missing numbers in this row are `1` and `4`, because each row in a Sudoku puzzle must contain all of the digits from 1 to the grid size exactly once, and `1` and `4` are the only digits from 1 to 4 that are not already in the row.
+The fourth row of the Sudoku puzzle is "2 _ 3 _". The missing numbers in this row are 1 and 4. However, we need to consider the numbers in the same column of the other rows as well. 
 
-However, we need to make sure that the numbers `1` and `4` do not conflict with the other numbers in the same column and the same 2x2 subgrid. Looking at the second column, we see that `4` is already in the third row, so we cannot put `4` in the second position of the fourth row. Therefore, `4` must go in the fourth position of the fourth row. And `1` must go in the second position of the fourth row.
+Looking at the second column, the numbers 3, 2, and 4 are already used in the first, second, and third rows, so the number in the second column of the fourth row must be 1.
 
-So, the completed fourth row is `2 1 3 4`.
+Looking at the fourth column, the numbers 1, 3, and 2 are already used in the first, second, and third rows, so the number in the fourth column of the fourth row must be 4.
+
+Therefore, the completed fourth row is "2 1 3 4".
 
 
 </div>
@@ -1077,25 +1118,37 @@ So, the completed fourth row is `2 1 3 4`.
 <div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
 <div>[7] <b>orchestrator</b>:</div>
 
-Tao, the above is your final problem solving trajectory. Please summarize it to a final answer.
+***Summarize***
 
-Note: if you use any files written during the problem solving above, to save spaces, you don't need to repeat the file 
-contents; instead you can refer to the files by path as `file:file_name_path`, for example: 
 
-```markdown
-The python program you need is contained in the files:
-
-1. file:my_module/__init__.py
-2. file:my_module/main.py
-```
 
 
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
+<div>[8] <b>orchestrator</b>:</div>
 
-The final solution to the 4x4 Sudoku puzzle is:
+Tao, the above is your final problem solving trajectory. Please summarize it to a final answer.
+
+Note: this is the final answer presented to the user. Therefore make sure to include **full and complete** 
+information requested by the user, except existing file contents, but leave out details created during the solving 
+session that the user does not need. To save spaces, don't need to repeat the file contents; instead you can refer 
+to the files by path as `file:<file_name_path>`; however, if you find missing files or file contents during the 
+solving session, you should write them out here.
+
+Start with heading `# FINAL_ANSWER`.
+
+
+</div>
+
+Reply: temperature=0.0, eff. reply tokens: 91.0
+
+***FINAL_ANSWER***
+
+
+
+The solution to the 4x4 Sudoku puzzle is:
 
 ```text
 4 3 2 1
@@ -1104,16 +1157,20 @@ The final solution to the 4x4 Sudoku puzzle is:
 2 1 3 4
 ```
 
-This solution was obtained by filling in the missing numbers in each row one by one, while ensuring that each number does not conflict with the other numbers in the same column and the same 2x2 subgrid.
+Each row, each column, and each 2x2 box contains all of the digits from 1 to 4 exactly once, which is the requirement for a valid Sudoku solution.
 
-**Text lengths**: context=5120 + reply:296=5416 **Total tokens**: 1399
+**Text lengths**: context=4862 + reply:250=5112 **Total tokens**: 1320
 
-# SEND TO LLM for check_final_solution/12/0
 
+
+# SEND TO LLM for check_final_answer/13/0
 <div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
 <div>[-1] <b>system</b>:</div>
 
-You're a helpful assistant.
+Your name is Sage. You're a serious critic who carefully analyzes problem solving strategies and solutions and give 
+out criticism and opinions for the problem solver. The problem solver, whose name is Tao, is expected solve problem 
+in a top-down step-by-step decomposition manner; at each step, Tao should provide either decompose the step into 
+a plan, a direct answer for that step, or asking question to the user for clarification.
 
 
 </div>
@@ -1121,15 +1178,23 @@ You're a helpful assistant.
 <div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
 <div>[0] <b>user</b>:</div>
 
-
 Solve this 4x4 Sudoku.
 
+
+
 ```text
+
 4 3 _ 1
+
 1 _ 4 3
-3 _ _ 2
+
+_ _ 1 _
+
 2 _ 3 _
+
 ```
+
+
 
 (Solve it in your head, do not write codes)
 
@@ -1143,7 +1208,9 @@ Solve this 4x4 Sudoku.
 
 
 
-The final solution to the 4x4 Sudoku puzzle is:
+[at step: Fill in the missing numbers in the fourth row.]
+
+The solution to the 4x4 Sudoku puzzle is:
 
 ```text
 4 3 2 1
@@ -1152,7 +1219,7 @@ The final solution to the 4x4 Sudoku puzzle is:
 2 1 3 4
 ```
 
-This solution was obtained by filling in the missing numbers in each row one by one, while ensuring that each number does not conflict with the other numbers in the same column and the same 2x2 subgrid.
+Each row, each column, and each 2x2 box contains all of the digits from 1 to 4 exactly once, which is the requirement for a valid Sudoku solution.
 
 
 </div>
@@ -1174,14 +1241,15 @@ content, if any, for  each item, carefully verify each item. Respond using the f
 
 </div>
 
-Reply: **<class 'langchain.schema.messages.AIMessage'>** temperature=0.0
+Reply: temperature=0.0, eff. reply tokens: 249.0
 
 ```json
 {
-  "Verify each row contains all numbers from 1 to 4": {"content": "4 3 2 1, 1 2 4 3, 3 4 1 2, 2 1 3 4", "finding": "Each row contains all numbers from 1 to 4", "ok": true},
-  "Verify each column contains all numbers from 1 to 4": {"content": "4 1 3 2, 3 2 4 1, 2 4 1 3, 1 3 2 4", "finding": "Each column contains all numbers from 1 to 4", "ok": true},
-  "Verify each 2x2 subgrid contains all numbers from 1 to 4": {"content": "4 3, 1 2, 1 2, 3 4, 3 4, 2 1, 2 1, 3 4", "finding": "Each 2x2 subgrid contains all numbers from 1 to 4", "ok": true}
+  "Verify each row contains all digits from 1 to 4": {"content": "4 3 2 1, 1 2 4 3, 3 4 1 2, 2 1 3 4", "finding": "Each row contains all digits from 1 to 4 exactly once", "ok": true},
+  "Verify each column contains all digits from 1 to 4": {"content": "4 1 3 2, 3 2 4 1, 2 4 1 3, 1 3 2 4", "finding": "Each column contains all digits from 1 to 4 exactly once", "ok": true},
+  "Verify each 2x2 box contains all digits from 1 to 4": {"content": "4 3, 1 2, 1 2, 3 4, 3 4, 1 2, 2 1, 3 4", "finding": "Each 2x2 box contains all digits from 1 to 4 exactly once", "ok": true}
 }
 ```
 
-**Text lengths**: context=914 + reply:559=1473 **Total tokens**: 512
+**Text lengths**: context=1328 + reply:584=1912 **Total tokens**: 602
+

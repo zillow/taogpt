@@ -22,7 +22,7 @@ def test_check_final_solution_success(logger):
     """
     overall, concerns = parse_final_response(text)
     assert overall
-    assert concerns == ""
+    assert len(concerns) == 0
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         assert reason == 'check_final_solution'
@@ -36,17 +36,22 @@ def test_check_final_solution_success(logger):
 
 def test_check_final_solution_failed(logger):
     text = """{
-    "calculation": {"ok": false, "reason": "1 + 1 != 3"},
+    "calculation": {"ok": false, "reason": "1 + 1 != 3", "blame": "step22"},
     "etc": {"ok": true, "reason": "Good"}
     }
     """
     overall, concerns = parse_final_response(text)
     assert not overall
-    assert concerns == "* calculation: 1 + 1 != 3"
+    assert concerns == {"calculation": "1 + 1 != 3"}
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        assert reason == 'check_final_solution'
-        return text
+        if reason == 'check_final_solution':
+            return text
+        elif reason == 'blame_step':
+            return """```json
+{"step22": "1 + 1 != 3"}
+```
+"""
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
     try:

@@ -80,15 +80,19 @@ class Config:
     ask_user_questions_in_one_prompt: bool = False
     ask_user_before_execute_codes: bool = True
     pause_after_initial_solving_expansion: bool = True
-    pause_after_final_answer_rejected: bool = True
+    pause_after_final_answer_rejected: bool = False
 
 
 class Executor(_abc.ABC):
 
     def __init__(self, input_fn: _t.Callable[[str], str]=None, **kwargs):
+        self._pending_pause: _t.Optional[str] = None
         self._input_fn = local()
         if input_fn is not None:
             self._input_fn.callback = input_fn
+
+    def reset(self):
+        self._pending_pause = None
 
     def set_input_fn(self, input_fn: _t.Callable[[str], str]):
         self._input_fn.callback = input_fn
@@ -159,6 +163,12 @@ class Executor(_abc.ABC):
                            retry_prompt: str):
         raise e # base just re-throw without retry
 
+    @property
+    def pending_pause(self) -> _t.Optional[str]:
+        return self._pending_pause
+
+    def request_pause(self, reason: str):
+        self._pending_pause = reason
 
 @_dc.dataclass(repr=False)
 class StepABC(_abc.ABC):

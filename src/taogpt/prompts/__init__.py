@@ -23,6 +23,7 @@ class PromptDb:
     orchestrator_summarize_questions: str
     sage_intro: str
     sage_final_check: str
+    sage_blame: str
 
     @staticmethod
     def load_defaults():
@@ -51,4 +52,5 @@ class PromptDb:
             orchestrator_summarize_questions=_read(path / 'orchestrator_summarize_questions.md'),
             sage_intro=_read(path / 'sage.md'),
             sage_final_check=_read(path / 'sage_final_check.md'),
+            sage_blame=_read(path / 'sage_blame.md'),
         )

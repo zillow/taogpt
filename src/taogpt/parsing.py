@@ -95,18 +95,11 @@ _json_response_re = re.compile(r"^.*(```(json)?\n+)(.+)(```).*$|^\s*(\{.+})\s*$"
 _final_solution_check_re = re.compile(r"^\s*(yes|no)[.,]?\s+(.+)$", flags=re.DOTALL|re.IGNORECASE)
 
 
-def parse_final_response(text: str) -> (bool, str):
-    match = _json_response_re.match(text)
-    if match is None:
-        raise ParseError("no JSON hash found")
-    json_text = match.group(3) if match.group(3) is not None else match.group(5)
-    try:
-        judgements: _t.Dict[str, _t.Dict[str, _t.Union[bool, str]]] = json.loads(json_text)
-    except json.JSONDecodeError as e:
-        raise ParseError(f"JSON parse error: {e}")
+def parse_final_response(text: str) -> _t.Tuple[bool, _t.Dict[str, str]]:
+    judgements: _t.Dict[str, _t.Dict[str, _t.Union[bool, str]]] = parse_json_hash(text, two_level_hashes=True)
     if not _utils.safe_is_instance(judgements, dict) or not all([_utils.safe_is_instance(x, dict) for x in judgements.values()]):
         raise ParseError("The response must be a JSON hash of hashes")
-    concerns = []
+    concerns: _t.Dict[str, str] = dict()
     overall_correctness: bool = True
     for concern, judgement in judgements.items():
         if 'ok' not in judgement:
@@ -117,9 +110,10 @@ def parse_final_response(text: str) -> (bool, str):
         overall_correctness = (overall_correctness and item_correctness)
         if not item_correctness:
             reason = judgement.get('reason', judgement.get('finding', ''))
-            reason = f": {reason}" if reason != '' else ''
-            concerns.append(f"* {concern}{reason}")
-    return overall_correctness, '\n'.join(concerns)
+            concerns[concern] = reason
+            # reason = f": {reason}" if reason != '' else ''
+            # concerns.add(f"* {concern}{reason}")
+    return overall_correctness, concerns
 
 
 @_dc.dataclass
@@ -131,7 +125,7 @@ class StepDescriptor:
 def parse_step_by_step_plan(text: str) -> _t.Dict[int, StepDescriptor]:
     results: {int: StepDescriptor} = dict()
     try:
-        plan = parse_json_hash(text)
+        plan = parse_json_hash(text, two_level_hashes=True)
     except ParseError as ex:
         if not 'no JSON hash found' in str(ex):
             raise ex
@@ -153,7 +147,7 @@ def parse_step_by_step_plan(text: str) -> _t.Dict[int, StepDescriptor]:
 
 
 def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:
-    rankings = parse_json_hash(text)
+    rankings = parse_json_hash(text, two_level_hashes=True)
     results: {int: float} = dict()
     dupes: {int: int} = dict()
     for i, item in rankings.items():
@@ -185,16 +179,23 @@ def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[
     return results, dupes
 
 
-def parse_json_hash(text):
+def parse_json_hash(text, two_level_hashes=False):
     match = _json_response_re.match(text)
+    responses: _t.Dict[str, _t.Any]
     if match is None:
-        raise ParseError("no JSON hash found")
-    json_text = match.group(3) if match.group(3) is not None else match.group(5)
-    try:
-        responses: _t.Dict[str, _t.Any] = json.loads(json_text)
-    except json.JSONDecodeError as e:
-        raise ParseError(f"JSON parse error: {e}")
-    if not _utils.safe_is_instance(responses, dict) or not all([_utils.safe_is_instance(x, dict) for x in responses.values()]):
+        try:
+            responses = json.loads(text)
+        except json.JSONDecodeError as e:
+            raise ParseError("no JSON hash found or invalid JSON")
+    else:
+        json_text = match.group(3) if match.group(3) is not None else match.group(5)
+        try:
+            responses = json.loads(json_text)
+        except json.JSONDecodeError as e:
+            raise ParseError(f"JSON parse error: {e}")
+    if not _utils.safe_is_instance(responses, dict):
+        raise ParseError("The response must be a JSON hash")
+    if two_level_hashes and not all([_utils.safe_is_instance(x, dict) for x in responses.values()]):
         raise ParseError("The response must be a JSON hash of hashes")
     return responses
 

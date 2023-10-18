@@ -1,7 +1,6 @@
 from __future__ import annotations
 import dataclasses as _dc
 import typing as _t
-import math as _math
 import datetime as _datetime
 import json as _json
 
@@ -10,8 +9,6 @@ from . import UnsolvableError, MarkdownLogger, TokenUsageError
 from .llm_model import *
 from .program import *
 import taogpt.utils as _utils
-
-_CONTINUE_VOTE_QUORUM = 0.51
 
 
 class Orchestrator(Executor):
@@ -131,7 +128,12 @@ class Orchestrator(Executor):
                     self._loop()
                     break
                 except Backtrack as backtrack:
-                    self.backtrack(backtrack)
+                    while True:
+                        try:
+                            self.backtrack(backtrack)
+                            break
+                        except Backtrack as b2:
+                            backtrack = b2
         except UnsolvableError as e:
             prev: Step|None = self._chain[-1] if len(self._chain) > 0 else None
             self._chain.append(FinalAnswerStep(prev, str(e), ROLE_TAO))
@@ -171,7 +173,10 @@ class Orchestrator(Executor):
             raise UnsolvableError('Tao cannot solve the problem.')
 
     def _loop(self):
-        while True:
+        while len(self.chain) > 0:
+            if self.pending_pause is not None:
+                reason = self.pending_pause
+                raise Pause(reason, self.chain[-1])
             self.check_token_usages()
             last_step = self._chain[-1]
             if _utils.safe_is_instance(last_step, DirectAnswerStep) \
@@ -215,6 +220,7 @@ class Orchestrator(Executor):
                                          first_expansion=first_expansion,
                                          max_expansion=self.config.max_search_expansion,
                                          first_problem_solving_step=start_solving)
+            work_next_step.set_step_name("start working on the problem")
             self._chain.append(work_next_step)
         else:
             ask_next_step = NextStep(step, '', role=ROLE_ORCHESTRATOR,
@@ -254,55 +260,6 @@ class Orchestrator(Executor):
         summarize_step.set_step_name(self.current_step_name)
         self._chain.append(summarize_step)
 
-    def check_execution_state(self,
-                              system_prompt: str,
-                              prompts: [(str, str)],
-                              step: Step,
-                              response_parser: _t.Callable[[str], (bool, str)],
-                              votes: int=None,
-                              reason='check_state',
-                              collapse_contents: {str:str}=None):
-        votes = votes or self.config.votes
-        all_criticism: [str] = []
-        min_yes_needed = int(_math.ceil(votes * _CONTINUE_VOTE_QUORUM))
-        max_no_allowed = int(_math.ceil(votes * (1 - _CONTINUE_VOTE_QUORUM)))
-        n_success, n_true = 0, 0
-        for i in range(votes):
-            n_retries = 0
-            prompts_to_be_sent = prompts.copy()
-            response: str = ''
-            while n_retries < self.config.max_retries:
-                try:
-                    response = self.sage_llm.ask(
-                        system_prompt,
-                        prompts_to_be_sent,
-                        reason=reason,
-                        step_id=f"{step.step_id}/{i}",
-                        temperature=0.0 if n_success == 0 else 0.1,
-                        collapse_contents=collapse_contents,
-                        log_request=i == 0)
-                    result, text = response_parser(response)
-                    n_success += 1
-                    if result:
-                        n_true += 1
-                    elif text is not None and len(text.strip()) > 0:
-                        all_criticism.append(text.strip())
-                    if n_true >= min_yes_needed:
-                        break
-                    if (n_success - n_true) >= max_no_allowed:
-                        break
-                except Exception as e:
-                    n_retries += 1
-                    self.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
-                                            self.prompts.orchestrator_parse_error)
-        if len(all_criticism) > 0:
-            self.record_criticisms(all_criticism)
-        if n_success == 0:
-            raise RuntimeError('Sage failed to perform execution state check')
-        if (n_true / n_success) < _CONTINUE_VOTE_QUORUM:
-            fail_votes = 1. - (n_true / n_success)
-            raise Backtrack(f'We are on a dead path with {fail_votes * 100:.1f}% of votes', blame=step)
-
     def record_criticisms(self, criticisms: [str]):
         for step in reversed(self._chain):
             if _utils.safe_is_instance(step, ExpandableStep):
@@ -330,6 +287,7 @@ class Orchestrator(Executor):
             raise Backtrack("Python execution error", blame=step)
 
     def reset(self):
+        super().reset()
         self.llm.reset()
         self._chain = []
         self._create_python_scope()
