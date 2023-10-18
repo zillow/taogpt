@@ -18,6 +18,16 @@ from taogpt.prompts import PromptDb
 _CONTINUE_VOTE_QUORUM = 0.51
 
 
+def add_files_to_prompts(executor, prompts) -> _t.Dict[str, GeneratedFile]:
+    file_contents = ''
+    files = GeneratedFile.collect_files(executor.chain)
+    for path, file in files.items():
+        file_contents += f"### FILE: {path}\n\n{file.markdown_snippet}\n\n"
+    if file_contents != '':
+        prompts.append((ROLE_TAO, file_contents))
+    return files
+
+
 @_dc.dataclass(repr=False)
 class Step(StepABC):
 
@@ -257,11 +267,7 @@ class FinalAnswerStep(TaoReplyStep):
             return _utils.safe_is_instance(step, (PresentTaskStep, AskQuestionStep, FinalAnswerStep))
 
         prompts = executor.show_conversation_thread(selector=_select)
-        file_contents = ''
-        for path, file in GeneratedFile.collect_files(executor.chain).items():
-            file_contents += f"### FILE: {path}\n\n{file.markdown_snippet}\n\n"
-        if file_contents != '':
-            prompts.append((ROLE_TAO, file_contents))
+        add_files_to_prompts(executor, prompts)
         sage_prompt = executor.prompts.sage_final_check
         prompts.append((ROLE_SAGE, sage_prompt))
         all_criticisms = self.check_final_answer(executor, prompts)
