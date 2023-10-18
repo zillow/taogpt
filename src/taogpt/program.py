@@ -164,17 +164,17 @@ class DirectAnswerStep(TaoReplyStep):
         self.description = re.sub(rf"#+\s+{NEXT_I_WANT_TO_WORK_AT}", f"### {NEXT_I_WANT_TO_WORK_AT}:",
                                   self.description, 1)
         sections: _t.Dict[str, str] = parse_sections(self.description)
+        extracted_contents = gather_file_contents(sections, pop_file_sections=True)
+        self._files: _t.Dict[str, taogpt.GeneratedFile] = {
+            file_path: taogpt.GeneratedFile(content_type, content, snippet, desc)
+            for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
+        }
         self.next_step = sections.pop(NEXT_I_WANT_TO_WORK_AT, None)
         self.is_final_step = self.is_final_step or is_final_answer(self.next_step)
         reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
         self.description = '\n\n'.join(reconstructed)
         self.description = re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=re.IGNORECASE)
         self.description = re.sub(r"#+ FILE", "### FILE", self.description, flags=re.IGNORECASE).strip()
-        extracted_contents = gather_file_contents(sections)
-        self._files: _t.Dict[str, taogpt.GeneratedFile] = {
-            file_path: taogpt.GeneratedFile(content_type, content, snippet, desc)
-            for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
-        }
         Step.__post_init__(self)
 
     def eval_only(self, executor) -> Step | None:
@@ -541,7 +541,10 @@ class ExpandableStep(Step):
             else prompt_db.tao_template_direct_step_answer
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
         base_prompts: _t.List[(str, str)] = executor.show_conversation_thread()
+        files = add_files_to_prompts(executor, base_prompts)
         base_prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
+        if len(files) > 0:
+            base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_template_notes_for_files))
         collapse_contents['tao_templates'] = tao_templates
         return system_prompt, base_prompts
 
@@ -734,9 +737,12 @@ class NextStep(ExpandableStep):
         prompt_db = executor.prompts
         system_prompt = prompt_db.tao_intro
         prompts = executor.show_conversation_thread()
+        files = add_files_to_prompts(executor, prompts)
         direct_answer = prompt_db.tao_template_direct_step_answer
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
         prompts.append((ROLE_ORCHESTRATOR, tao_templates))
+        if len(files) > 0:
+            prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_template_notes_for_files))
         if self.step_name is not None:
             prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_at_step.format(current_step=self.step_name)))
         next_step_prompt = prompt_db.orchestrator_next_step

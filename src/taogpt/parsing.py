@@ -288,12 +288,18 @@ def extract_fenced_content(text) -> _t.Tuple[_t.Optional[str], _t.Optional[str],
     return None, None, None
 
 
-def gather_file_contents(sections: _t.Dict[str, str]) -> _t.Dict[str, _t.Tuple[str, str, str, str]]:
+file_section_re = re.compile(r"FILE:?\s*(.+)")
+
+
+def gather_file_contents(sections: _t.Dict[str, str], pop_file_sections=False) \
+        -> _t.Dict[str, _t.Tuple[str, str, str, str]]:
+    file_sections = set()
     results: _t.Dict[str, _t.Tuple[str, str, str, str]] = dict()
     for section, markdown_full_content in sections.items():
-        match = re.match(r"FILE:?\s*(.+)", section)
+        match = re.match(file_section_re, section)
         if match is None:
             continue
+        file_sections.add(section)
         file_path = match.group(1)
         if file_path == '':
             raise ParseError(f"No file path for file section '{section}'")
@@ -302,4 +308,7 @@ def gather_file_contents(sections: _t.Dict[str, str]) -> _t.Dict[str, _t.Tuple[s
             raise ParseError(f"No content (in markdown fenced block) for section '{section}'")
         markdown_full_content = markdown_full_content.replace(snippet, '')
         results[file_path] = (content_type, content, snippet, markdown_full_content)
+    if pop_file_sections:
+        for section in file_sections:
+            sections.pop(section)
     return results

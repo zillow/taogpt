@@ -8,6 +8,7 @@ class PromptDb:
     tao_intro: str # main system prompt
     tao_templates: str
     tao_template_direct_step_answer: str
+    tao_template_notes_for_files: str
     tao_template_intuitive_answer: str
     orchestrator_ask_init_analysis: str
     orchestrator_rank_choices: str
@@ -19,6 +20,7 @@ class PromptDb:
     orchestrator_parse_error: str
     orchestrator_prior_approaches: str
     orchestrator_criticisms: str
+    orchestrator_error_noted: str
     orchestrator_summarize: str
     orchestrator_summarize_questions: str
     sage_intro: str
@@ -37,6 +39,7 @@ class PromptDb:
             tao_intro=_read(path / 'tao.md'),
             tao_templates=_read(path / 'tao_templates.md'),
             tao_template_direct_step_answer=_read(path / 'tao_template_direct_step_answer.md'),
+            tao_template_notes_for_files=_read(path / 'tao_template_notes_for_files.md'),
             tao_template_intuitive_answer=_read(path / 'tao_template_intuitive_answer.md'),
             orchestrator_ask_init_analysis=_read(path / 'orchestrator_ask_init_analysis.md'),
             orchestrator_rank_choices=_read(path / 'orchestrator_rank_choices.md'),
@@ -48,6 +51,7 @@ class PromptDb:
             orchestrator_parse_error=_read(path / 'orchestrator_parse_error.md'),
             orchestrator_prior_approaches=_read(path / 'orchestrator_prior_approaches.md'),
             orchestrator_criticisms=_read(path / 'orchestrator_criticisms.md'),
+            orchestrator_error_noted=_read(path / 'orchestrator_error_noted.md'),
             orchestrator_summarize=_read(path / 'orchestrator_summarize.md'),
             orchestrator_summarize_questions=_read(path / 'orchestrator_summarize_questions.md'),
             sage_intro=_read(path / 'sage.md'),
