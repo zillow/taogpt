@@ -487,6 +487,8 @@ class ExpandableStep(Step):
         prompt_db: PromptDb  = executor.prompts
         collapse_contents = dict()
         system_prompt, base_prompts = self.build_prompts(executor, collapse_contents)
+        if self.n_expanded > 0:
+            base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_error_noted))
         if self.choices is None:
             self.choices = []
         llm = executor.sage_llm if self.first_problem_solving_step \
