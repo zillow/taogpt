@@ -33,6 +33,49 @@ The interaction between Tao, Orchestrator, and Sage is a crucial aspect of this 
 
 This system is designed to facilitate effective problem-solving by breaking down complex problems into manageable steps, encouraging critical analysis, and promoting collaboration.
 
+## Methodology and Key Features
+
+(This is a high-level overview. More details will be presented later.)
+
+A problem solving session typically flows like:
+
+1. User's task is presented to Tao
+2. Orchestrator asks Tao to first analyze the task problem for issues and contradictions.
+3. Orchestrator asks Tao to come up with one or more approaches to solve the step. (Task problem is the root step.)
+4. Tao can reply with one of these strategies: answer directly, decompose into a step-by-step plan, ask user for 
+   clarifications, or give up due to error found.
+5. After receiving all approaches, Orchestrator asks Sage to rank and deduplicate the approaches.
+6. Orchestrator select the next best approach and take appropriate actions
+    * For asking user, present questions to user and solicit answers.
+    * If Tao gives up, backtrack and try the next best approach.
+    * For step-by-step plan, start with the first step in the plan and go to #3.
+    * Else, find out from reply or ask Tao for the next step and go to #3.
+7. If Tao's direct answer indicates final answer:
+   1. Add a (retryable) summarization step to let Tao summarize the conversation into a final answer
+   2. Ask Sage to verify the final answer.
+   3. If Sage thinks the final answer is incorrect, 
+      1. ask Sage to identify the steps that cause errors.
+      2. backtrack directly to the first problematic step and go to #3.
+   4. Else done
+
+### Key features
+
+* Top-down recursive step-by-step problem solving.
+* Generic rather than task specific.
+* Flexible problem solving strategy and structure: encourage high-level abstract recursive strategies, but honor 
+  intuition and do not forbid iterative or out-of-plan steps.
+* Fast-tracked backtracking.
+* Multiple opportunities to correct errors.
+
+### Technical features
+
+* LLM token usage limiting and optimization to guard against out-of-control token usages.
+* Resumable execution (when token limit is reached.)
+* Tao can take use of writing Python codes for the purpose of solving the problem (even if the problem's answer does 
+  not need program codes.) The sandbox environment is known as the Python Genie to Tao.
+* File generation support: Tao can generate files as part of the answer and the files are collected 
+  and saved.
+
 ## Examples
 
 This a final problem solving chain showing TaoGPT tackling a travel planning task. The steps go through:
@@ -405,6 +448,10 @@ From local git check-out to path `taogpt`:
 pip install path/to/taogpt/
 ```
 
+**Sandboxing Python environment**: Tao can execute Python codes as a tool to solve problem. By default, the user will 
+be prompted before a code snippet is executed. It is highly recommended that TaoGPT be installed in a virtual 
+machine (docker) for ultimate security.
+
 # Usages
 
 ## Command-line interface
@@ -422,9 +469,10 @@ mkdir /tmp/taogpt_outputs # directory where output files go to.
 taogpt -p /tmp/taogpt_outputs -llm gpt-3.5 --sage-llm=gpt-4 "What's x mod (y - z) where x = 10, y = 7, z = 4."
 ```
 
-A file logging the problem solving progress and a file with the final step chain are written to the output directory;
-they are Markdown files viewable by any Markdown viewer. The directory also contain any Tao-generated files (which 
-appear as sections with `### FILE: <path>` heading in the direct answer responses) organized by directory paths.
+The command-line tool will print out (abbreviated) log in the console. A file logging the problem solving 
+progress and a file with the final step chain are written to the output directory; they are Markdown files viewable 
+by any Markdown viewer. Users are recommended to view the Markdown log files for better experiences. The directory also 
+contain any Tao-generated files organized by directory paths.
 
 ## Web UI interface
 
@@ -438,3 +486,17 @@ appear as sections with `### FILE: <path>` heading in the direct answer response
 
 Apache License 2.0
 
+# Citation
+
+Please consider citing our work if you use the data or code in this repo.
+
+```
+@software{taogpt,
+  title = {TaoGPT},
+  author = {Quock, Winston},
+  url = {https://github.com/TBD/TaoGPT},
+  version = {pre-release},
+  year = {2023},
+  month = {10},
+}
+```
