@@ -491,6 +491,16 @@ contain any Tao-generated files organized by directory paths.
 
 *TBA*
 
+## Inspirations
+
+Formal citations will be provided with pending publications. Here are some prior arts inspiring TaoGPT:
+
+* Chain of Thought
+* ReACT
+* Tree of Thoughts
+* Graph of Thoughts
+* ToolLLM
+
 # Publications
 
 *Pending*
