@@ -76,8 +76,16 @@ class Step(StepABC):
         """
         return f"# {self.step_title}\n\n{self.description}" if len(self.step_title) > 0 else self.description
 
-    def show_in_thread(self, with_header=True) -> [(str, str)]:
+    @property
+    def extras(self) -> str:
+        return ''
+
+    def show_in_thread(self, with_header=True, with_extras=False) -> [(str, str)]:
         content = self.description_with_header if with_header else self.description
+        if with_extras:
+            extras = _utils.str_or_blank(self.extras)
+            if extras != '':
+                content += '\n\n' + extras
         return [(self.role, content)]
 
     def retryable(self, config: Config):
@@ -191,6 +199,13 @@ class DirectAnswerStep(TaoReplyStep):
     def collected_files(self) -> _t.Dict[str, GeneratedFile]:
         return self._files
 
+    @property
+    def extras(self) -> str:
+        file_contents = ''
+        for path, file in self.collected_files.items():
+            file_contents += f"### FILE: {path}\n\n{file.markdown_snippet}\n\n"
+        return file_contents
+
 
 @_dc.dataclass(repr=False)
 class GiveUpStep(TaoReplyStep):
@@ -274,7 +289,7 @@ class FinalAnswerStep(TaoReplyStep):
         if len(all_criticisms) == 0:
             return None
 
-        prompts = executor.show_conversation_thread()
+        prompts = executor.show_conversation_thread(with_extras=True)
         prompts.append((ROLE_SAGE, f"```json\n{_json.dumps(all_criticisms)}\n```"))
         blame_prompt = executor.prompts.sage_blame
         prompts.append((ROLE_ORCHESTRATOR, blame_prompt))

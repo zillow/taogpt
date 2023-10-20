@@ -1,4 +1,4 @@
-Tao, the above is your final problem solving trajectory. Please summarize it to a final answer.
+Tao, the above is your final problem solving trajectory. Please a final answer presentable to the user.
 
 Note: this is the final answer presented to the user. Therefore make sure to include **full and complete** 
 information requested by the user, except existing file contents, but leave out details created during the solving 

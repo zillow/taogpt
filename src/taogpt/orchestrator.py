@@ -199,14 +199,15 @@ class Orchestrator(Executor):
             raise TokenUsageError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
                                   f"exceeded allowance of {self.config.max_tokens_for_sage_llm}", self.chain[-1])
 
-    def show_conversation_thread(self, with_header=True, selector: _t.Callable[[int, StepABC], bool] | None=None) \
+    def show_conversation_thread(self, with_header=True, with_extras=False,
+                                 selector: _t.Callable[[int, StepABC], bool] | None=None) \
             -> [(str, str)]:
         conversation: [(str, str)] = []
         for i, step in enumerate(self._chain):
             if _utils.safe_is_instance(step, ExpandableStep) and i < len(self._chain) - 1:
                 continue # skip the expandable step except the last one
             if selector is None or selector(i, step):
-                conversation.extend(step.show_in_thread(with_header=with_header))
+                conversation.extend(step.show_in_thread(with_header=with_header, with_extras=with_extras))
         return conversation
 
     def next_step(self):

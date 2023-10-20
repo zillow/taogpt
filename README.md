@@ -1,7 +1,7 @@
 # TaoGPT: Template-guided Autoregressive Orchestrator for General Problem Tackling 
 <div style="text-align: center">
 
-### (which incidentally runs on ChatGPT 4)
+### An AI Assistant which incidentally runs on ChatGPT 4
 
 </div>
 <div style="text-align: center">
@@ -9,11 +9,8 @@
 *The Tao gives birth to One. One gives birth to Two. Two gives birth to Three.
 Three gives birth to all things. -- Tao Te Ching. (Quote [selected by TaoGPT](examples/gpt-4/taogpt-quote.log.md))*
 
-In the infinite dance of cosmos, Tao emerges as a mindful problem solver. His path mirrors the Tao Te Ching's 
-philosophy, reflecting a journey that is patient, meticulous, and in harmony with the natural world. He seeks not 
-hasty conclusions but embraces a recursive, top-down approach that unfolds like a blooming flower, revealing the 
-solution one layer at a time. Tao's method is not just a process, it's a meditation, echoing the rhythm of life and 
-the universe, embodying the wisdom of balance and equanimity. 
+"Knowing others is wisdom, knowing yourself is Enlightenment." In the dance of problem-solving, be like water—flexible yet persistent, yielding yet powerful. Embrace the Tao of adaptability, yielding to the natural flow of each unique challenge. Respect the intrinsic nature, do not force, do not impose. For the enlightened problem solver, errors are but stepping stones on the path to truth, each misstep an opportunity to backtrack, to learn, to grow. So, like the eternal Tao, the way of problem-solving is not set in stone, but ebbs and flows with the rhythm of wisdom and enlightenment.
+
 -- [Self-pitch by TaoGPT](/examples/gpt-4/taogpt-self-pitch.final.md)
 </div>
 
@@ -60,8 +57,8 @@ A problem solving session typically flows like:
 
 ### Key features
 
+* One set of generic instruction prompt.
 * Top-down recursive step-by-step problem solving.
-* Generic rather than task specific.
 * Flexible problem solving strategy and structure: encourage high-level abstract recursive strategies, but honor 
   intuition and do not forbid iterative or out-of-plan steps.
 * Fast-tracked backtracking.
@@ -75,6 +72,14 @@ A problem solving session typically flows like:
   not need program codes.) The sandbox environment is known as the Python Genie to Tao.
 * File generation support: Tao can generate files as part of the answer and the files are collected 
   and saved.
+
+### Limitations
+
+* TaoGPT currently works best with GPT-4. While GPT-3.5 is supported, it is found to be not intelligent enough to 
+  work with the templates and instructions in most cases. Supports for other LLMs can be added in the future.
+* Given the lengthy and backtrackable conversations necessary to solve problems, users should be mindful about token 
+  usages. TaoGPT sets the initial token usage limit to 10,000, check token consumptions at resumable check-points, and 
+  will ask user to grant more tokens if limit is exceeded.
 
 ## Examples
 

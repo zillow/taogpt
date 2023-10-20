@@ -136,7 +136,8 @@ class Executor(_abc.ABC):
         pass
 
     @_abc.abstractmethod
-    def show_conversation_thread(self, with_header=True, selector: _t.Callable[[int, StepABC], bool] | None=None) \
+    def show_conversation_thread(self, with_header=True, with_extras=False,
+                                 selector: _t.Callable[[int, StepABC], bool] | None=None) \
             -> [(str, str)]:
         pass
 
