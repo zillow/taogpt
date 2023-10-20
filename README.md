@@ -72,6 +72,10 @@ A problem solving session typically flows like:
   not need program codes.) The sandbox environment is known as the Python Genie to Tao.
 * File generation support: Tao can generate files as part of the answer and the files are collected 
   and saved.
+* Multi-LLM support: in order to lower LLM costs, it is possible to configure TaoGPT to use different LLMs for 
+  different needs during problem solving. For example, one could use gpt-3.5 for Tao while gpt-4 for Sage. Also long 
+  context LLM can be configured to use when the context length exceeds a certain limit. For example, gpt-4-32k is 
+  used in place of gpt-4 when the context exceeds 3000 tokens.
 
 ### Limitations
 
@@ -80,6 +84,10 @@ A problem solving session typically flows like:
 * Given the lengthy and backtrackable conversations necessary to solve problems, users should be mindful about token 
   usages. TaoGPT sets the initial token usage limit to 10,000, check token consumptions at resumable check-points, and 
   will ask user to grant more tokens if limit is exceeded.
+* Maximum conversation context lengths in most LLMs including GPT-4 are quite low. This hinders TaoGPT's ability to 
+  work on large problem such as full blown implementation of an application project.
+
+Some of these limitations and costs can be reduced over time as hardward availability, costs and performances improve.
 
 ## Examples
 
