@@ -60,7 +60,7 @@ def parse_sections(text: str, section_level: str='##') -> {str: str|None}:
     for line in text.split('\n'):
         match: re.Match = re.match(rf"^{section_level}+\s+([^\n]+)", line)
         if match is not None:
-            section = match.group(1)
+            section = match.group(1).strip()
             while section.endswith(':'):
                 section = section[:-1]
             matched_sections[section] = ''

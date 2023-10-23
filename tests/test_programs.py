@@ -77,4 +77,4 @@ None. I'm done.
 """
     step: DirectAnswerStep = parse_to_step(None, text)
     assert step.is_final_step
-    assert step.description == content
+    assert step.description == '22'

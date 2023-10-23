@@ -383,3 +383,16 @@ z = x * y
     assert content is None
     assert snippet is None
 
+
+def test_parse_sections_with_colons():
+    text = """[at step: a step]
+
+```javascript
+document.getElementById('log-display').style.overflow = 'auto';
+```
+
+# NEXT_I_WANT_TO_WORK_AT:: 
+Implement the client-side logic for handling user inputs and actions"""
+    sections = parsing.parse_sections(text, section_level='#')
+    assert len(sections) == 2
+    assert NEXT_I_WANT_TO_WORK_AT in sections

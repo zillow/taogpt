@@ -25,13 +25,13 @@ def test_check_final_solution_success(logger):
     assert len(concerns) == 0
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        assert reason == 'check_final_solution'
+        assert reason == 'check_final_answer'
         return text
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
     step.eval(orchestrator)
     assert len(llm.conversation_sequence) == 1
-    assert llm.conversation_sequence[-1][0] == 'check_final_solution'
+    assert llm.conversation_sequence[-1][0] == 'check_final_answer'
 
 
 def test_check_final_solution_failed(logger):
@@ -45,7 +45,7 @@ def test_check_final_solution_failed(logger):
     assert concerns == {"calculation": "1 + 1 != 3"}
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        if reason == 'check_final_solution':
+        if reason == 'check_final_answer':
             return text
         elif reason == 'blame_step':
             return """```json
@@ -73,7 +73,7 @@ def test_check_final_solution_parse_error(logger):
         pass
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        assert reason == 'check_final_solution'
+        assert reason == 'check_final_answer'
         return text
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)

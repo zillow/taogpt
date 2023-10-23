@@ -23,27 +23,29 @@ parser.add_argument('-m', '--max-search-expansion', type=int, default=4, help='M
 parser.add_argument('-v', '--votes', type=int, default=1, help='Number of votes')
 
 # behavioral
-parser.add_argument('-a', '--analyze-first', type=bool, default=True, help='Analyze first')
-parser.add_argument('-c', '--check-final', type=bool, default=True, help='Check final')
+parser.add_argument('-a', '--analyze-first', type=bool, default=True,
+                    action=argparse.BooleanOptionalAction, help='Analyze first')
+parser.add_argument('-c', '--check-final', type=bool, default=True,
+                    action=argparse.BooleanOptionalAction, help='Check final')
 
 # token usage controls
 parser.add_argument('-t', '--max-tokens', type=int, default=10000, help='Maximum number of tokens')
 parser.add_argument('--max-tokens-for-sage-llm', type=int, default=None, help='Maximum tokens for sage LLM')
 parser.add_argument('-r', '--max-retries', type=int, default=3, help='Maximum number of retries')
 parser.add_argument('-s', '--use-sage-llm-for-initial-expansion', type=bool, default=True,
-                    help='Use sage LLM for initial expansion')
+                    action=argparse.BooleanOptionalAction, help='Use sage LLM for initial expansion')
 
 # user interactions
 parser.add_argument('-S', '--silence', type=int, default=0,
                     help='Level of console printouts: 0: print conversation; 1: do not print conversation.')
 parser.add_argument('-Q', '--ask-user-questions-in-one-prompt', type=bool, default=False,
-                    help='Ask user questions in one prompt')
+                    action=argparse.BooleanOptionalAction, help='Ask user questions in one prompt')
 parser.add_argument('-E', '--ask-user-before-execute-codes', type=bool, default=True,
-                    help='Ask user before execute codes')
+                    action=argparse.BooleanOptionalAction, help='Ask user before execute codes')
 parser.add_argument('-P', '--pause-after-initial-solving-expansion', type=bool, default=True,
-                    help='Pause after initial solving expansion')
+                    action=argparse.BooleanOptionalAction, help='Pause after initial solving expansion')
 parser.add_argument('-R', '--pause-after-final-answer-rejected', type=bool, default=True,
-                    help='Pause after any final answer rejected by Sage')
+                    action=argparse.BooleanOptionalAction, help='Pause after any final answer rejected by Sage')
 
 # separate settings
 parser.add_argument('-p', '--path', type=str, required=True, help='Directory path for outputs')
@@ -61,7 +63,8 @@ parser.add_argument('--long-context-threshold', type=int, default=3000,
 parser.add_argument('-C', '--openai-credential-json', type=str, default=None,
                     help='File path of JSON hash containing `key` and `url` '
                          'corresponding to "OPENAI_API_KEY" and "OPENAI_API_BASE" respectively')
-parser.add_argument('-D', '--debug', type=bool, default=False, help='Enable debugging')
+parser.add_argument('-D', '--debug', type=bool, default=False,
+                    action=argparse.BooleanOptionalAction, help='Enable debugging')
 
 # last positional argument as the string of task
 parser.add_argument('user_task', type=str, nargs='?', default=None,
