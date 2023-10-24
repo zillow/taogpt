@@ -94,6 +94,10 @@ Some of these limitations and costs can be reduced over time as hardward availab
 
 ## Examples
 
+(The problem solving logs are markdown format with colored sections. Some Markdown viewers, such as those built in 
+the git source control system, may remove `<div>`s used for coloring sections. For best viewing pleasure, it is 
+recommend to view the log contents using a proper Markdown browser plugin.)
+
 This a final problem solving chain showing TaoGPT tackling a travel planning task. The steps go through:
 
 1. Analyze the task problem;
