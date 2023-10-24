@@ -195,7 +195,7 @@ Evaluate possible addition combinations.
 """
     decision, (answer, decision_details) = parsing.parse_next_step_reply(text)
     assert decision == NEXT_I_WANT_TO_WORK_AT
-    assert answer == 'Evaluate possible addition combinations.'
+    assert answer == 'Evaluate possible addition combinations'
     assert WILL_ASK_GENIE in decision_details
     assert decision_details == f"# {WILL_ASK_GENIE}\n{details}"
 
@@ -316,10 +316,10 @@ def test_parse_step_by_step_plan():
 """
     results = parsing.parse_step_by_step_plan(text)
     assert len(results) == 2
-    assert results[0].description == steps[0]
-    assert results[0].why == reasons[0]
-    assert results[1].description == steps[1]
-    assert results[1].why is None
+    assert results[1].description == steps[0]
+    assert results[1].why == reasons[0]
+    assert results[2].description == steps[1]
+    assert results[2].why is None
 
 
 def test_replacement_with_multiple_identical_fenced_blocks():

@@ -203,7 +203,7 @@ So, the first row becomes: 4 3 2 1
 ### NEXT_I_WANT_TO_WORK_AT:
 Fill in the second row [None]
 """
-    step = parse_to_step(None, text)
+    step = parse_to_step(None, text, config=Config())
     assert isinstance(step, DirectAnswerStep)
     assert not step.is_final_step
     assert step.next_step == 'Fill in the second row [None]'
@@ -224,6 +224,6 @@ def test_parse_step_by_step_no_whys():
 ```
 This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must contain all of the numbers from 1 to 4 exactly once. We will fill in the rows one by one, making sure that each number appears exactly once in each row and column, and in each 2x2 square. This is a recursive, top-down approach to solving the puzzle.
 """
-    step = parse_to_step(None, text)
+    step = parse_to_step(None, text, config=Config())
     assert isinstance(step, StepByStepPlan)
     assert step.first_step == 'Fill in the first row'

@@ -26,6 +26,7 @@ def solve_problem(user_task: str, log_path: str, config: Config,
     except Pause as e:
         pause = e
     while pause is not None:
+        log_final_chain(executor, log_path, console_out=console_out)
         resume: _t.Optional[str] = None
         while resume is None or re.match(r"\d+|no", resume) is None:
             resume = input(f"{str(pause)}\nReply amount of tokens to add (0 is OK) and continue, 'no' to cancel: ") \

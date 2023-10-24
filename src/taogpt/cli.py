@@ -36,6 +36,8 @@ parser.add_argument('-s', '--use-sage-llm-for-initial-expansion', type=bool, def
                     action=argparse.BooleanOptionalAction, help='Use sage LLM for initial expansion')
 
 # user interactions
+parser.add_argument('-F', '--file-generation-support', type=bool, default=False,
+                    action=argparse.BooleanOptionalAction, help='Additional support for file generation')
 parser.add_argument('-S', '--silence', type=int, default=0,
                     help='Level of console printouts: 0: print conversation; 1: do not print conversation.')
 parser.add_argument('-Q', '--ask-user-questions-in-one-prompt', type=bool, default=False,

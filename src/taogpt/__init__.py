@@ -81,6 +81,7 @@ class Config:
     ask_user_before_execute_codes: bool = True
     pause_after_initial_solving_expansion: bool = True
     pause_after_final_answer_rejected: bool = False
+    file_generation_support: bool = False
 
 
 class Executor(_abc.ABC):
@@ -177,10 +178,20 @@ class StepABC(_abc.ABC):
     description: str
     role: str
 
+    def __post_init__(self):
+        self._visible = True
+
     @property
     @_abc.abstractmethod
     def step_id(self) -> int:
         pass
+
+    @property
+    def visible_in_chain(self) -> bool:
+        return self._visible
+
+    def set_visible_in_chain(self, visible: bool):
+        self._visible = visible
 
     @property
     def collected_files(self) -> _t.Dict[str, GeneratedFile]:

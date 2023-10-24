@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import typing as _t
 from io import StringIO as _StringIO
 import sys as _sys
@@ -33,6 +34,9 @@ def cast(obj, to_class: _t.Type[_T]) -> _T:
     _ = to_class
     return obj
 
+
+def single_space(s: str) -> str:
+    return re.sub(r"\s{2,}", " ", str_or_blank(s))
 
 def str_or_blank(s: str) -> str:
     return s.strip() if s is not None else ''

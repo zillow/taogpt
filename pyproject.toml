@@ -17,7 +17,7 @@ langchain = ">=0.0.238"
 marko = ">=2.0.0"
 tiktoken = "^0.5.1"
 numpy = ">1.0.0"
-
+levenshtein = "*"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.14.0"

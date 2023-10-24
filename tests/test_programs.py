@@ -75,6 +75,6 @@ def test_final_direct_answer_with_nonstandard_heading():
 # {NEXT_I_WANT_TO_WORK_AT}
 None. I'm done.
 """
-    step: DirectAnswerStep = parse_to_step(None, text)
+    step: DirectAnswerStep = parse_to_step(None, text, config=Config())
     assert step.is_final_step
     assert step.description == '22'

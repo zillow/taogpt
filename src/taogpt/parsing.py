@@ -31,7 +31,7 @@ _true_false_answer_re = re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
                                    flags=re.MULTILINE|re.DOTALL|re.IGNORECASE)
 _whitespace_re = re.compile(r"\s+", flags=re.DOTALL)
 _ordered_list_re = re.compile(r'\n\s*(\d+)\.\s+(.*?)(?=\n\s*(\d+)|\n\n|\Z)', flags=re.DOTALL)
-
+strip_quotes_re = re.compile(r"^\s+|[\s\"\'.,]+$|[\"\']", flags=re.DOTALL)
 
 class ParseError(ValueError):
     pass
@@ -140,7 +140,7 @@ def parse_step_by_step_plan(text: str) -> _t.Dict[int, StepDescriptor]:
                              f"Key '{key}' should be '{index}'.")
         if 'description' not in item:
             raise ParseError(f'Missing description for step {key}')
-        results[index-1] = StepDescriptor(item['description'], item.get('why', None))
+        results[index] = StepDescriptor(item['description'], item.get('why', None))
     if len(results) < 2:
         raise ParseError("Should have at least 2 steps in the plan. If only one step, choose answering directly")
     return results
@@ -224,6 +224,7 @@ def parse_next_step_reply(text: str) -> (str, str|None):
     if NEXT_I_WANT_TO_WORK_AT not in sections:
         raise ParseError(f"No section header `# NEXT_I_WANT_TO_WORK_AT`")
     next_step_desc = sections.pop(NEXT_I_WANT_TO_WORK_AT).strip()
+    next_step_desc = _utils.single_space(strip_quotes_re.sub('', next_step_desc))
     if _utils.str_or_blank(next_step_desc) == '':
         raise ParseError('Missing next step description')
     if len(sections) == 0:
@@ -312,3 +313,10 @@ def gather_file_contents(sections: _t.Dict[str, str], pop_file_sections=False) \
         for section in file_sections:
             sections.pop(section)
     return results
+
+
+def match_step_name(actual: str, expected_step_num: int, expected_step_name: str) -> bool:
+    import Levenshtein
+    dist = max(Levenshtein.distance(actual, expected_step_name),
+               Levenshtein.distance(actual, f"{expected_step_num}: {expected_step_name}"))
+    return dist >= 0.95

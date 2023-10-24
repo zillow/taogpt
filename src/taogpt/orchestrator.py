@@ -204,7 +204,7 @@ class Orchestrator(Executor):
             -> [(str, str)]:
         conversation: [(str, str)] = []
         for i, step in enumerate(self._chain):
-            if _utils.safe_is_instance(step, ExpandableStep) and i < len(self._chain) - 1:
+            if not step.visible_in_chain and i < len(self._chain) - 1:
                 continue # skip the expandable step except the last one
             if selector is None or selector(i, step):
                 conversation.extend(step.show_in_thread(with_header=with_header, with_extras=with_extras))
