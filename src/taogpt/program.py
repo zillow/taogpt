@@ -428,6 +428,10 @@ class AskPythonGenieStep(TaoReplyStep):
     def eval_only(self, executor) -> Step | None:
         results = executor.ask_genie(self._code_snippets, self)
         result_markdown = '\n\n'.join(f"""```text\n{r}\n```""" for r in results)
+        logger = executor.logger
+        logger.new_message_section(ROLE_GENIE, self.step_id)
+        logger.log(result_markdown)
+        logger.close_message_section()
         return PythonGenieReplyStep(self, result_markdown, ROLE_GENIE)
 
 
