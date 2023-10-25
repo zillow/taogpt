@@ -1,8 +1,9 @@
-# ![Tao-LLM](assets/LLM_tao.24x24.png) TaoGPT: Template-guided Autoregressive Orchestrator for General Problem Tackling
+# TaoGPT: Template-guided Autoregressive Orchestrator for General Problem Tackling
 
 <div style="text-align: center">
 
 ### An AI Assistant which incidentally runs on ChatGPT 4
+![Tao-LLM](assets/LLM_tao.128x128.png)
 
 </div>
 <div style="text-align: center">
