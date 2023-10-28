@@ -1,29 +1,27 @@
-Tao, which step you want to work on next? You can choose one of the options below.
+Tao, which step you want to work on next? Choose one of the following strategies:
 
-1) Finish the task by summarizing the final answer. Use the `# FINAL_ANSWER` strategy.
-   Note: this is the final answer presented to the user. Therefore make sure to include **full and complete**
-   information requested by the user, except file contents, but leave out details created during the solving session that
-   the user do not need. If you use any files written during the problem solving above, to save spaces, you don't need
-   to repeat the file contents; instead you can refer to the files by path as `file:file_name_path`.
-2) Finish the task by giving up. Use the `# BACKTRACK_ON_ERROR` strategy.
-3) Choose the next step to work on. You can choose the next step and get start working on it using the following 
-   template. You're encouraged to choose from the steps planned earlier but you can also take a detour from the 
-   earlier plan.
-    
-    ```markdown
-    # NEXT_I_WANT_TO_WORK_AT
-    <step ID: description> or <DETOUR: step description>
-    
-    <strategy for the next step>
-    ```
-    
-    Follow **strictly** the Problem Solving Instructions and templates above for the details of the next step. Example:
-    
-    ```markdown
-    # NEXT_I_WANT_TO_WORK_AT
-    3: think_of_an_even_number
-    
-    ## I_WILL_ANSWER_DIRECTLY
-    42
-    ```
+## Strategy: Choose the next step to work on
 
+ ```markdown
+ # NEXT_I_WANT_TO_WORK_AT
+<next step ID: description> or "None. This is the final step."
+ ```
+
+## Strategy: Give up on errors
+
+If you see any errors or inconsistencies, response with the list of **specific** issues in valid JSON like this:
+
+ `````markdown
+ # BACKTRACK_ON_ERROR
+
+```json
+[
+  "<issue 1 with details>",
+  "<issue 2 with details>",
+  // ...
+]
+```
+`````
+
+Do NOT try to fix the errors since Orchestrator wouldn't understand. Instead it will let you try other alternatives
+later.

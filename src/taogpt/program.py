@@ -18,8 +18,8 @@ from taogpt.prompts import PromptDb
 _CONTINUE_VOTE_QUORUM = 0.51
 
 
-def add_files_to_prompts(executor, prompts, role=ROLE_TAO) -> _t.Dict[str, GeneratedFile]:
-    file_contents = ''
+def add_files_to_prompts(executor, prompts, role=ROLE_ORCHESTRATOR) -> _t.Dict[str, GeneratedFile]:
+    file_contents = 'Current files we have so far:\n\n'
     files = GeneratedFile.collect_files(executor.chain)
     for path, file in files.items():
         file_contents += f"### FILE: {path}\n\n{file.markdown_snippet}\n\n"
@@ -189,7 +189,6 @@ class DirectAnswerStep(TaoReplyStep):
         reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
         self.description = '\n\n'.join(reconstructed)
         self.description = re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=re.IGNORECASE)
-        self.description = re.sub(r"#+ FILE", "### FILE", self.description, flags=re.IGNORECASE).strip()
         Step.__post_init__(self)
 
     def eval_only(self, executor) -> Step | None:
@@ -814,9 +813,12 @@ class NextStep(ExpandableStep):
             prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_at_step.format(current_step=self.step_name)))
         next_step_prompt = prompt_db.orchestrator_next_step
         prompts.append((ROLE_ORCHESTRATOR, next_step_prompt))
-        collapse_contents['tao_template'] = system_prompt
+        collapse_contents['tao_template'] = tao_templates
         collapse_contents['next_step_prompt'] = next_step_prompt
         return system_prompt, prompts
+
+    def get_parse_error_instruction(self, prompt_db) -> str:
+        return prompt_db.orchestrator_parse_error
 
     def parse_reply(self, plan: str, executor: Executor) -> Step:
         prompt_db, config = executor.prompts, executor.config
@@ -830,13 +832,14 @@ class NextStep(ExpandableStep):
             else:
                 work_prompt = prompt_db.orchestrator_proceed_to_step.format(
                     prev_step=self.step_name, step=answer)
+                choices = [parse_to_step(self, plan, config=config, working_on=answer)] if plan is not None else []
                 proceed = ProceedStep(
                     self,
                     work_prompt,
                     role=ROLE_ORCHESTRATOR,
                     first_expansion=config.first_expansion,
                     max_expansion=config.max_search_expansion,
-                    choices=[parse_to_step(self, plan, config=config, working_on=answer)]
+                    choices=choices
                 )
             proceed.set_step_name(answer)
             return proceed
@@ -884,7 +887,7 @@ class UpdateFilesStep(ExpandableStep):
             -> _t.Tuple[str, _t.List[_t.Tuple[str, str]]]:
         system_prompt = executor.prompts.tao_intro
         prompts = executor.show_conversation_thread()
-        add_files_to_prompts(executor, prompts, role=ROLE_ORCHESTRATOR)
+        add_files_to_prompts(executor, prompts)
         update_file_prompt = executor.prompts.tao_template_update_files
         prompts.append((ROLE_ORCHESTRATOR, update_file_prompt))
         collapse_contents['update_files'] = update_file_prompt
@@ -902,10 +905,14 @@ class SummarizeStep(ExpandableStep):
     def _expansion_reason(self) -> str:
         return "summarize"
 
+    def get_parse_error_instruction(self, prompt_db) -> str:
+        return prompt_db.orchestrator_parse_error
+
     def build_prompts(self, executor: Executor, collapse_contents: {str: str}) \
             -> _t.Tuple[str, _t.List[_t.Tuple[str, str]]]:
         system_prompt = executor.prompts.tao_intro
         prompts = executor.show_conversation_thread()
+        add_files_to_prompts(executor, prompts)
         summarize_prompt = executor.prompts.orchestrator_summarize
         prompts.append((ROLE_ORCHESTRATOR, summarize_prompt))
         collapse_contents['summarize'] = summarize_prompt
@@ -919,6 +926,21 @@ class PresentTaskStep(Step):
     def step_title(self) -> str:
         return ""
 
+    def __post_init__(self):
+        sections: _t.Dict[str, str] = parse_sections(self.description)
+        extracted_contents = gather_file_contents(sections, pop_file_sections=True)
+        self._files: _t.Dict[str, taogpt.GeneratedFile] = {
+            file_path: taogpt.GeneratedFile(content_type, content, snippet, desc)
+            for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
+        }
+        reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
+        self.description = '\n\n'.join(reconstructed)
+        self.description = re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=re.IGNORECASE)
+        Step.__post_init__(self)
+
+    @property
+    def collected_files(self) -> _t.Dict[str, GeneratedFile]:
+        return self._files
 
 
 @_dc.dataclass(repr=False)

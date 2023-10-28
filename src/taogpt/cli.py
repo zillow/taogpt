@@ -1,10 +1,12 @@
 import argparse
 import dataclasses
 import os
+import pickle
 import sys
+import typing as _t
 
 from taogpt import Config
-from taogpt.runner import solve_problem
+from taogpt.runner import solve_problem, load_and_resume_problem
 from taogpt.utils import set_openai_credentials_from_json
 
 # The skeleton is created by the GPT-4
@@ -67,11 +69,15 @@ parser.add_argument('-C', '--openai-credential-json', type=str, default=None,
                          'corresponding to "OPENAI_API_KEY" and "OPENAI_API_BASE" respectively')
 parser.add_argument('-D', '--debug', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Enable debugging')
+parser.add_argument('-L', '--load-chain', type=bool, default=False,
+                    action=argparse.BooleanOptionalAction, help='The task is the pickle file containing the state of '
+                                                                'a previous problem solving session.')
 
 # last positional argument as the string of task
 parser.add_argument('user_task', type=str, nargs='?', default=None,
                     help='User task in markdown text. '
-                         'If the string starts with "@", it is the path to a text file to be read.')
+                         'If the string starts with "@", it is either the path to a text file to be read or a pickle '
+                         'file containing the state of the problem solving session.')
 
 def main() -> int:
     args = parser.parse_args()
@@ -91,9 +97,19 @@ def main() -> int:
     if user_task is None or user_task.strip() == '':
         print("WARN: no user task problem is given", file=sys.stderr)
         return 0
+    load_previous = args.load_chain
+    previous_states: _t.Optional[_t.Dict[str, _t.Any]] = None
     if user_task.startswith('@'):
-        with open(user_task[1:], 'r') as f:
-            user_task = '\n'.join(f.readlines())
+        if user_task.endswith('.pkl'):
+            load_previous = True
+        if load_previous:
+            with open(user_task[1:], 'rb') as f:
+                previous_states = pickle.load(f)
+        else:
+            with open(user_task[1:], 'r') as f:
+                user_task = f.read()
+    elif load_previous:
+        raise ValueError("--load-chain option is specified but the task argument is not a file")
 
     if args.openai_credential_json is not None:
         set_openai_credentials_from_json(args.openai_credential_json)
@@ -102,8 +118,12 @@ def main() -> int:
         raise PermissionError("Must set OPENAI_API_KEY environment variable.")
 
     os.makedirs(log_path, exist_ok=True)
-    solve_problem(user_task, log_path, config, llm, long_llm, long_sage_llm, sage_llm, long_context_token_threshold,
-                  input, log_to_stdout, debug)
+    if previous_states is None:
+        solve_problem(user_task, log_path, config, llm, long_llm, long_sage_llm, sage_llm, long_context_token_threshold,
+                      input, log_to_stdout, debug)
+    else:
+        load_and_resume_problem(previous_states, log_path, config, llm, long_llm, long_sage_llm, sage_llm,
+                                long_context_token_threshold, input, log_to_stdout, debug)
     return 0
 
 

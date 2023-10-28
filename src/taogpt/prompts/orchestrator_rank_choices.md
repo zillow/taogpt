@@ -11,14 +11,15 @@ the proposed approaches in the range of [0.0, 10.0], the higher the score the mo
 Scoring criteria: 
 * If the original task problem contains error and not solvable or we are at a dead-end or infinite loop trying to 
   solve the original, then all approaches except `BACKTRACK_ON_ERROR` get 0 scores.
-* Direct answers that are incorrect should get a score of 0.
+* Direct answers are acceptable unless the answer is incorrect in which case it should get a score of 0.
 * The approaches which lead to incorrect results should get a score of 0.
 * The assumption implied/used should be correct.
 * The questions asked by Tao should be relevant and not trivial.
-* Among `HERE_IS_MY_STEP_BY_STEP_PLAN` strategies, choose simple, generic, and high-level over detailed, specific, 
-  and low-level ones. Because it is impossible to backtrack and try different values in detailed plans in case of 
-  errors. Likewise, choose linear, decomposable steps over looping. For example, choose "Find and set missing 
-  elements to fill-in values" instead of "Set 2nd and 5th elements to 22". Tao is good at handling details himself.
+* Among `HERE_IS_MY_STEP_BY_STEP_PLAN` strategies, simple, generic, and high-level ones get higher scores. 
+  Overly detailed, specific, and low-level ones get lower scores. Because it is impossible to backtrack and try 
+  different values in detailed plans in case of errors. Likewise, choose linear, decomposable steps over looping. 
+  For example, rate "Find and set missing elements to fill-in values" higher than "Set 2nd and 5th elements to 22". 
+  Tao is good at handling details himself.
 * Try to avoid identical scores (except 0's;) you can use decimal points (e.g. 9.5) to distinguish two different 
   approaches.
 * Among similar approaches, mark others as duplicates of the best one; note: an approach can only duplicate another 

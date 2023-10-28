@@ -227,12 +227,7 @@ def parse_next_step_reply(text: str) -> (str, str|None):
     next_step_desc = _utils.single_space(strip_quotes_re.sub('', next_step_desc))
     if _utils.str_or_blank(next_step_desc) == '':
         raise ParseError('Missing next step description')
-    if len(sections) == 0:
-        raise ParseError("Missing a strategy section for the next step")
-    if len(sections) > 1:
-        raise ParseError("More than one strategy sections")
-    strategy, details = next(iter(sections.items()))
-    return NEXT_I_WANT_TO_WORK_AT, (next_step_desc, f"# {strategy}\n{details}")
+    return NEXT_I_WANT_TO_WORK_AT, (next_step_desc, None)
 
 
 def is_final_answer(next_step) -> bool:
@@ -289,7 +284,7 @@ def extract_fenced_content(text) -> _t.Tuple[_t.Optional[str], _t.Optional[str],
     return None, None, None
 
 
-file_section_re = re.compile(r"FILE:?\s*(.+)")
+file_section_re = re.compile(r"FILE[\s:]+[\s\"\'`]*([^\s\"\'`]+)[\s\"\'`]*")
 
 
 def gather_file_contents(sections: _t.Dict[str, str], pop_file_sections=False) \
@@ -317,6 +312,6 @@ def gather_file_contents(sections: _t.Dict[str, str], pop_file_sections=False) \
 
 def match_step_name(actual: str, expected_step_num: int, expected_step_name: str) -> bool:
     import Levenshtein
-    dist = max(Levenshtein.distance(actual, expected_step_name),
+    dist = min(Levenshtein.distance(actual, expected_step_name),
                Levenshtein.distance(actual, f"{expected_step_num}: {expected_step_name}"))
-    return dist >= 0.95
+    return dist < (0.95 * len(actual))

@@ -25,6 +25,30 @@ def solve_problem(user_task: str, log_path: str, config: Config,
         executor.start(user_task)
     except Pause as e:
         pause = e
+    _continue_solving(executor, log_path, console_out, pause)
+
+
+def load_and_resume_problem(states: _t.Dict[str, _t.Any], log_path: str, config: Config,
+                  llm: str, long_llm: str, long_sage_llm: str, sage_llm: str,
+                  long_context_token_threshold: int,
+                  user_input_fn: _t.Callable[[str], str], console_out: _t.Optional[_TextIO],
+                  debug=False):
+    executor = create_orchestrator(config, log_path, llm, long_llm, sage_llm, long_sage_llm,
+                                   long_context_token_threshold, console_out, debug=debug)
+    executor.set_input_fn(user_input_fn)
+    executor._chain = states['chain']
+    for step in executor.chain:
+        print(step)
+    pause: _t.Optional[Pause] = None
+    log_final_chain(executor, log_path, console_out=console_out)
+    try:
+        executor.resume(0, unblock_initial_expansion=True)
+    except Pause as e:
+        pause = e
+    _continue_solving(executor, log_path, console_out, pause)
+
+
+def _continue_solving(executor, log_path, console_out, pause):
     while pause is not None:
         log_final_chain(executor, log_path, console_out=console_out)
         resume: _t.Optional[str] = None
@@ -56,8 +80,9 @@ def log_final_chain(executor, log_path,
                           sage_llm=executor.sage_llm.model_id if executor.sage_llm is not None else None,
                           chain=executor.chain), f)
     for path, file in GeneratedFile.collect_files(executor.chain).items():
+        path = re.sub(r"[\"\'`]", "", path)
         full_path = _p.Path(log_path) / path
-        full_path.parent.mkdir(exist_ok=True)
+        full_path.parent.mkdir(parents=True, exist_ok=True)
         with open(full_path, 'w') as f:
             f.write(file.content)
 

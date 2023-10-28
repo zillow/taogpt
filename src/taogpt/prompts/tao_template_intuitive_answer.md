@@ -1,18 +1,24 @@
 ## Strategy: Direct Answer
 
 Only if task problem is simple and you know the correct answer to the whole problem, you 
-can answer it directly. If you need to write out any file contents, write out the content in markdown fenced code 
-block under its own file section.
+can answer it directly.
 
-Important Note: if this is the **final** step, then put "None. This is the final step." in the
-`NEXT_I_WANT_TO_WORK_AT` section.
+Important Note: as we are giving direct answer to the whole task problem, this is the final 
+step, then put "None. This is the final step." in the `NEXT_I_WANT_TO_WORK_AT` section.
 
 Follow this template:
 
-```markdown
+`````markdown
 # I_WILL_ANSWER_DIRECTLY
 <answer and explanation>
 
 ### FILE: <file_path_name>
-<file content in markdown fenced code block>
+<brief description of this file>
+
+```text
+<file content in markdown fenced code block as required by the task>
 ```
+
+### NEXT_I_WANT_TO_WORK_AT:
+None. This is the final step.
+`````
