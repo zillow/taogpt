@@ -43,24 +43,6 @@ class Step(StepABC):
     def step_title(self) -> str:
         return ''
 
-    def set_step_name(self, name: str|None, forced=False):
-        name = _utils.str_or_blank(name)
-        if name == '' or self._step_name == name:
-            return
-        if self._step_name is None or forced:
-            self._step_name = name
-            self._prepend_step_name_header(name)
-        else:
-            raise RuntimeError(f"step name has already been set to {self._step_name}")
-
-    def _prepend_step_name_header(self, name):
-        if not self.description.strip().startswith("[at step"):
-            self.description = f"[at step: {name}]\n\n{self.description}"
-
-    @property
-    def step_name(self) -> str|None:
-        return self._step_name
-
     def __repr__(self) -> str:
         prev = self.previous.step_id if self.previous is not None else None
         return f"{self.__class__.__name__}(step_id={self.step_id},prev={prev};{self.__repr_local__()})"
@@ -194,12 +176,11 @@ class DirectAnswerStep(TaoReplyStep):
     def eval_only(self, executor) -> Step | None:
         if not _utils.is_blank(self.next_step) and not self.is_final_step:
             prompt_db: PromptDb  = executor.prompts
-            prev_step = self.step_name or "start or unknown"
             if UPDATE_FILES.lower() in self.next_step.lower():
                 next_step = UpdateFilesStep(self, "", ROLE_ORCHESTRATOR,
                                             first_expansion=1, incremental_expansion=1, max_expansion=1)
             else:
-                work_prompt = prompt_db.orchestrator_proceed_to_step.format(prev_step=prev_step, step=self.next_step)
+                work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.next_step)
                 next_step = ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
             next_step.set_step_name(self.next_step)
             return next_step
@@ -291,11 +272,7 @@ class StepByStepPlan(TaoReplyStep):
     def eval_only(self, executor) -> Step | None:
         # when evaluating this node, we are always at the first step
         prompt_db: PromptDb  = executor.prompts
-        prev_step = executor.current_step_name
-        if prev_step != '':
-            work_prompt = prompt_db.orchestrator_proceed_to_step.format(prev_step=prev_step, step=self.first_step)
-        else:
-            work_prompt = ''
+        work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.first_step)
         # note: we insert the update file step at the end, this cannot be update file step.
         next = ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
         next.set_step_name(self.first_step)
@@ -455,6 +432,9 @@ class AskQuestionStep(TaoReplyStep):
     def need_consolidate_multiple_questions(self, true_or_false: bool):
         self._need_consolidate = true_or_false
 
+    def _prepend_step_name_header(self, name):
+        pass # do not append at step for asking question
+
     def eval_only(self, executor) -> Step | None:
         if self._need_consolidate:
             prompts: _t.List[(str, str)] = executor.show_conversation_thread()[:-1]
@@ -469,10 +449,14 @@ class AskQuestionStep(TaoReplyStep):
                 new_text += q_lines + '\n'
                 new_text += a.strip() + '\n\n'
             self.description = new_text
-            self.set_step_name(self.step_name, forced=True) # reset the "[at step: ...]" header
+            self._prepend_step_name_header(self.step_name)
             self.role = ROLE_USER
             self._questions = questions
-            return None
+            work_prompt = executor.prompts.orchestrator_proceed_to_step.format(step=self.step_name)
+            next_step = ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
+            next_step.set_step_name(self.step_name)
+            next_step.first_problem_solving_step = executor.is_first_solving_expansion()
+            return next_step
 
     def consolidate_questions(self, executor: taogpt.Executor,
                               conversation_chain: _t.List[(str, str)]) -> str:
@@ -525,7 +509,6 @@ class ExpandableStep(Step):
     first_expansion: int = 1
     incremental_expansion: int = 1
     max_expansion: int = 4
-    first_problem_solving_step: bool = False
 
     @property
     def step_title(self) -> str:
@@ -560,7 +543,7 @@ class ExpandableStep(Step):
             base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_error_noted))
         if self.choices is None:
             self.choices = []
-        llm = executor.sage_llm if self.first_problem_solving_step \
+        llm = executor.sage_llm if executor.is_first_solving_expansion() \
                                    and executor.config.use_sage_llm_for_initial_expansion else executor.llm
         while self.n_expanded < upto_branches:
             prompts = base_prompts.copy()
@@ -584,6 +567,8 @@ class ExpandableStep(Step):
                         log_request=(len(self.choices) == 0 and n_retries == 0),
                         collapse_contents=collapse_contents)
                     choice = self.parse_reply(plan, executor)
+                    if executor.is_first_solving_expansion() and _utils.safe_is_instance(choice, DirectAnswerStep):
+                        _utils.cast(choice, DirectAnswerStep).is_final_step = True
                     self.choices.append(choice)
                     self.n_expanded += 1
                     break
@@ -603,7 +588,7 @@ class ExpandableStep(Step):
             -> _t.Tuple[str, _t.List[_t.Tuple[str, str]]]:
         prompt_db = executor.prompts
         system_prompt = prompt_db.tao_intro
-        direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
+        direct_answer = prompt_db.tao_template_intuitive_answer if executor.is_first_solving_expansion() \
             else prompt_db.tao_template_direct_step_answer
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
         base_prompts: _t.List[(str, str)] = executor.show_conversation_thread()
@@ -629,7 +614,7 @@ class ExpandableStep(Step):
                 return # nothing left to rank, skip ranking
         prompt_db: PromptDb  = executor.prompts
         system_prompt = prompt_db.sage_intro
-        direct_answer = prompt_db.tao_template_intuitive_answer if self.first_problem_solving_step \
+        direct_answer = prompt_db.tao_template_intuitive_answer if executor.is_first_solving_expansion() \
             else prompt_db.tao_template_direct_step_answer
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
 
@@ -764,7 +749,7 @@ Looks like the final answer was rejected by Sage. Do you want to backtrack and t
             if self.n_expanded - old_length > 1:
                 logger.log_debug(f"{self.step_id}/'{self.step_name}' ranking choices from {old_length}")
                 self.rank_choices(executor, n_existing_choices=old_length)
-            if self.first_problem_solving_step and executor.config.pause_after_initial_solving_expansion:
+            if executor.is_first_solving_expansion() and executor.config.pause_after_initial_solving_expansion:
                 raise Pause("Pause after initial solving expansion", self)
         if self.choices is None or len(self.choices) == 0:
             raise Backtrack('No viable options.', blame=self)
@@ -830,8 +815,7 @@ class NextStep(ExpandableStep):
                 proceed = UpdateFilesStep(self, "", ROLE_ORCHESTRATOR,
                                           first_expansion=1, incremental_expansion=1, max_expansion=1)
             else:
-                work_prompt = prompt_db.orchestrator_proceed_to_step.format(
-                    prev_step=self.step_name, step=answer)
+                work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=answer)
                 choices = [parse_to_step(self, plan, config=config, working_on=answer)] if plan is not None else []
                 proceed = ProceedStep(
                     self,

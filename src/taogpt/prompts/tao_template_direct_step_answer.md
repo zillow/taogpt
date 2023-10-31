@@ -1,7 +1,7 @@
 ## Strategy: Direct Answer
 
-Go with this strategy if the step is simple and you know the correct answer. You should also tell the Orchestrator 
-which step you want to work at next in the `### NEXT_I_WANT_TO_WORK_AT` section.
+Go with this strategy if you know the correct answer. You should also tell the Orchestrator which step you want to 
+work at next in the `### NEXT_I_WANT_TO_WORK_AT` section.
 
 Important Note: if this is the **final** step, then put "None. This is the final step." in the
 `### NEXT_I_WANT_TO_WORK_AT` section.

@@ -104,13 +104,12 @@ class LangChainLLM(LLM):
         if temperature is not None:
             self.llm.temperature = temperature
         messages: [ChatMessage] = []
-        context_len = 0
         context_tokens = 0
 
         if system_prompt is not None and len(system_prompt) > 0:
-            context_len += len(system_prompt)
-            context_tokens += self.count_tokens(system_prompt)
-            self._logger.new_message_section(ROLE_SYSTEM, -1)
+            tokens = self.count_tokens(system_prompt)
+            context_tokens += tokens
+            self._logger.new_message_section(ROLE_SYSTEM, -1, tokens=tokens)
             content_to_be_logged = self.deduplicate_for_logging(system_prompt, ROLE_SYSTEM)
             self._logger.log(content_to_be_logged, demote_h1=True, role=ROLE_SYSTEM)
             self._logger.close_message_section()
@@ -120,14 +119,14 @@ class LangChainLLM(LLM):
             if message == '':
                 continue
             effective_role = LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[role]
-            self._logger.new_message_section(role, i)
-            if len(message) > 500:
+            tokens = self.count_tokens(message)
+            context_tokens += tokens
+            self._logger.new_message_section(role, i, tokens=tokens)
+            if tokens > 500:
                 deduped_msg = self.deduplicate_for_logging(message, role=role)
                 self._logger.log(deduped_msg, demote_h1=True, role=role)
             else:
                 self._logger.log(message, demote_h1=True, role=role)
-            context_tokens += self.count_tokens(message)
-            context_len += len(message)
             self._logger.close_message_section()
             chat_message = ChatMessage(role=effective_role, content=message)
             messages.append(chat_message)
@@ -149,16 +148,13 @@ class LangChainLLM(LLM):
                 is_json = 'JSON '
             except json.JSONDecodeError:
                 pass
-            reply_len = len(reply.content)
-            total_len = context_len + reply_len
             reply_tokens = self.count_tokens(reply.content)
             token_count = context_tokens + reply_tokens
-            self._logger.log(f"{is_json}Reply: temperature={temperature}, "
-                             f"eff. reply tokens: {reply_tokens * token_factor}\n")
+            self._logger.log(f"{is_json}Reply: temperature={temperature}n")
             self._logger.log(reply_content_logged, demote_h1=True)
 
             eff_tokens = f" (eff. tokens: {token_count * token_factor})" if token_factor != 1.0 else ''
-            self._logger.log(f"**Text lengths**: context={context_len} + reply:{reply_len}={total_len}"
+            self._logger.log(f"{context_tokens} context tokens, {reply_tokens} reply tokens. "
                              f" **Total tokens**: {token_count}{eff_tokens}\n", role='debug')
             self._total_tokens += token_count
             return reply.content

@@ -165,7 +165,7 @@ Do stuff
     decision, (answer, decision_details) = parsing.parse_next_step_reply(text)
     assert decision == NEXT_I_WANT_TO_WORK_AT
     assert answer == 'Do stuff'
-    assert decision_details == next_plan.strip()
+    assert decision_details is None
 
 
 def test_parse_next_step_reply_example():
@@ -196,8 +196,7 @@ Evaluate possible addition combinations.
     decision, (answer, decision_details) = parsing.parse_next_step_reply(text)
     assert decision == NEXT_I_WANT_TO_WORK_AT
     assert answer == 'Evaluate possible addition combinations'
-    assert WILL_ASK_GENIE in decision_details
-    assert decision_details == f"# {WILL_ASK_GENIE}\n{details}"
+    assert decision_details is None
 
 
 def test_parse_python_code_snippets():

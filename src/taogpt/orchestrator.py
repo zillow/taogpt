@@ -176,6 +176,7 @@ class Orchestrator(Executor):
         while len(self.chain) > 0:
             if self.pending_pause is not None:
                 reason = self.pending_pause
+                self.request_pause(None)
                 raise Pause(reason, self.chain[-1])
             self.check_token_usages()
             last_step = self._chain[-1]
@@ -219,8 +220,7 @@ class Orchestrator(Executor):
             first_expansion = self.config.initial_expansion if start_solving else self.config.first_expansion
             work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
                                          first_expansion=first_expansion,
-                                         max_expansion=self.config.max_search_expansion,
-                                         first_problem_solving_step=start_solving)
+                                         max_expansion=self.config.max_search_expansion)
             work_next_step.set_step_name("start working on the problem")
             self._chain.append(work_next_step)
         else:

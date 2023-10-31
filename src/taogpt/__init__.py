@@ -7,6 +7,7 @@ from threading import local
 
 from taogpt.prompts import PromptDb
 from taogpt.logging import MarkdownLogger
+from taogpt import utils as _utils
 
 
 class LLM:
@@ -145,6 +146,10 @@ class Executor(_abc.ABC):
     def record_criticisms(self, criticisms: [str]):
         pass
 
+    @_abc.abstractmethod
+    def is_first_solving_expansion(self) -> bool:
+        pass
+
     def ask_questions(self, questions: [str]) -> {str: str}:
         raise NotImplementedError('No user agent feature in the base')
 
@@ -169,7 +174,7 @@ class Executor(_abc.ABC):
     def pending_pause(self) -> _t.Optional[str]:
         return self._pending_pause
 
-    def request_pause(self, reason: str):
+    def request_pause(self, reason: _t.Optional[str]):
         self._pending_pause = reason
 
 @_dc.dataclass(repr=False)
@@ -179,12 +184,31 @@ class StepABC(_abc.ABC):
     role: str
 
     def __post_init__(self):
+        self._step_name = None
         self._visible = True
 
     @property
     @_abc.abstractmethod
     def step_id(self) -> int:
         pass
+
+    @property
+    def step_name(self) -> str|None:
+        return self._step_name
+
+    def set_step_name(self, name: str|None, forced=False):
+        name = _utils.str_or_blank(name)
+        if name == '' or self._step_name == name:
+            return
+        if self._step_name is None or forced:
+            self._step_name = name
+            self._prepend_step_name_header(name)
+        else:
+            raise RuntimeError(f"step name has already been set to {self._step_name}")
+
+    def _prepend_step_name_header(self, name):
+        if not self.description.strip().startswith("[at step"):
+            self.description = f"[at step: {name}]\n\n{self.description}"
 
     @property
     def visible_in_chain(self) -> bool:

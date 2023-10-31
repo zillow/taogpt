@@ -100,12 +100,13 @@ class MarkdownLogger:
         finally:
             self._console_out = orig_log_to_stdout
 
-    def new_message_section(self, role, step_index):
+    def new_message_section(self, role, step_index, tokens: int=None):
+        tokens = f"(tokens: {tokens})" if tokens is not None else ""
         color = role_color_map.get(role, 'white')
         if role == 'debug':
             color = 'aliceblue'
         self._log.write(f'<div style="background-color:{color}; padding: 5px; border-bottom: 1px dotted grey">\n'
-                 f'<div>[{step_index}] <b>{role}</b>:</div>\n\n')
+                 f'<div>[{step_index}] <b>{role}</b>: {tokens}</div>\n\n')
         if self._console_out is not None:
             print(f"--- [{step_index:03d}] {role.strip()} ---", file=self._console_out)
 
