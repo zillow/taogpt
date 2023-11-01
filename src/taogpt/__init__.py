@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc as _abc
 import dataclasses as _dc
 import typing as _t
+import re as _re
 from threading import local
 
 from taogpt.prompts import PromptDb
@@ -177,13 +178,12 @@ class Executor(_abc.ABC):
     def request_pause(self, reason: _t.Optional[str]):
         self._pending_pause = reason
 
-@_dc.dataclass(repr=False)
 class StepABC(_abc.ABC):
-    previous: _t.Optional[StepABC]
-    description: str
-    role: str
 
-    def __post_init__(self):
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str):
+        self.previous = previous
+        self.description = description
+        self.role = role
         self._step_name = None
         self._visible = True
 
@@ -207,8 +207,8 @@ class StepABC(_abc.ABC):
             raise RuntimeError(f"step name has already been set to {self._step_name}")
 
     def _prepend_step_name_header(self, name):
-        if not self.description.strip().startswith("[at step"):
-            self.description = f"[at step: {name}]\n\n{self.description}"
+        self.description = _re.sub(r"\[at step:[^]]+]\s*", "", self.description)
+        self.description = f"[at step: {name}]\n\n{self.description}"
 
     @property
     def visible_in_chain(self) -> bool:

@@ -1,5 +1,4 @@
 from __future__ import annotations
-import dataclasses as _dc
 import time
 import typing as _t
 from _collections import defaultdict
@@ -28,16 +27,11 @@ def add_files_to_prompts(executor, prompts, role=ROLE_ORCHESTRATOR) -> _t.Dict[s
     return files
 
 
-@_dc.dataclass(repr=False)
 class Step(StepABC):
     @classmethod
     def create(cls, prev_step: StepABC, step_def: str, role: str, config: Config) -> _t.Self:
         _ = Config
-        return cls(prev_step, description=step_def, role=role)
-
-    def __post_init__(self):
-        super().__post_init__()
-        self._step_name: str|None = None
+        return cls(previous=prev_step, description=step_def, role=role)
 
     @property
     def step_title(self) -> str:
@@ -89,7 +83,6 @@ class Step(StepABC):
         return None
 
 
-@_dc.dataclass(repr=False)
 class PythonGenieReplyStep(Step):
 
     @property
@@ -97,16 +90,15 @@ class PythonGenieReplyStep(Step):
         return 'The Python Genie Replies'
 
 
-@_dc.dataclass(repr=False)
 class AnalysisStep(Step):
+
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str):
+        super().__init__(previous=previous, description=description, role=role)
+        self._analyzed = False
 
     @property
     def step_title(self) -> str:
         return 'Problem Analysis'
-
-    def __post_init__(self):
-        super().__post_init__()
-        self._analyzed = False
 
     def eval_only(self, executor) -> Step | None:
         if self._analyzed:
@@ -136,28 +128,26 @@ class AnalysisStep(Step):
                     raise e
 
 
-@_dc.dataclass(repr=False)
 class TaoReplyStep(Step):
 
-    def __post_init__(self):
-        super().__post_init__()
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str):
+        super().__init__(previous=previous, description=description, role=role)
         sections = parse_sections(self.description)
         self.description = sections[FREE_TEXT]
 
 
-@_dc.dataclass(repr=False)
 class DirectAnswerStep(TaoReplyStep):
     TYPE_SPEC = WILL_ANSWER_DIRECTLY
-
-    is_final_step: bool = False
 
     @property
     def step_title(self) -> str:
         return DirectAnswerStep.TYPE_SPEC
 
-    def __post_init__(self):
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str, is_final_step=False):
+        super().__init__(previous=previous, description=description, role=role)
+        self.is_final_step = is_final_step
         self.description = re.sub(rf"#+\s+{NEXT_I_WANT_TO_WORK_AT}", f"### {NEXT_I_WANT_TO_WORK_AT}:",
-                                  self.description, 1)
+                                  description, 1)
         sections: _t.Dict[str, str] = parse_sections(self.description)
         extracted_contents = gather_file_contents(sections, pop_file_sections=True)
         self._files: _t.Dict[str, taogpt.GeneratedFile] = {
@@ -171,17 +161,16 @@ class DirectAnswerStep(TaoReplyStep):
         reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
         self.description = '\n\n'.join(reconstructed)
         self.description = re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=re.IGNORECASE)
-        Step.__post_init__(self)
 
     def eval_only(self, executor) -> Step | None:
         if not _utils.is_blank(self.next_step) and not self.is_final_step:
             prompt_db: PromptDb  = executor.prompts
             if UPDATE_FILES.lower() in self.next_step.lower():
-                next_step = UpdateFilesStep(self, "", ROLE_ORCHESTRATOR,
+                next_step = UpdateFilesStep(previous=self, description="", role=ROLE_ORCHESTRATOR,
                                             first_expansion=1, incremental_expansion=1, max_expansion=1)
             else:
                 work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.next_step)
-                next_step = ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
+                next_step = ProceedStep(previous=self, description=work_prompt, role=ROLE_ORCHESTRATOR)
             next_step.set_step_name(self.next_step)
             return next_step
         return None
@@ -198,7 +187,6 @@ class DirectAnswerStep(TaoReplyStep):
         return file_contents
 
 
-@_dc.dataclass(repr=False)
 class GiveUpStep(TaoReplyStep):
     TYPE_SPEC = UNSOLVABLE
 
@@ -206,8 +194,8 @@ class GiveUpStep(TaoReplyStep):
     def step_title(self) -> str:
         return GiveUpStep.TYPE_SPEC
 
-    def __post_init__(self):
-        super().__post_init__()
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str):
+        super().__init__(previous=previous, description=description, role=role)
         if len(self.description) == 0:
             raise ParseError("Must provide explanation why you gave up.")
         self.issues = [issue.replace('\n', '').strip() for issue in parse_json_list(self.description)]
@@ -218,15 +206,13 @@ class GiveUpStep(TaoReplyStep):
         raise Backtrack(f"Problem or step is unsolvable. I gave up.", self)
 
 
-@_dc.dataclass(repr=False)
 class StepByStepPlan(TaoReplyStep):
     TYPE_SPEC = HERE_IS_MY_STEP_BY_STEP_PLAN
 
-    add_file_update_step: bool = False
-
     @classmethod
     def create(cls, prev_step: StepABC, step_def: str, role: str, config: Config) -> _t.Self:
-        return cls(prev_step, step_def, role, add_file_update_step=config.file_generation_support)
+        return cls(previous=prev_step, description=step_def, role=role,
+                   add_file_update_step=config.file_generation_support)
 
     @property
     def step_title(self) -> str:
@@ -236,8 +222,10 @@ class StepByStepPlan(TaoReplyStep):
         desc = ';'.join([_utils.safe_subn(step.description, 10) for step in self._steps.values()])
         return f"[{desc}]"
 
-    def __post_init__(self):
-        super().__post_init__()
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str,
+                 add_file_update_step=False):
+        super().__init__(previous=previous, description=description, role=role)
+        self.add_file_update_step = add_file_update_step
         self._steps = parse_step_by_step_plan(self.description)
         self._update_file_step: _t.Optional[StepDescriptor] = None
         if self.add_file_update_step:
@@ -274,17 +262,16 @@ class StepByStepPlan(TaoReplyStep):
         prompt_db: PromptDb  = executor.prompts
         work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.first_step)
         # note: we insert the update file step at the end, this cannot be update file step.
-        next = ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
+        next = ProceedStep(previous=self, description=work_prompt, role=ROLE_ORCHESTRATOR)
         next.set_step_name(self.first_step)
         return next
 
 
-@_dc.dataclass(repr=False)
 class FinalAnswerStep(TaoReplyStep):
     TYPE_SPEC = FINAL_ANSWER
 
-    def __post_init__(self):
-        super().__post_init__()
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str):
+        super().__init__(previous=previous, description=description, role=role)
         self.set_visible_in_chain(False)
 
     @property
@@ -383,7 +370,6 @@ class FinalAnswerStep(TaoReplyStep):
         return first_step_being_blamed
 
 
-@_dc.dataclass(repr=False)
 class AskPythonGenieStep(TaoReplyStep):
 
     TYPE_SPEC = WILL_ASK_GENIE
@@ -392,8 +378,8 @@ class AskPythonGenieStep(TaoReplyStep):
     def step_title(self) -> str:
         return AskPythonGenieStep.TYPE_SPEC
 
-    def __post_init__(self):
-        super().__post_init__()
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str):
+        super().__init__(previous=previous, description=description, role=role)
         self._code_snippets = parse_python_snippets(self.description)
         if len(self._code_snippets) == 0:
             raise ParseError("No python code snippet inside markdown fenced block.")
@@ -408,10 +394,9 @@ class AskPythonGenieStep(TaoReplyStep):
         logger.new_message_section(ROLE_GENIE, self.step_id)
         logger.log(result_markdown)
         logger.close_message_section()
-        return PythonGenieReplyStep(self, result_markdown, ROLE_GENIE)
+        return PythonGenieReplyStep(previous=self, description=result_markdown, role=ROLE_GENIE)
 
 
-@_dc.dataclass(repr=False)
 class AskQuestionStep(TaoReplyStep):
 
     TYPE_SPEC = WILL_ASK_QUESTIONS
@@ -420,8 +405,8 @@ class AskQuestionStep(TaoReplyStep):
     def step_title(self) -> str:
         return AskQuestionStep.TYPE_SPEC if self._questions is None else 'Tao asked and user replied:'
 
-    def __post_init__(self):
-        super().__post_init__()
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str):
+        super().__init__(previous=previous, description=description, role=role)
         self._questions: [str] = None
         self._need_consolidate = False
 
@@ -453,7 +438,7 @@ class AskQuestionStep(TaoReplyStep):
             self.role = ROLE_USER
             self._questions = questions
             work_prompt = executor.prompts.orchestrator_proceed_to_step.format(step=self.step_name)
-            next_step = ProceedStep(self, work_prompt, ROLE_ORCHESTRATOR)
+            next_step = ProceedStep(previous=self, description=work_prompt, role=ROLE_ORCHESTRATOR)
             next_step.set_step_name(self.step_name)
             next_step.first_problem_solving_step = executor.is_first_solving_expansion()
             return next_step
@@ -503,12 +488,25 @@ def parse_to_step(prev_step: Step, response: str, config: Config, working_on: st
     return step
 
 
-@_dc.dataclass(repr=False)
 class ExpandableStep(Step):
-    choices: _t.List[Step] | None = None
-    first_expansion: int = 1
-    incremental_expansion: int = 1
-    max_expansion: int = 4
+
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str,
+                 choices: _t.List[Step]=None,
+                 first_expansion: int=1,
+                 incremental_expansion: int=1,
+                 max_expansion: int=4):
+        super().__init__(previous=previous, description=description, role=role)
+        self.choices = choices
+        self.first_expansion = first_expansion
+        self.incremental_expansion = incremental_expansion
+        self.max_expansion = max_expansion
+        self.set_visible_in_chain(False)
+        self._ptr = 0
+        self.n_expanded = 0
+        self._new_criticisms: {int: {str}} = dict()
+        if self.choices is not None:
+            for next_step in self.choices:
+                next_step.previous = self
 
     @property
     def step_title(self) -> str:
@@ -517,16 +515,6 @@ class ExpandableStep(Step):
     def __repr_local__(self) -> str:
         desc = ','.join([step.__class__.__name__ for step in self.choices] if self.choices is not None else [])
         return f"[{desc}],ptr={self._ptr}"
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.set_visible_in_chain(False)
-        self._ptr = 0
-        self.n_expanded = 0
-        self._new_criticisms: {int: {str}} = dict()
-        if self.choices is not None:
-            for next_step in self.choices:
-                next_step.previous = self
 
     @property
     def _expansion_reason(self) -> str:
@@ -760,7 +748,6 @@ Looks like the final answer was rejected by Sage. Do you want to backtrack and t
             raise Backtrack('No more options', blame=self)
 
 
-@_dc.dataclass(repr=False)
 class ProceedStep(ExpandableStep):
 
     @property
@@ -772,7 +759,6 @@ class ProceedStep(ExpandableStep):
         return "proceed_to_next"
 
 
-@_dc.dataclass(repr=False)
 class NextStep(ExpandableStep):
 
     @property
@@ -812,14 +798,14 @@ class NextStep(ExpandableStep):
         assert answer is not None
         if decision == NEXT_I_WANT_TO_WORK_AT:
             if UPDATE_FILES.lower() in answer.lower():
-                proceed = UpdateFilesStep(self, "", ROLE_ORCHESTRATOR,
+                proceed = UpdateFilesStep(previous=self, description="", role=ROLE_ORCHESTRATOR,
                                           first_expansion=1, incremental_expansion=1, max_expansion=1)
             else:
                 work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=answer)
                 choices = [parse_to_step(self, plan, config=config, working_on=answer)] if plan is not None else []
                 proceed = ProceedStep(
-                    self,
-                    work_prompt,
+                    previous=self,
+                    description=work_prompt,
                     role=ROLE_ORCHESTRATOR,
                     first_expansion=config.first_expansion,
                     max_expansion=config.max_search_expansion,
@@ -831,7 +817,6 @@ class NextStep(ExpandableStep):
             return parse_to_step(self, answer, config=config, working_on=self.step_name)
 
 
-@_dc.dataclass(repr=False)
 class UpdateFilesStep(ExpandableStep):
 
     @property
@@ -863,8 +848,6 @@ class UpdateFilesStep(ExpandableStep):
             for i in range(start_at, end_at+1, 1):
                 step = executor.chain[i]
                 step.set_visible_in_chain(False)
-
-
         return choice
 
     def build_prompts(self, executor: Executor, collapse_contents: {str: str}) \
@@ -878,7 +861,6 @@ class UpdateFilesStep(ExpandableStep):
         return system_prompt, prompts
 
 
-@_dc.dataclass(repr=False)
 class SummarizeStep(ExpandableStep):
 
     @property
@@ -903,14 +885,14 @@ class SummarizeStep(ExpandableStep):
         return system_prompt, prompts
 
 
-@_dc.dataclass(repr=False)
 class PresentTaskStep(Step):
 
     @property
     def step_title(self) -> str:
         return ""
 
-    def __post_init__(self):
+    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str):
+        super().__init__(previous=previous, description=description, role=role)
         sections: _t.Dict[str, str] = parse_sections(self.description)
         extracted_contents = gather_file_contents(sections, pop_file_sections=True)
         self._files: _t.Dict[str, taogpt.GeneratedFile] = {
@@ -920,17 +902,7 @@ class PresentTaskStep(Step):
         reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
         self.description = '\n\n'.join(reconstructed)
         self.description = re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=re.IGNORECASE)
-        Step.__post_init__(self)
 
     @property
     def collected_files(self) -> _t.Dict[str, GeneratedFile]:
         return self._files
-
-
-@_dc.dataclass(repr=False)
-class SageReplyStep(Step):
-
-    @property
-    def step_title(self) -> str:
-        return "Sage Replied"
-

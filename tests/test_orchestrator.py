@@ -87,11 +87,11 @@ def test_check_final_solution_parse_error(logger):
 def create_final_check_chain(reply, logger):
     llm = MockLLM(logger, reply_fn=reply)
     orchestrator = create_orchestrator(llm, logger, check_final=True)
-    step = PresentTaskStep(None, "This is a problem", ROLE_USER)
+    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = DirectAnswerStep(step, "This is an answer", ROLE_TAO)
+    step = DirectAnswerStep(previous=step, description="This is an answer", role=ROLE_TAO)
     orchestrator.chain.append(step)
-    step = FinalAnswerStep(step, "This is the final answer", ROLE_TAO)
+    step = FinalAnswerStep(previous=step, description="This is the final answer", role=ROLE_TAO)
     orchestrator.chain.append(step)
     return step, llm, orchestrator
 
@@ -99,9 +99,9 @@ def create_final_check_chain(reply, logger):
 def test_need_full_expansion_at_first_expandable_step(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
-    step = PresentTaskStep(None, "This is a problem", ROLE_USER)
+    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
+    step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(step)
     assert orchestrator.is_first_solving_expansion()
 
@@ -109,13 +109,13 @@ def test_need_full_expansion_at_first_expandable_step(logger):
 def test_need_full_expansion_at_first_expandable_step_followed_by_ask_step(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
-    step = PresentTaskStep(None, "This is a problem", ROLE_USER)
+    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
+    step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(step)
-    step = AskQuestionStep(step, "I have a question", ROLE_TAO)
+    step = AskQuestionStep(previous=step, description="I have a question", role=ROLE_TAO)
     orchestrator.chain.append(step)
-    step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
+    step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(step)
     assert orchestrator.is_first_solving_expansion()
 
@@ -123,15 +123,15 @@ def test_need_full_expansion_at_first_expandable_step_followed_by_ask_step(logge
 def test_no_full_expansion_at_subsequent_expandable_steps(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
-    step = PresentTaskStep(None, "This is a problem", ROLE_USER)
+    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
+    step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(step)
-    step = StepByStepPlan(step, EXAMPLE_STEP_BY_STEP_PLAN, ROLE_TAO)
+    step = StepByStepPlan(previous=step, description=EXAMPLE_STEP_BY_STEP_PLAN, role=ROLE_TAO)
     orchestrator.chain.append(step)
-    step = AskQuestionStep(step, "I have a question", ROLE_TAO)
+    step = AskQuestionStep(previous=step, description="I have a question", role=ROLE_TAO)
     orchestrator.chain.append(step)
-    step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
+    step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(step)
     assert not orchestrator.is_first_solving_expansion()
 
@@ -139,11 +139,12 @@ def test_no_full_expansion_at_subsequent_expandable_steps(logger):
 def test_record_criticism_to_expandable_steps(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
-    step = PresentTaskStep(None, "This is a problem", ROLE_USER)
+    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    expandable: ProceedStep = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
+    expandable: ProceedStep = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(expandable)
-    plan_step: StepByStepPlan = StepByStepPlan(expandable, EXAMPLE_STEP_BY_STEP_PLAN, ROLE_TAO)
+    plan_step: StepByStepPlan = StepByStepPlan(previous=expandable, description=EXAMPLE_STEP_BY_STEP_PLAN,
+                                               role=ROLE_TAO)
     expandable.choices = []
     expandable.choices.append(plan_step)
     orchestrator.chain.append(plan_step)
@@ -167,16 +168,16 @@ def test_backtracking(logger):
     orchestrator = create_orchestrator(llm, logger)
     orchestrator.config.ask_user_before_execute_codes = False
     orchestrator.config.max_search_expansion = 2
-    step = PresentTaskStep(None, "This is a problem", ROLE_USER)
+    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    proceed_step = ProceedStep(step, "Proceed to solve", ROLE_ORCHESTRATOR)
+    proceed_step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(proceed_step)
 
     code = f"""```python
 no_such_var * 123
 ```
     """
-    step = AskPythonGenieStep(proceed_step, code, ROLE_TAO)
+    step = AskPythonGenieStep(previous=proceed_step, description=code, role=ROLE_TAO)
     orchestrator.chain.append(step)
     proceed_step.choices = [step]
     try:

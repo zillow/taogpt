@@ -79,7 +79,7 @@ class Orchestrator(Executor):
     def start(self, task: str | Step):
         self.log_configs()
         if _utils.safe_is_instance(task, str):
-            root_step = PresentTaskStep(None, task, role=ROLE_USER)
+            root_step = PresentTaskStep(previous=None, description=task, role=ROLE_USER)
         elif _utils.safe_is_instance(task, PresentTaskStep):
             root_step = task
         else:
@@ -88,7 +88,7 @@ class Orchestrator(Executor):
         self.reset()
         self._chain.append(root_step)
         if self.config.analyze_first:
-            init_analysis_step = AnalysisStep(root_step, '', ROLE_ORCHESTRATOR)
+            init_analysis_step = AnalysisStep(previous=root_step, description='', role=ROLE_ORCHESTRATOR)
             self._chain.append(init_analysis_step)
         self._execute_with_backtracking()
 
@@ -136,7 +136,7 @@ class Orchestrator(Executor):
                             backtrack = b2
         except UnsolvableError as e:
             prev: Step|None = self._chain[-1] if len(self._chain) > 0 else None
-            self._chain.append(FinalAnswerStep(prev, str(e), ROLE_TAO))
+            self._chain.append(FinalAnswerStep(previous=prev, description=str(e), role=ROLE_TAO))
 
     def backtrack_to(self, step_number: int):
         if step_number < 0 or step_number >= len(self._chain):
@@ -159,9 +159,11 @@ class Orchestrator(Executor):
                 last_step.backtrack(self, backtrack)
                 self._chain.append(last_step)
                 cls = last_step.__class__.__name__
-                desc = _utils.safe_subn(last_step.description)
+                desc = _utils.safe_subn(
+                    last_step.step_name if last_step.step_name is not None else last_step.description)
                 self.logger.log(f'---\n<div style="color: white; background-color: black">\n')
-                self.logger.log(f"# BACKTRACK to {cls}:{desc}@{last_step.step_id}. Why: {str(backtrack)}\n")
+                self.logger.log(f"# BACKTRACK to {desc}@{cls}/{last_step.step_id}\n")
+                self.logger.log(f"Why: {str(backtrack)}\n")
                 self.logger.log(f"</div>\n")
                 break
         if len(self._chain) == 0: # empty, nothing to backtrack
@@ -218,13 +220,13 @@ class Orchestrator(Executor):
         if start_solving:
             work_prompt = self.prompts.orchestrator_proceed
             first_expansion = self.config.initial_expansion if start_solving else self.config.first_expansion
-            work_next_step = ProceedStep(step, work_prompt, role=ROLE_ORCHESTRATOR,
+            work_next_step = ProceedStep(previous=step, description=work_prompt, role=ROLE_ORCHESTRATOR,
                                          first_expansion=first_expansion,
                                          max_expansion=self.config.max_search_expansion)
             work_next_step.set_step_name("start working on the problem")
             self._chain.append(work_next_step)
         else:
-            ask_next_step = NextStep(step, '', role=ROLE_ORCHESTRATOR,
+            ask_next_step = NextStep(previous=step, description='', role=ROLE_ORCHESTRATOR,
                                      first_expansion=1,
                                      max_expansion=self.config.max_search_expansion)
             ask_next_step.set_step_name(self.current_step_name)
@@ -251,11 +253,15 @@ class Orchestrator(Executor):
                 elif _utils.safe_is_instance(self._chain[i], (DirectAnswerStep, PythonGenieReplyStep, StepByStepPlan)):
                     break
             if is_direct_answer_only: # replace
-                final_answer_step = FinalAnswerStep(self._chain[-2], last_step.description, ROLE_TAO)
+                final_answer_step = FinalAnswerStep(previous=self._chain[-2],
+                                                    description=last_step.description,
+                                                    role=ROLE_TAO)
                 self._chain[-1] = final_answer_step
                 return
 
-        summarize_step = SummarizeStep(self.chain[-1], '', role=ROLE_ORCHESTRATOR,
+        summarize_step = SummarizeStep(previous=self.chain[-1],
+                                       description='',
+                                       role=ROLE_ORCHESTRATOR,
                                        first_expansion=1,
                                        max_expansion=self.config.max_search_expansion)
         summarize_step.set_step_name(self.current_step_name)
