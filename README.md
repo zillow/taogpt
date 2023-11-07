@@ -20,7 +20,9 @@ Three gives birth to all things. -- Tao Te Ching. (Quote [selected by TaoGPT](ex
 
 ## Introduction
 
-(*This section [is written by TaoGPT](examples/gpt-4/taogpt-self-describe.log.md).*)
+(*This section [is written by TaoGPT](examples/gpt-4/taogpt-self-describe.log.md) with illustration by the authors.*)
+
+![TaoGPT High-level design](assets/high_level_design.png)
 
 The problem-solving system is a collaborative platform designed to tackle complex problems in a structured and systematic manner. It leverages the unique strengths of three key components: Tao, Orchestrator, and Sage.
 
@@ -34,35 +36,14 @@ The interaction between Tao, Orchestrator, and Sage is a crucial aspect of this 
 
 This system is designed to facilitate effective problem-solving by breaking down complex problems into manageable steps, encouraging critical analysis, and promoting collaboration.
 
-## Methodology and Key Features
+## Key Features and Methodology
 
 (This is a high-level overview. More details will be presented later.)
-
-A problem solving session typically flows like:
-
-1. User's task is presented to Tao
-2. Orchestrator asks Tao to first analyze the task problem for issues and contradictions.
-3. Orchestrator asks Tao to come up with one or more approaches to solve the step. (Task problem is the root step.)
-4. Tao can reply with one of these strategies: answer directly, decompose into a step-by-step plan, ask user for
-   clarifications, or give up due to error found.
-5. After receiving all approaches, Orchestrator asks Sage to rank and deduplicate the approaches.
-6. Orchestrator select the next best approach and take appropriate actions
-   * For asking user, present questions to user and solicit answers.
-   * If Tao gives up, backtrack and try the next best approach.
-   * For step-by-step plan, start with the first step in the plan and go to #3.
-   * Else, find out from reply or ask Tao for the next step and go to #3.
-7. If Tao's direct answer indicates final answer:
-   1. Add a (retryable) summarization step to let Tao summarize the conversation into a final answer
-   2. Ask Sage to verify the final answer.
-   3. If Sage thinks the final answer is incorrect,
-      1. ask Sage to identify the steps that cause errors.
-      2. backtrack directly to the first problematic step and go to #3.
-   4. Else done
 
 ### Key features
 
 * One set of generic instruction prompt.
-* Top-down recursive step-by-step problem solving.
+* Top-down recursive step-by-step problem solving. guided by simple templates.
 * Flexible problem solving strategy and structure: encourage high-level abstract recursive strategies, but honor
   intuition and do not forbid iterative or out-of-plan steps.
 * Fast-tracked backtracking.
@@ -80,6 +61,29 @@ A problem solving session typically flows like:
   different needs during problem solving. For example, one could use gpt-3.5 for Tao while gpt-4 for Sage. Also long
   context LLM can be configured to use when the context length exceeds a certain limit. For example, gpt-4-32k is
   used in place of gpt-4 when the context exceeds 3000 tokens.
+
+### Problem solving process
+
+A problem solving session typically flows like:
+
+1. User's task is presented to Tao
+2. Orchestrator asks Tao to first analyze the task problem for issues and contradictions.
+3. Orchestrator asks Tao to come up with one or more approaches to solve the step. (Task problem is the root step.)
+4. Tao can reply with one of these strategies: answer directly, decompose into a step-by-step plan, ask user for
+   clarifications, or give up due to error found.
+5. After receiving all approaches, Orchestrator asks Sage to rank and deduplicate the approaches.
+6. Orchestrator select the next best approach and take appropriate actions
+    * For asking user, present questions to user and solicit answers.
+    * If Tao gives up, backtrack and try the next best approach.
+    * For step-by-step plan, start with the first step in the plan and go to #3.
+    * Else, find out from reply or ask Tao for the next step and go to #3.
+7. If Tao's direct answer indicates final answer:
+    1. Add a (retryable) summarization step to let Tao summarize the conversation into a final answer
+    2. Ask Sage to verify the final answer.
+    3. If Sage thinks the final answer is incorrect,
+        1. ask Sage to identify the steps that cause errors.
+        2. backtrack directly to the first problematic step and go to #3.
+    4. Else done
 
 ### Limitations
 
