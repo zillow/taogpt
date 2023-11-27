@@ -7,7 +7,7 @@ import math as _math
 import tiktoken as _tiktoken
 from langchain.chat_models import ChatOpenAI as _ChatOpenAI
 
-import taogpt.logging
+import taogpt.md_logging
 from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_TAO, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
 import taogpt.utils as _utils
 from . import LLM

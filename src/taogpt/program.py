@@ -18,12 +18,12 @@ _CONTINUE_VOTE_QUORUM = 0.51
 
 
 def add_files_to_prompts(executor, prompts, role=ROLE_ORCHESTRATOR) -> _t.Dict[str, GeneratedFile]:
-    file_contents = 'Current files we have so far:\n\n'
+    file_contents = ''
     files = GeneratedFile.collect_files(executor.chain)
     for path, file in files.items():
         file_contents += f"### FILE: {path}\n\n{file.markdown_snippet}\n\n"
     if file_contents != '':
-        prompts.append((role, file_contents))
+        prompts.append((role, f'Current files we have so far:\n\n{file_contents}'))
     return files
 
 
@@ -165,12 +165,8 @@ class DirectAnswerStep(TaoReplyStep):
     def eval_only(self, executor) -> Step | None:
         if not _utils.is_blank(self.next_step) and not self.is_final_step:
             prompt_db: PromptDb  = executor.prompts
-            if UPDATE_FILES.lower() in self.next_step.lower():
-                next_step = UpdateFilesStep(previous=self, description="", role=ROLE_ORCHESTRATOR,
-                                            first_expansion=1, incremental_expansion=1, max_expansion=1)
-            else:
-                work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.next_step)
-                next_step = ProceedStep(previous=self, description=work_prompt, role=ROLE_ORCHESTRATOR)
+            work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.next_step)
+            next_step = ProceedStep(previous=self, description=work_prompt, role=ROLE_ORCHESTRATOR)
             next_step.set_step_name(self.next_step)
             return next_step
         return None
@@ -228,15 +224,6 @@ class StepByStepPlan(TaoReplyStep):
         self.add_file_update_step = add_file_update_step
         self._steps = parse_step_by_step_plan(self.description)
         self._update_file_step: _t.Optional[StepDescriptor] = None
-        if self.add_file_update_step:
-            for step in self._steps.values():
-                if UPDATE_FILES.lower() in step.description.lower():
-                    self._update_file_step = step
-                    break
-            if self._update_file_step is None:
-                last_step_num = max(self._steps.keys())
-                self._update_file_step = StepDescriptor(f"{UPDATE_FILES} UNKNOWN_STEP", "")
-                self._steps[last_step_num + 1] = self._update_file_step
         self.first_step = f"{self._steps[1].description}" # 1-base
         # erase sub_steps
         step_def = {i: {'description': _utils.single_space(strip_quotes_re.sub('', step.description))}
@@ -582,9 +569,10 @@ class ExpandableStep(Step):
         base_prompts: _t.List[(str, str)] = executor.show_conversation_thread()
         files = add_files_to_prompts(executor, base_prompts)
         base_prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
+        collapse_contents['tao_templates'] = tao_templates
         if len(files) > 0:
             base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_template_notes_for_files))
-        collapse_contents['tao_templates'] = tao_templates
+            collapse_contents['notes_for_files'] = prompt_db.tao_template_notes_for_files
         return system_prompt, base_prompts
 
     def rank_choices(self, executor: Executor, n_existing_choices: int = 0):
@@ -778,13 +766,14 @@ class NextStep(ExpandableStep):
         direct_answer = prompt_db.tao_template_direct_step_answer
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
         prompts.append((ROLE_ORCHESTRATOR, tao_templates))
+        collapse_contents['tao_template'] = tao_templates
         if len(files) > 0:
             prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_template_notes_for_files))
+            collapse_contents['notes_for_files'] = prompt_db.tao_template_notes_for_files
         if self.step_name is not None:
             prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_at_step.format(current_step=self.step_name)))
         next_step_prompt = prompt_db.orchestrator_next_step
         prompts.append((ROLE_ORCHESTRATOR, next_step_prompt))
-        collapse_contents['tao_template'] = tao_templates
         collapse_contents['next_step_prompt'] = next_step_prompt
         return system_prompt, prompts
 
@@ -797,68 +786,20 @@ class NextStep(ExpandableStep):
         assert decision is not None
         assert answer is not None
         if decision == NEXT_I_WANT_TO_WORK_AT:
-            if UPDATE_FILES.lower() in answer.lower():
-                proceed = UpdateFilesStep(previous=self, description="", role=ROLE_ORCHESTRATOR,
-                                          first_expansion=1, incremental_expansion=1, max_expansion=1)
-            else:
-                work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=answer)
-                choices = [parse_to_step(self, plan, config=config, working_on=answer)] if plan is not None else []
-                proceed = ProceedStep(
-                    previous=self,
-                    description=work_prompt,
-                    role=ROLE_ORCHESTRATOR,
-                    first_expansion=config.first_expansion,
-                    max_expansion=config.max_search_expansion,
-                    choices=choices
-                )
+            work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=answer)
+            choices = [parse_to_step(self, plan, config=config, working_on=answer)] if plan is not None else []
+            proceed = ProceedStep(
+                previous=self,
+                description=work_prompt,
+                role=ROLE_ORCHESTRATOR,
+                first_expansion=config.first_expansion,
+                max_expansion=config.max_search_expansion,
+                choices=choices
+            )
             proceed.set_step_name(answer)
             return proceed
         else:
             return parse_to_step(self, answer, config=config, working_on=self.step_name)
-
-
-class UpdateFilesStep(ExpandableStep):
-
-    @property
-    def step_title(self) -> str:
-        return "Update files"
-
-    @property
-    def _expansion_reason(self) -> str:
-        return "update_files"
-
-    def get_parse_error_instruction(self, prompt_db) -> str:
-        return prompt_db.orchestrator_parse_error
-
-    def parse_reply(self, plan, executor: Executor) -> Step:
-        choice = super().parse_reply(plan, executor)
-        choice.set_visible_in_chain(True)
-        first, start_at, end_at = len(executor.chain), -1, -1
-        for i in range(len(executor.chain)-1, -1, -1):
-            if _utils.safe_is_instance(executor.chain[i], StepByStepPlan):
-                first = i
-            if executor.chain[i] is self:
-                end_at = i
-            elif _utils.safe_is_instance(executor.chain[i], StepByStepPlan):
-                step_by_step = _utils.cast(executor.chain[i], StepByStepPlan)
-                last_step = max(step_by_step.steps.keys())
-                if match_step_name(self.step_name, last_step, step_by_step.steps[last_step].description):
-                    start_at = i
-        if start_at > 0 and end_at > 0 and start_at > first: # do not hide first level
-            for i in range(start_at, end_at+1, 1):
-                step = executor.chain[i]
-                step.set_visible_in_chain(False)
-        return choice
-
-    def build_prompts(self, executor: Executor, collapse_contents: {str: str}) \
-            -> _t.Tuple[str, _t.List[_t.Tuple[str, str]]]:
-        system_prompt = executor.prompts.tao_intro
-        prompts = executor.show_conversation_thread()
-        add_files_to_prompts(executor, prompts)
-        update_file_prompt = executor.prompts.tao_template_update_files
-        prompts.append((ROLE_ORCHESTRATOR, update_file_prompt))
-        collapse_contents['update_files'] = update_file_prompt
-        return system_prompt, prompts
 
 
 class SummarizeStep(ExpandableStep):
