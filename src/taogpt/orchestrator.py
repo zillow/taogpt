@@ -4,7 +4,7 @@ import typing as _t
 import datetime as _datetime
 import json as _json
 
-import taogpt.logging
+import taogpt.md_logging
 from . import UnsolvableError, MarkdownLogger, TokenUsageError
 from .llm_model import *
 from .program import *
@@ -214,7 +214,6 @@ class Orchestrator(Executor):
         return conversation
 
     def next_step(self):
-        system_prompt = self.prompts.tao_intro
         start_solving = self.is_first_solving_expansion()
         step = self._chain[-1]
         if start_solving:

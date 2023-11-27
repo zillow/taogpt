@@ -1,3 +1,3 @@
-Tao, If everything looks good, please proceed to "{step}".
+Tao, work at step "{step}".
 
 Following **strictly** the "Problem Solving Instructions" and templates.

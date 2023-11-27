@@ -17,7 +17,6 @@ class PromptDb:
     tao_template_direct_step_answer: str = _read(_template_dir / 'tao_template_direct_step_answer.md')
     tao_template_notes_for_files: str = _read(_template_dir / 'tao_template_notes_for_files.md')
     tao_template_intuitive_answer: str = _read(_template_dir / 'tao_template_intuitive_answer.md')
-    tao_template_update_files: str = _read(_template_dir / 'tao_template_update_files.md')
     orchestrator_ask_init_analysis: str = _read(_template_dir / 'orchestrator_ask_init_analysis.md')
     orchestrator_rank_choices: str = _read(_template_dir / 'orchestrator_rank_choices.md')
     orchestrator_at_step: str = _read(_template_dir / 'orchestrator_at_step.md')

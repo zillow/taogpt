@@ -7,7 +7,7 @@ import re as _re
 from threading import local
 
 from taogpt.prompts import PromptDb
-from taogpt.logging import MarkdownLogger
+from taogpt.md_logging import MarkdownLogger
 from taogpt import utils as _utils
 
 
