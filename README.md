@@ -2,7 +2,7 @@
 
 <div style="text-align: center">
 
-### A generalized System 2 AI agent which incidentally runs on ChatGPT 4
+### A generalized System 1 & 2 hybrid AI agent which incidentally runs on ChatGPT 4
 ![Tao-LLM](assets/LLM_tao.128x128.png)
 
 </div>
@@ -36,6 +36,43 @@ The interaction between Tao, Orchestrator, and Sage is a crucial aspect of this 
 
 This system is designed to facilitate effective problem-solving by breaking down complex problems into manageable steps, encouraging critical analysis, and promoting collaboration.
 
+## Philosophy
+
+AI agent can be categorized into three main types of reasoning systems: System 1 reasoner, System 2 reasoner, and the 
+Hybrid reasoner. The System 1 reasoner relies on memorized knowledge, common sense, and intuition, often described 
+as the "black arts". Notable examples of this system include neural networks and large language models in particular.
+
+On the other end of the spectrum, we have the System 2 reasoner that employs complex reasoning process. Classic 
+cases include the medical diagnosis system MYCIN, logic programming language Prolog and IBM’s DeepBlue chess-playing 
+program.
+
+Hybrid reasoning, as the name suggests, is the marriage between the System 1 and System 2 reasoners. In other words, 
+it uses search and backtracking guided by intuition. One of the well-known instances of hybrid reasoner is AlphaGo, 
+the first AI to beat a human world champion Go player. AlphaGo employs systematic search techniques under the 
+guidance of its intuition (developed through learning) to make the best move decisions and judge board situation.
+
+Dynamic duality is a key characteristic of intelligent reasoning in a hybrid system:
+
+* Intuition can produce answers with some (shallow) reasoning steps;
+* Intuition generates search branches and ranks them for problems without mechanical branching such as non-board 
+  games and most real-world problems;
+* Deep search of the System 2 reasoning process extends capability unreachable by intuition;
+* Knowledge revealed by searching can be internalized to become intuition through (continuous) learning and memoization;
+* Better intuition reduces search cost but never replace searching
+* Intuition can decide the halting of a search for problems without mechanical verification such as non-board
+  games and most real-world problems.
+
+This philosophy can be depicted in the illustration below. The knowledge that the Earth orbits the Sun is an obvious 
+example of transitions between System 1 and 2. Human beings, relying solely on daily intuition, had believed the Sun 
+orbited the Earth until Nicolas Copernicus discovered the opposed arrangement, through elaborated reasoning using his 
+knowledge and insights of math and astronomy, and confirmed by scientists after him. Today, most human beings have 
+the intuitive knowledge that the Earth orbits the Sun, even though few of them can actually perform the same 
+elaborated reasonings the pioneering scientists did.
+
+![Duality of System 1 and System 2 reasoners](assets/taogpt-philosophy.png)
+
+TaoGPT strikes to be a hybrid system that embraces and implements the duality of System 1 and System 2 reasoners.
+
 ## Key Features and Methodology
 
 (This is a high-level overview. More details will be presented later.)
@@ -68,10 +105,15 @@ A problem solving session typically flows like:
 
 1. User's task is presented to Tao
 2. Orchestrator asks Tao to first analyze the task problem for issues and contradictions.
-3. Orchestrator asks Tao to come up with one or more approaches to solve the step. (Task problem is the root step.)
-4. Tao can reply with one of these strategies: answer directly, decompose into a step-by-step plan, ask user for
-   clarifications, or give up due to error found.
-5. After receiving all approaches, Orchestrator asks Sage to rank and deduplicate the approaches.
+3. Orchestrator asks Tao to deliberate, one or more times, to solve the step. (Task problem is the root step.)
+4. Tao replies using one of these strategies: answer directly, decompose into a step-by-step plan, interact with the 
+   user or environment (e.g. asking clarification questions, executing python codes, etc.,) or give up due to error 
+   found.
+   1. Tao's response should be in the JSON template required by the Orchestrator. If the response is not in the 
+      expected format, the Orchestrator informs Tao of the error and repeat the 
+      deliberation for a confiurable number of times.
+5. After receiving all deliberated approaches, Orchestrator asks Sage to rank and deduplicate the approaches.
+   * Response error identification and correction is similar to step 4.1
 6. Orchestrator select the next best approach and take appropriate actions
     * For asking user, present questions to user and solicit answers.
     * If Tao gives up, backtrack and try the next best approach.
@@ -80,6 +122,7 @@ A problem solving session typically flows like:
 7. If Tao's direct answer indicates final answer:
     1. Add a (retryable) summarization step to let Tao summarize the conversation into a final answer
     2. Ask Sage to verify the final answer.
+       * Response error identification and correction is similar to step 4.1
     3. If Sage thinks the final answer is incorrect,
         1. ask Sage to identify the steps that cause errors.
         2. backtrack directly to the first problematic step and go to #3.
