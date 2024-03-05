@@ -466,7 +466,7 @@ Formal citations will be provided with pending publications. Here are some prior
 
 # License
 
-Apache License 2.0
+The Responsible Artificial Intelligence Source Code License, Version 11
 
 # Citation
 
