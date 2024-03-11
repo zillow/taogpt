@@ -243,12 +243,6 @@ class StepByStepPlan(TaoReplyStep):
             if distance < 0.5:
                 raise ParseError("This step-by-step plan looks like repetition of the previous plan. "
                                  "Come up with a real plan")
-#         step_def = {i: {'description': _utils.single_space(strip_quotes_re.sub('', step.description))}
-#                     for i, step in self._steps.items()}
-#         self.description = f"""```json
-# {_json.dumps(step_def, indent=2)}
-# ```
-# """
 
     @property
     def steps(self) -> _t.Dict[int, StepDescriptor]:

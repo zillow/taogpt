@@ -80,17 +80,17 @@ def log_final_chain(executor, log_path,
     executor.log_configs(logger)
     logger.log_conversation(executor.show_conversation_thread(with_header=True))
     logger.log(f"**total tokens**: {executor.llm.total_tokens}")
-    with open(_p.Path(log_path) / pickle_file, 'wb') as f:
-        _pickle.dump(dict(config=executor.config,
-                          llm=executor.llm.model_id,
-                          sage_llm=executor.sage_llm.model_id if executor.sage_llm is not None else None,
-                          chain=executor.chain), f)
     for path, file in GeneratedFile.collect_files(executor.chain).items():
         path = re.sub(r"[\"\'`]", "", path)
         full_path = _p.Path(log_path) / path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         with open(full_path, 'w') as f:
             f.write(file.content)
+    with open(_p.Path(log_path) / pickle_file, 'wb') as f:
+        _pickle.dump(dict(config=executor.config,
+                          llm=executor.llm.model_id,
+                          sage_llm=executor.sage_llm.model_id if executor.sage_llm is not None else None,
+                          chain=executor.chain), f)
 
 
 def create_orchestrator(

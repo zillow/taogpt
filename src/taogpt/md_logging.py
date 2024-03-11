@@ -19,6 +19,7 @@ class MarkdownLogger:
         if limit_console_for_roles is None:
             limit_console_for_roles = {ROLE_ORCHESTRATOR, 'debug'}
         self._log_path = _Path(log_path)
+        self._log_path.parent.mkdir(exist_ok=True)
         self._log = open(self._log_path, 'w')
         self._log_debug = log_debug
         self._console_out = console_out

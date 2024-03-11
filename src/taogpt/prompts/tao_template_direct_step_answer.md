@@ -13,7 +13,7 @@ Follow this template:
 <answer and explanation>
 
 ### FILE: <file_path_name>
-<file content section>
+<file content section only in need of writing a file>
 
 ### NEXT_I_WANT_TO_WORK_AT:
 <next step ID: description> or "None. This is the final step."
