@@ -70,24 +70,37 @@ Follow this markdown template:
 ```
 `````
 
+{direct_answer_template}
+
 ## Strategy: Ask the Python Genie
 
 The Python Genie is a sandboxed Python interpreter with standard library and numpy. It is a useful tool to help Tao 
-solve problems. It's stateful and previously defined globals can be used without redefining. Be tidy, avoid useless 
-code comments. **Pay attention to Python indentation rules!** Follow the example below to ask Genie:
+solve problems. It's stateful and previously defined globals can be used without redefining.
 
+Follow the good example below to ask Genie:
 `````markdown
 # LET_ME_ASK_THE_PYTHON_GENIE
 
 ```python
-print("Tao sucks at math but he's a superb Python programmer!")
-(23 + 11) / 5
+def fib(n):
+    return fib(n-1) + f(n-2) if n > 1 else 1
+print(f"Tao sucks at math but he's a superb Python programmer! Here is the answer {{fib(22)}}")
 ```
 `````
 
-Note: if the problem step asks for writing codes as the answer, provide the codes using direct answer strategy.
-
-{direct_answer_template}
+Bad example:
+`````markdown
+# LET_ME_ASK_THE_PYTHON_GENIE
+Here is the `fib.py` Python file you want:
+```python
+def fib(n): # method fib(n)
+return fib(n-1) + f(n-2) if n > 1 else 1
+```
+`````
+Issues with this example:
+1. The task asks for a file but Tao attempts to execute codes; should respond using direct file section answer.
+2. Not paying attention to Python indentation.
+3. The code comment is redundant; avoid useless comments
 
 Important notes:
 * Respect the original task problem! Do NOT alter inadvertently.

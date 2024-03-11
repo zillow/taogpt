@@ -12,12 +12,13 @@ packages = [{include = "taogpt", from = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
-openai = ">=0.27.8"
-langchain = ">=0.0.238"
-marko = ">=2.0.0"
-tiktoken = "^0.5.1"
-numpy = ">1.0.0"
-levenshtein = "*"
+langchain = "*"
+langchain-community = "*"
+langchain-openai = "*"
+marko = "^2.0.0"
+tiktoken = "^0.6.0"
+numpy = "^1.26.0"
+levenshtein = "^0.25.0"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.14.0"

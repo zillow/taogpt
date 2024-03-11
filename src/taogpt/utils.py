@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import os.path
 import re
 import typing as _t
 from io import StringIO as _StringIO
+import os as _os
 import sys as _sys
 import ast as _ast
 import json as _json
-
+import configparser as _config
+import Levenshtein as _leven
 
 _T = _t.TypeVar('_T')
 
@@ -66,6 +69,21 @@ def safe_subn(text: str | None, n=20, default='', escape_new_line=True, append='
     if orig_len > len(text):
         text += append
     return text
+
+
+def normalized_levenstein_distance(s1: str|None, s2: str|None, normalized_to: int|str|None=None) -> float:
+    s1 = s1 or ''
+    s2 = s2 or ''
+    if normalized_to is None:
+        normalized_to = s1 if len(s1) > len(s2) else s2
+    elif isinstance(normalized_to, int):
+        assert normalized_to in (1, 2)
+        normalized_to = s1 if normalized_to == 1 else s2
+    dist = _leven.distance(s1, s2)
+    n = len(normalized_to)
+    if n == 0:
+        return 0. if dist == 0 else 1.
+    return float(dist) / n
 
 
 # credit: https://stackoverflow.com/questions/39379331/python-exec-a-code-block-and-eval-the-last-line
@@ -130,9 +148,14 @@ Reply "yes" to execute this code snippet, or "no" to cancel: """)
     return eval_and_collect(codes, global_scope or dict())
 
 
-def set_openai_credentials_from_json(path):
-    import os
+def set_openai_credentials(path: str):
+    path = os.path.expanduser(path)
     with open(path, 'r') as f:
-        credentials = _json.load(f)
-    os.environ["OPENAI_API_KEY"] = credentials['key']
-    os.environ["OPENAI_API_BASE"] = credentials['url']
+        if path.endswith('.json'):
+            credentials = _json.load(f)
+        else:
+            config = _config.ConfigParser()
+            config.read_file(f)
+            credentials = config['DEFAULT']
+    _os.environ["OPENAI_API_KEY"] = credentials['key']
+    _os.environ["OPENAI_API_BASE"] = credentials['url']

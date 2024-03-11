@@ -4,10 +4,9 @@ import typing as _t
 from io import TextIOBase as _TextIOBase
 import pickle as _pickle
 
-from langchain.chat_models import ChatOpenAI
-
+from langchain_openai import ChatOpenAI
 from taogpt import Pause, MarkdownLogger, PromptDb, Config, GeneratedFile
-from taogpt.llm_model import LangChainLLM
+from taogpt.llm_model import LangChainLLM, fix_model_name, get_long_model
 from taogpt.orchestrator import Orchestrator
 from io import TextIOBase as _TextIO
 
@@ -28,11 +27,18 @@ def solve_problem(user_task: str, log_path: str, config: Config,
     _continue_solving(executor, log_path, console_out, pause)
 
 
-def load_and_resume_problem(states: _t.Dict[str, _t.Any], log_path: str, config: Config,
-                  llm: str, long_llm: str, long_sage_llm: str, sage_llm: str,
-                  long_context_token_threshold: int,
-                  user_input_fn: _t.Callable[[str], str], console_out: _t.Optional[_TextIO],
-                  debug=False):
+def load_and_resume_problem(
+        states: _t.Dict[str, _t.Any],
+        log_path: str,
+        config: Config,
+        llm: str,
+        long_llm: str=None,
+        long_sage_llm: str=None,
+        sage_llm: str=None,
+        long_context_token_threshold: int=3000,
+        user_input_fn: _t.Callable[[str], str]=input,
+        console_out: _t.Optional[_TextIO]=None,
+        debug=False):
     executor = create_orchestrator(config, log_path, llm, long_llm, sage_llm, long_sage_llm,
                                    long_context_token_threshold, console_out, debug=debug)
     executor.set_input_fn(user_input_fn)
@@ -74,32 +80,33 @@ def log_final_chain(executor, log_path,
     executor.log_configs(logger)
     logger.log_conversation(executor.show_conversation_thread(with_header=True))
     logger.log(f"**total tokens**: {executor.llm.total_tokens}")
-    with open(_p.Path(log_path) / pickle_file, 'wb') as f:
-        _pickle.dump(dict(config=executor.config,
-                          llm=executor.llm.model_id,
-                          sage_llm=executor.sage_llm.model_id if executor.sage_llm is not None else None,
-                          chain=executor.chain), f)
     for path, file in GeneratedFile.collect_files(executor.chain).items():
         path = re.sub(r"[\"\'`]", "", path)
         full_path = _p.Path(log_path) / path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         with open(full_path, 'w') as f:
             f.write(file.content)
+    with open(_p.Path(log_path) / pickle_file, 'wb') as f:
+        _pickle.dump(dict(config=executor.config,
+                          llm=executor.llm.model_id,
+                          sage_llm=executor.sage_llm.model_id if executor.sage_llm is not None else None,
+                          chain=executor.chain), f)
 
 
-
-def create_orchestrator(config: Config, log_path: str,
-                        llm: str, long_llm: str, sage_llm: str, long_sage_llm: str,
-                        long_context_token_threshold: int,
-                        log_to_stdout: _t.Optional[_TextIO], debug=False):
-    llm = _fix_model_name(llm, required=True)
-    sage_llm = _fix_model_name(sage_llm)
-    long_llm = _fix_model_name(long_llm)
-    long_sage_llm = _fix_model_name(long_sage_llm)
-    if long_llm is None and llm == 'gpt-4':
-        long_llm = 'gpt-4-32k' if llm in {'gpt-4', 'gpt-4-32k'} else 'gpt-3.5-turbo-16k'
-    if long_sage_llm is None and sage_llm == 'gpt-4':
-        long_sage_llm = 'gpt-4-32k' if sage_llm in {'gpt-4', 'gpt-4-32k'} else 'gpt-3.5-turbo-16k'
+def create_orchestrator(
+        config: Config,
+        log_path: str,
+        llm: str,
+        long_llm: str=None,
+        sage_llm: str=None,
+        long_sage_llm: str=None,
+        long_context_token_threshold: int=3000,
+        log_to_stdout: _t.Optional[_TextIO]=None,
+        debug=False):
+    llm = fix_model_name(llm, required=True)
+    sage_llm = fix_model_name(sage_llm, default_to=llm)
+    long_llm = fix_model_name(get_long_model(long_llm), default_to=llm)
+    long_sage_llm = fix_model_name(get_long_model(long_sage_llm), default_to=sage_llm)
     prompts = PromptDb.load_defaults()
     logger = MarkdownLogger(_p.Path(log_path) / 'taogpt_log.md', log_debug=debug, console_out=log_to_stdout)
     long_ctx_llm = ChatOpenAI(model_name=long_llm) if long_llm is not None and long_llm != llm else None
@@ -121,13 +128,3 @@ def create_orchestrator(config: Config, log_path: str,
         sage_llm=sage_model,
     )
     return executor
-
-
-def _fix_model_name(model_name, required=False):
-    if model_name is None:
-        assert required is not None
-        return model_name
-    assert model_name in {'gpt-4', 'gpt-3.5', 'gpt-3.5-turbo'}
-    if model_name == 'gpt-3.5':
-        model_name = 'gpt-3.5-turbo'
-    return model_name

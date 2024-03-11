@@ -1,6 +1,6 @@
 from mocks import MockLLM, create_orchestrator, logger
 from taogpt.program import *
-from taogpt.parsing import ParseError, parse_final_response
+from taogpt.parsing import ParseError, parse_verification_response
 
 EXAMPLE_STEP_BY_STEP_PLAN = """This is my plan:
 ```json
@@ -16,13 +16,14 @@ _logger = logger
 
 def test_check_final_solution_success(logger):
     text = """{
-    "rule conformance": {"ok": true, "reason": "All right!"},
-    "calculation": {"ok": true, "reason": "Good math!"}
+    "rule conformance": {"ok": "All right!"},
+    "calculation": {"warning": "Can simplify"}
     }
     """
-    overall, concerns = parse_final_response(text)
+    overall, concerns, errors = parse_verification_response(text)
     assert overall
-    assert len(concerns) == 0
+    assert len(concerns) == 1
+    assert len(errors) == 0
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         assert reason == 'check_final_answer'
@@ -36,13 +37,13 @@ def test_check_final_solution_success(logger):
 
 def test_check_final_solution_failed(logger):
     text = """{
-    "calculation": {"ok": false, "reason": "1 + 1 != 3", "blame": "step22"},
-    "etc": {"ok": true, "reason": "Good"}
+    "calculation": {"error": "1 + 1 != 3", "blame": "calculate total"},
+    "etc": {"ok": "Good"}
     }
     """
-    overall, concerns = parse_final_response(text)
+    overall, _, errors = parse_verification_response(text)
     assert not overall
-    assert concerns == {"calculation": "1 + 1 != 3"}
+    assert errors == {"calculation": ("1 + 1 != 3", "calculate total")}
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         if reason == 'check_final_answer':
@@ -63,11 +64,11 @@ def test_check_final_solution_failed(logger):
 
 def test_check_final_solution_parse_error(logger):
     text = """// missing {
-    "calculation": {"ok": true, "reason": "Good math!"}
+    "calculation": {"huh": "I don't know!"}
     }
     """
     try:
-        parse_final_response(text)
+        parse_verification_response(text)
         assert False, "expecting ParseError not raised"
     except ParseError:
         pass

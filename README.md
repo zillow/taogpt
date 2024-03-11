@@ -437,14 +437,21 @@ taogpt --help
 Example command-line invocation with a simple arithmetic problem:
 
 ```shell
+export OPENAI_API_KEY="...your OpenAI key..."
+export OPENAI_API_BASE="https://api.openai.com/v1" # or you OPENAI_API_BASE URL
 mkdir /tmp/taogpt_outputs # directory where output files go to.
-taogpt -p /tmp/taogpt_outputs -llm gpt-3.5 --sage-llm=gpt-4 "What's x mod (y - z) where x = 10, y = 7, z = 4."
+taogpt -p /tmp/taogpt_outputs "What's x mod (y - z) where x = 10, y = 7, z = 4."
 ```
 
 The command-line tool will print out (abbreviated) log in the console. A file logging the problem solving
 progress and a file with the final step chain are written to the output directory; they are Markdown files viewable
 by any Markdown viewer. Users are recommended to view the Markdown log files for better experiences. The directory also
 contain any Tao-generated files organized by directory paths.
+
+```shell
+mkdir /tmp/taogpt_outputs # directory where output files go to.
+taogpt -p /tmp/taogpt_outputs "I plan to relocate to San Francisco Bay Area next month. Where should I settle?"
+```
 
 ## Web UI interface
 

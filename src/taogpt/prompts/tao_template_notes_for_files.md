@@ -1,34 +1,19 @@
-## Notes for file contents
+### Notes for file content sections
 
-The Orchestrator cannot tell if a piece of content is a file unless it's in the `### FILE:` sections
-and inside a fenced Markdown block. If the task requires writing files, do not write file contents such as code
-snippets outside of the `### FILE:` section. Whileit is OK to update previous files, try to write full and correct 
-contents in one shot. Do not repeat a previous written file unless you need to update the files.
+If (and only if) the task requires writing files, write a Mrkdown block for each file in a `### FILE:` section.
 
-Bad file example:
+Try to write full and correct contents in one shot. Do not repeat a previous written file unless you need to change 
+the files.
+
+Example:
 
 ````markdown
 # I_WILL_ANSWER_DIRECTLY
 
-```text
-new file
-```
-
-### FILE: file1.txt
-File from previous step.
+### FILE: path/to/file.txt
+<short description of this file>
 
 ```text
-same content
-```
-
-### FILE: file2.txt
-
-```text
-new file
+<content of this file>
 ```
 ````
-
-Issues of the above example:
-
-* File file2.txt's content appears outside of `### FILE:` section
-* Repeating file from previous step without change.
