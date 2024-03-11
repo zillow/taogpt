@@ -13,12 +13,10 @@ Follow this template:
 <answer and explanation>
 
 ### FILE: <file_path_name>
-<brief description of this file>
-
-```text
-<file content in markdown fenced code block as required by the task>
-```
+<file content section>
 
 ### NEXT_I_WANT_TO_WORK_AT:
 <next step ID: description> or "None. This is the final step."
 `````
+
+{notes_for_files}

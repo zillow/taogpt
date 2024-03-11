@@ -5,8 +5,7 @@ import typing as _t
 import time as _time
 import math as _math
 import tiktoken as _tiktoken
-from langchain.chat_models import ChatOpenAI as _ChatOpenAI
-
+from langchain_openai import ChatOpenAI as _ChatOpenAI
 import taogpt.md_logging
 from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_TAO, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
 import taogpt.utils as _utils
@@ -138,7 +137,12 @@ class LangChainLLM(LLM):
             if self.long_context_llm is not None and context_tokens > self.long_context_token_threshold:
                 llm = self.long_context_llm
                 token_factor = self.long_context_llm_token_factor
-            reply = llm.predict_messages(messages)
+            max_tokens = GPT_OUTPUT_TOKEN_LIMITS.get(self.model_id, None)
+            if max_tokens is not None and max_tokens < 0:
+                max_tokens = abs(max_tokens) - context_tokens
+            # todo: try the `continue` trick to using multiple calls
+            assert max_tokens is None or max_tokens > 0, f"No more output tokens allowed: {max_tokens}"
+            reply = llm.invoke(messages, max_tokens=max_tokens)
             reply_content_logged = reply.content
             is_json = ''
             try:
@@ -176,3 +180,32 @@ class LangChainLLM(LLM):
             enc = _tiktoken.encoding_for_model('gpt-4')
         tokens = enc.encode(text)
         return len(tokens)
+
+
+def fix_model_name(model_name: str, required=False, default_to: str=None):
+    if model_name is None:
+        assert not required or default_to is not None
+        return default_to
+    return GPT_MODEL_ALIAS.get(model_name, model_name)
+
+
+def get_long_model(model_name: str):
+    return GPT_LONG_CONTEXT_MODEL_MAP.get(model_name, model_name)
+
+
+GPT_MODEL_ALIAS = {
+    'gpt-3.5': 'gpt-3.5-turbo',
+    'gpt-4-turbo': 'gpt-4-1106-preview'
+}
+GPT_LONG_CONTEXT_MODEL_MAP = {
+    'gpt-3.5-turbo': 'gpt-3.5-turbo-16k',
+    'gpt-4': 'gpt-4-32k',
+    'gpt-4-1106-preview': 'gpt-4-1106-preview',
+}
+GPT_OUTPUT_TOKEN_LIMITS = {
+    # negative number means the max token limit is `abs(limit) - n_context_tokens`
+    'gpt-3.5-turbo': 4096,
+    'gpt-4': -8192, # tested experimentally
+    'gpt-4-32k': -32 * 1024,
+    'gpt-4-1106-preview': 4096,
+}

@@ -93,56 +93,76 @@ def parse_ordered_list(markdown_text) -> [str]:
 
 _json_response_re = re.compile(r"^.*(```(json)?\n+)(.+)(```).*$|^\s*(\{.+})\s*$", flags=re.DOTALL | re.IGNORECASE)
 _final_solution_check_re = re.compile(r"^\s*(yes|no)[.,]?\s+(.+)$", flags=re.DOTALL|re.IGNORECASE)
+_step_re = re.compile(r"^( *\[? *at +step[ :]+)?(.*?)[\s\]]*$", flags=re.IGNORECASE)
 
 
-def parse_final_response(text: str) -> _t.Tuple[bool, _t.Dict[str, str]]:
+def parse_verification_response(text: str) \
+        -> _t.Tuple[bool, _t.Dict[str, _t.Tuple[str, str|None]], _t.Dict[str, _t.Tuple[str, str|None]]]:
     judgements: _t.Dict[str, _t.Dict[str, _t.Union[bool, str]]] = parse_json_hash(text, two_level_hashes=True)
     if not _utils.safe_is_instance(judgements, dict) or not all([_utils.safe_is_instance(x, dict) for x in judgements.values()]):
         raise ParseError("The response must be a JSON hash of hashes")
-    concerns: _t.Dict[str, str] = dict()
+    concerns: _t.Dict[str, _t.Tuple[str, str|None]] = dict()
+    errors: _t.Dict[str, _t.Tuple[str, str|None]] = dict()
     overall_correctness: bool = True
     for concern, judgement in judgements.items():
-        if 'ok' not in judgement:
-            raise ParseError(f"{concern} does not have the 'ok' field.")
-        item_correctness = judgement['ok']
-        if type(item_correctness) != bool:
-            raise ParseError(f"the 'ok' field of {concern} is not a JSON boolean.")
-        overall_correctness = (overall_correctness and item_correctness)
-        if not item_correctness:
-            reason = judgement.get('reason', judgement.get('finding', ''))
-            concerns[concern] = reason
-            # reason = f": {reason}" if reason != '' else ''
-            # concerns.add(f"* {concern}{reason}")
-    return overall_correctness, concerns
+        has_ok = 'ok' in judgement
+        has_warning = 'warning' in judgement
+        has_error = 'error' in judgement
+        total = int(has_ok) + int(has_warning) + int(has_error)
+        if total != 1:
+            raise ParseError(f"{concern} must have exactly one of 'ok', 'warning',or 'error' field.")
+        overall_correctness = (overall_correctness and not has_error)
+        blame = judgement.get('blame', None)
+        if blame is not None and len(blame) > 0:
+            blame = _step_re.search(blame).group(2)
+        if blame is not None and len(blame) == 0:
+            blame = None
+        if has_error:
+            errors[concern] = (judgement['error'], blame)
+        if has_warning:
+            concerns[concern] = (judgement['warning'], blame)
+    return overall_correctness, concerns, errors
 
 
 @_dc.dataclass
 class StepDescriptor:
     description: str
-    why: str
+    why: str|None
+    sub_steps: _t.Dict[str, _t.Any]|None = None
 
 
 def parse_step_by_step_plan(text: str) -> _t.Dict[int, StepDescriptor]:
-    results: {int: StepDescriptor} = dict()
     try:
         plan = parse_json_hash(text, two_level_hashes=True)
     except ParseError as ex:
         if not 'no JSON hash found' in str(ex):
             raise ex
         plan = {str(i + 1): {"description": desc} for i, desc in enumerate(parse_ordered_list(text))}
+    return validate_step_by_step_plan(plan)
+
+
+def validate_step_by_step_plan(plan: _t.Dict[str, _t.Any]) -> _t.Dict[int, StepDescriptor]:
+    results: _t.Dict[int, StepDescriptor] = dict()
+    last_index = -1
     for i, item in plan.items():
         if not re.match(r"^\d+$", i):
             raise ParseError(f"JSON hash key '{i}' is not an integer")
-        key = int(i)
-        index = len(results) + 1
-        if key != index:
+        key = int(i.split('.')[-1]) # sometimes we get step number in the form like "3.1", take the last
+        if key <= last_index:
             raise ParseError(f"Element keys should be a contiguous natural number sequence starting at 1. "
-                             f"Key '{key}' should be '{index}'.")
+                             f"Invalid key: '{key}'.")
+        last_index = key
         if 'description' not in item:
             raise ParseError(f'Missing description for step {key}')
-        results[index] = StepDescriptor(item['description'], item.get('why', None))
-    if len(results) < 2:
-        raise ParseError("Should have at least 2 steps in the plan. If only one step, choose answering directly")
+        results[len(results) + 1] = StepDescriptor(item['description'], item.get('why', None),
+                                                   item.get('sub_steps', None))
+    if len(results) == 0:
+        raise ParseError("Should have at least 2 steps in the plan. If only one step, answer directly")
+    if len(results) == 1:
+        sub_steps = next(iter(results.values())).sub_steps
+        if sub_steps is None or len(sub_steps) == 0:
+            raise ParseError("Should have at least 2 steps in the plan. If only one step, answer directly")
+        return validate_step_by_step_plan(sub_steps)
     return results
 
 

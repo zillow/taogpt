@@ -141,7 +141,7 @@ class DirectAnswerStep(TaoReplyStep):
 
     @property
     def step_title(self) -> str:
-        return DirectAnswerStep.TYPE_SPEC
+        return "[My thought]"
 
     def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str, is_final_step=False):
         super().__init__(previous=previous, description=description, role=role)
@@ -226,12 +226,29 @@ class StepByStepPlan(TaoReplyStep):
         self._update_file_step: _t.Optional[StepDescriptor] = None
         self.first_step = f"{self._steps[1].description}" # 1-base
         # erase sub_steps
-        step_def = {i: {'description': _utils.single_space(strip_quotes_re.sub('', step.description))}
-                    for i, step in self._steps.items()}
-        self.description = f"""```json
-{_json.dumps(step_def, indent=2)}
-```
-"""
+        def stringyfy(steps) -> str:
+            return "\n".join([f"{i}. {_utils.single_space(strip_quotes_re.sub('', step.description))}"
+                              for i, step in steps.items()])
+        step_desc = stringyfy(self._steps).strip()
+        self.description = f"""\n{step_desc}\n"""
+        previous_plan: StepByStepPlan|None = None
+        while previous is not None:
+            if isinstance(previous, StepByStepPlan):
+                previous_plan = previous
+                break
+            previous = previous.previous
+        if previous_plan is not None:
+            previous_plan_steps = stringyfy(previous_plan._steps).strip().lower()
+            distance = _utils.normalized_levenstein_distance(previous_plan_steps, step_desc.lower())
+            if distance < 0.5:
+                raise ParseError("This step-by-step plan looks like repetition of the previous plan. "
+                                 "Come up with a real plan")
+#         step_def = {i: {'description': _utils.single_space(strip_quotes_re.sub('', step.description))}
+#                     for i, step in self._steps.items()}
+#         self.description = f"""```json
+# {_json.dumps(step_def, indent=2)}
+# ```
+# """
 
     @property
     def steps(self) -> _t.Dict[int, StepDescriptor]:
@@ -279,23 +296,29 @@ class FinalAnswerStep(TaoReplyStep):
         add_files_to_prompts(executor, prompts)
         sage_prompt = executor.prompts.sage_final_check
         prompts.append((ROLE_ORCHESTRATOR, sage_prompt))
-        all_criticisms = self.check_final_answer(executor, prompts)
-        if len(all_criticisms) == 0:
+        all_errors = self.check_final_answer(executor, prompts)
+        if len(all_errors) == 0:
             return None
 
-        prompts = executor.show_conversation_thread(with_extras=True)
-        prompts.append((ROLE_SAGE, f"```json\n{_json.dumps(all_criticisms)}\n```"))
-        blame_prompt = executor.prompts.sage_blame
-        prompts.append((ROLE_ORCHESTRATOR, blame_prompt))
-        response = executor.sage_llm.ask(executor.prompts.sage_intro, prompts, temperature=0.0,
-                                         reason="blame_step",
-                                         collapse_contents={"sage_blame_step": blame_prompt})
-        try:
-            step_and_blames = parse_json_hash(response)
-            if not isinstance(step_and_blames, dict):
-                raise ParseError(f"Expecting JSON hash, got {type(step_and_blames)}")
-        except json.JSONDecodeError as e:
-            raise ParseError(f"Invalid JSON: {str(e)}")
+        step_and_blames = {
+            step: finding for finding, step in all_errors.values()
+            if step is not None
+        }
+        if len(step_and_blames) == 0:
+            prompts = executor.show_conversation_thread(with_extras=True)
+            all_errors = {k: v[0] for k, v in all_errors.items()}
+            prompts.append((ROLE_SAGE, f"```json\n{_json.dumps(all_errors)}\n```"))
+            blame_prompt = executor.prompts.sage_blame
+            prompts.append((ROLE_ORCHESTRATOR, blame_prompt))
+            response = executor.sage_llm.ask(executor.prompts.sage_intro, prompts, temperature=0.0,
+                                             reason="blame_step",
+                                             collapse_contents={"sage_blame_step": blame_prompt})
+            try:
+                step_and_blames = parse_json_hash(response)
+                if not isinstance(step_and_blames, dict):
+                    raise ParseError(f"Expecting JSON hash, got {type(step_and_blames)}")
+            except json.JSONDecodeError as e:
+                raise ParseError(f"Invalid JSON: {str(e)}")
         blame = self.find_first_culprit(executor, step_and_blames) or self
         raise Backtrack(f'final answer verification failed.', blame=blame)
 
@@ -304,10 +327,11 @@ class FinalAnswerStep(TaoReplyStep):
                            prompts: [(str, str)],
                            votes: int=None,
                            reason='check_final_answer',
-                           collapse_contents: {str:str}=None) -> _t.Dict[str, str]:
+                           collapse_contents: _t.Dict[str, str]=None) \
+            -> _t.Dict[str, _t.Tuple[str, str|None]]:
         system_prompt = executor.prompts.sage_intro
         votes = votes or executor.config.votes
-        all_criticism: _t.Dict[str, str] = dict()
+        all_errors: _t.Dict[str, _t.Tuple[str, str|None]] = dict()
         min_yes_needed = int(_math.ceil(votes * _CONTINUE_VOTE_QUORUM))
         max_no_allowed = int(_math.ceil(votes * (1 - _CONTINUE_VOTE_QUORUM)))
         n_success, n_true = 0, 0
@@ -325,11 +349,11 @@ class FinalAnswerStep(TaoReplyStep):
                         temperature=0.0 if n_success == 0 else 0.1,
                         collapse_contents=collapse_contents,
                         log_request=i == 0)
-                    result, criticisms = parse_final_response(response)
+                    result, warnings, errors = parse_verification_response(response)
                     n_success += 1
                     if result:
                         n_true += 1
-                    all_criticism.update(criticisms)
+                    all_errors.update(errors)
                     if n_true >= min_yes_needed:
                         break
                     if (n_success - n_true) >= max_no_allowed:
@@ -341,7 +365,7 @@ class FinalAnswerStep(TaoReplyStep):
         if n_success == 0:
             raise RuntimeError('Sage failed to perform execution state check')
         if (n_true / n_success) < _CONTINUE_VOTE_QUORUM:
-            return all_criticism
+            return all_errors
         return dict()
 
     def find_first_culprit(self, executor: Executor, blames: _t.Dict[str, str]) -> _t.Optional[Step]:
@@ -563,16 +587,17 @@ class ExpandableStep(Step):
             -> _t.Tuple[str, _t.List[_t.Tuple[str, str]]]:
         prompt_db = executor.prompts
         system_prompt = prompt_db.tao_intro
-        direct_answer = prompt_db.tao_template_intuitive_answer if executor.is_first_solving_expansion() \
-            else prompt_db.tao_template_direct_step_answer
+        first = executor.is_first_solving_expansion()
+        direct_answer = prompt_db.tao_template_intuitive_answer if first else prompt_db.tao_template_direct_step_answer
+        direct_answer = direct_answer.format(notes_for_files=prompt_db.tao_template_notes_for_files)
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
         base_prompts: _t.List[(str, str)] = executor.show_conversation_thread()
         files = add_files_to_prompts(executor, base_prompts)
         base_prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
-        collapse_contents['tao_templates'] = tao_templates
-        if len(files) > 0:
-            base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_template_notes_for_files))
-            collapse_contents['notes_for_files'] = prompt_db.tao_template_notes_for_files
+        if first:
+            collapse_contents['tao_templates'] = tao_templates
+        else:
+            collapse_contents['tao_templates_first_expansion'] = tao_templates
         return system_prompt, base_prompts
 
     def rank_choices(self, executor: Executor, n_existing_choices: int = 0):
@@ -590,9 +615,8 @@ class ExpandableStep(Step):
                 return # nothing left to rank, skip ranking
         prompt_db: PromptDb  = executor.prompts
         system_prompt = prompt_db.sage_intro
-        direct_answer = prompt_db.tao_template_intuitive_answer if executor.is_first_solving_expansion() \
-            else prompt_db.tao_template_direct_step_answer
-        tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
+        rank_choice_instruction = prompt_db.orchestrator_rank_choices.split('---')[-1].strip()
+        collapse_contents = {'rank_choices': rank_choice_instruction}
 
         def _select_except_self(_: int, step: StepABC) -> bool:
             return step != self
@@ -611,6 +635,7 @@ class ExpandableStep(Step):
                 for i, plan in enumerate(self.choices)
             ])
         )
+
         prompts.append((ROLE_ORCHESTRATOR, work_prompt))
         rankings_one_based: _t.Dict[int, float] = defaultdict(lambda: 0.0)
         ranking_types = {i+1: plan.step_title for i, plan in enumerate(self.choices)}
@@ -621,14 +646,13 @@ class ExpandableStep(Step):
             prompts_to_be_sent = prompts.copy()
             while n_retries < executor.config.max_retries:
                 try:
-                    rank_choice_instruction = prompt_db.orchestrator_rank_choices.split('---')[-1].strip()
                     response = executor.sage_llm.ask(
                         system_prompt, prompts_to_be_sent,
                         reason='rank_choices',
                         step_id=f"{self.step_id}/{n_success}#{n_retries}",
                         temperature=0.0 if n_success == 0 else 0.1,
                         log_request=(n_success == 0 and n_retries == 0),
-                        collapse_contents={'tao_templates': tao_templates, 'rank_choices': rank_choice_instruction})
+                        collapse_contents=collapse_contents)
                     scores, dupes = parse_ranking_response(response, len(self.choices))
                     for plan, score in scores.items():
                         rankings_one_based[plan] += score
@@ -763,13 +787,11 @@ class NextStep(ExpandableStep):
         system_prompt = prompt_db.tao_intro
         prompts = executor.show_conversation_thread()
         files = add_files_to_prompts(executor, prompts)
-        direct_answer = prompt_db.tao_template_direct_step_answer
+        direct_answer = prompt_db.tao_template_direct_step_answer.format(
+            notes_for_files=prompt_db.tao_template_notes_for_files)
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
         prompts.append((ROLE_ORCHESTRATOR, tao_templates))
         collapse_contents['tao_template'] = tao_templates
-        if len(files) > 0:
-            prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_template_notes_for_files))
-            collapse_contents['notes_for_files'] = prompt_db.tao_template_notes_for_files
         if self.step_name is not None:
             prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_at_step.format(current_step=self.step_name)))
         next_step_prompt = prompt_db.orchestrator_next_step
@@ -806,7 +828,7 @@ class SummarizeStep(ExpandableStep):
 
     @property
     def step_title(self) -> str:
-        return "Summarize"
+        return "Summarize final answer"
 
     @property
     def _expansion_reason(self) -> str:

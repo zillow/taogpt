@@ -7,7 +7,7 @@ import typing as _t
 
 from taogpt import Config
 from taogpt.runner import solve_problem, load_and_resume_problem
-from taogpt.utils import set_openai_credentials_from_json
+from taogpt.utils import set_openai_credentials
 
 # The skeleton is created by the GPT-4
 parser = argparse.ArgumentParser(
@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(
 )
 
 # hyperparameters
-parser.add_argument('-i', '--initial-expansion', type=int, default=1, help='Initial expansion factor')
+parser.add_argument('-i', '--initial-expansion', type=int, default=2, help='Initial expansion factor')
 parser.add_argument('-f', '--first-expansion', type=int, default=1, help='First expansion factor')
 parser.add_argument('-T0', '--first-try-temperature', type=float, default=0.0, help='First try temperature')
 parser.add_argument('-T1', '--alternative-temperature', type=float, default=0.7, help='Alternative temperature')
@@ -46,27 +46,28 @@ parser.add_argument('-Q', '--ask-user-questions-in-one-prompt', type=bool, defau
                     action=argparse.BooleanOptionalAction, help='Ask user questions in one prompt')
 parser.add_argument('-E', '--ask-user-before-execute-codes', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Ask user before execute codes')
-parser.add_argument('-P', '--pause-after-initial-solving-expansion', type=bool, default=True,
+parser.add_argument('-P', '--pause-after-initial-solving-expansion', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Pause after initial solving expansion')
 parser.add_argument('-R', '--pause-after-final-answer-rejected', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Pause after any final answer rejected by Sage')
 
 # separate settings
 parser.add_argument('-p', '--path', type=str, required=True, help='Directory path for outputs')
-parser.add_argument('-llm', '--llm', type=str, choices=['gpt-4', 'gpt-3.5'], default='gpt-4',
+parser.add_argument('-llm', '--llm', type=str, default='gpt-4-turbo',
                     help='Default LLM model name')
-parser.add_argument('--sage-llm', type=str, choices=['gpt-4', 'gpt-3.5'], default=None,
+parser.add_argument('--sage-llm', type=str, default=None,
                     help='Sage LLM model name')
-parser.add_argument('--long-llm', type=str, choices=['gpt-4-32k', 'gpt-3.5-16k'], default=None,
+parser.add_argument('--long-llm', type=str, default=None,
                     help='Default long-context LLM model name')
-parser.add_argument('--long-sage-llm', type=str, choices=['gpt-4-32k', 'gpt-3.5-16k'], default=None,
+parser.add_argument('--long-sage-llm', type=str, default=None,
                     help='Long-context sage LLM model name')
 parser.add_argument('--long-context-threshold', type=int, default=3000,
                     help='Number of tokens before switching to long-context LLM')
 
-parser.add_argument('-C', '--openai-credential-json', type=str, default=None,
-                    help='File path of JSON hash containing `key` and `url` '
-                         'corresponding to "OPENAI_API_KEY" and "OPENAI_API_BASE" respectively')
+parser.add_argument('-C', '--openai-credential', type=str, default=None,
+                    help='File path of .ini file or .json containing `key` and `url` (in the `DEFAULT` section)'
+                         'corresponding to the `OPENAI_API_KEY` and `OPENAI_API_BASE` '
+                         'environment variables respectively')
 parser.add_argument('-D', '--debug', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Enable debugging')
 parser.add_argument('-L', '--load-chain', type=bool, default=False,
@@ -77,7 +78,7 @@ parser.add_argument('-L', '--load-chain', type=bool, default=False,
 parser.add_argument('user_task', type=str, nargs='?', default=None,
                     help='User task in markdown text. '
                          'If the string starts with "@", it is either the path to a text file to be read or a pickle '
-                         'file containing the state of the problem solving session.')
+                         'file with suffix `.pkl` containing the state of the problem solving session.')
 
 def main() -> int:
     args = parser.parse_args()
@@ -111,8 +112,8 @@ def main() -> int:
     elif load_previous:
         raise ValueError("--load-chain option is specified but the task argument is not a file")
 
-    if args.openai_credential_json is not None:
-        set_openai_credentials_from_json(args.openai_credential_json)
+    if args.openai_credential is not None:
+        set_openai_credentials(args.openai_credential)
     key = os.environ.get("OPENAI_API_KEY", None)
     if llm.startswith('gpt-') and (key is None or key == ''):
         raise PermissionError("Must set OPENAI_API_KEY environment variable.")

@@ -438,7 +438,7 @@ Example command-line invocation with a simple arithmetic problem:
 
 ```shell
 mkdir /tmp/taogpt_outputs # directory where output files go to.
-taogpt -p /tmp/taogpt_outputs -llm gpt-3.5 --sage-llm=gpt-4 "What's x mod (y - z) where x = 10, y = 7, z = 4."
+taogpt -p /tmp/taogpt_outputs "What's x mod (y - z) where x = 10, y = 7, z = 4."
 ```
 
 The command-line tool will print out (abbreviated) log in the console. A file logging the problem solving
