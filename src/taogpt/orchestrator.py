@@ -117,8 +117,7 @@ class Orchestrator(Executor):
             self.config.max_tokens_for_sage_llm += additional_sage_tokens
             self.logger.log(f"**resume**: extend token allowance for sage "
                             f"LLM by {additional_sage_tokens} to {self.config.max_tokens_for_sage_llm}")
-        if unblock_initial_expansion:
-            self.config.pause_after_initial_solving_expansion = False
+        self.config.pause_after_initial_solving_expansion = False
         self._execute_with_backtracking()
 
     def _execute_with_backtracking(self):
@@ -252,10 +251,11 @@ class Orchestrator(Executor):
                 elif _utils.safe_is_instance(self._chain[i], (DirectAnswerStep, PythonGenieReplyStep, StepByStepPlan)):
                     break
             if is_direct_answer_only: # replace
+                self._chain[-1].set_visible_in_chain(False)
                 final_answer_step = FinalAnswerStep(previous=self._chain[-2],
                                                     description=last_step.description,
                                                     role=ROLE_TAO)
-                self._chain[-1] = final_answer_step
+                self._chain.append(final_answer_step)
                 return
 
         summarize_step = SummarizeStep(previous=self.chain[-1],

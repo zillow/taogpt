@@ -1,19 +1,12 @@
-### Notes for file content sections
-
-If (and only if) the task requires writing files, write a Mrkdown block for each file in a `### FILE:` section.
-
-Try to write full and correct contents in one shot. Do not repeat a previous written file unless you need to change 
-the files.
-
-Example:
+If (and only if) the task requires writing files, add a Markdown `### FILE:` section for each file and put the content
+in a block. Example:
 
 ````markdown
-# I_WILL_ANSWER_DIRECTLY
 
-### FILE: path/to/file.txt
+### FILE: path/to/codes.py
 <short description of this file>
 
-```text
+```python
 <content of this file>
 ```
 ````

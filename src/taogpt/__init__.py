@@ -25,7 +25,7 @@ class LLM:
     def total_tokens(self):
         return 0
 
-    def ask(self, system_prompt: str, conversation: _t.List[_t.Tuple[str, str]], reason=None,
+    def ask(self, system_prompt: str|None, conversation: _t.List[_t.Tuple[str, str]], reason=None,
             temperature: float=None, log_request=True, collapse_contents: {str: str}=None,**_) -> str:
         pass
 
@@ -66,11 +66,12 @@ class Config:
     first_try_temperature: float = 0.0
     alternative_temperature: float = 0.7
     max_search_expansion: int = 4
+    always_try_intuition: bool = True
     votes: int = 1
 
     # behavioral
     analyze_first: bool = True
-    check_final: bool = True,
+    check_final: bool = True
 
     # token usage controls
     max_tokens: int = 10000

@@ -19,7 +19,7 @@ _all_step_types = '|'.join([
     WILL_ANSWER_DIRECTLY,
     WILL_ASK_QUESTIONS
 ])
-_step_type_re = re.compile(
+step_type_re = re.compile(
     r"(^|\n)#{1,2}\s*(I_WILL_ANSWER_DIRECTLY"
     r"|LET_ME_ASK_THE_PYTHON_GENIE"
     r"|BACKTRACK_ON_ERROR"
@@ -41,7 +41,7 @@ def parse_step_type_spec(text: str) -> _t.Optional[(str, str)]:
     text = _utils.str_or_blank(text)
     if text == '':
         return None, None
-    match: re.Match = _step_type_re.search(text)
+    match: re.Match = step_type_re.search(text)
     if match is None:
         return None, None
     step_type, definition = match.group(2), _utils.str_or_blank(match.group(3))

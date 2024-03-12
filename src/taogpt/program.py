@@ -62,12 +62,16 @@ class Step(StepABC):
         return ''
 
     def show_in_thread(self, with_header=True, with_extras=False) -> [(str, str)]:
+        content = self.description_with_header_and_extras(with_header, with_extras)
+        return [(self.role, content)]
+
+    def description_with_header_and_extras(self, with_header, with_extras):
         content = self.description_with_header if with_header else self.description
         if with_extras:
             extras = _utils.str_or_blank(self.extras)
             if extras != '':
                 content += '\n\n' + extras
-        return [(self.role, content)]
+        return content
 
     def retryable(self, config: Config):
         return False
@@ -287,7 +291,7 @@ class FinalAnswerStep(TaoReplyStep):
             return _utils.safe_is_instance(step, (PresentTaskStep, AskQuestionStep, FinalAnswerStep))
 
         prompts = executor.show_conversation_thread(selector=_select)
-        add_files_to_prompts(executor, prompts)
+        add_files_to_prompts(executor, prompts, role=ROLE_TAO)
         sage_prompt = executor.prompts.sage_final_check
         prompts.append((ROLE_ORCHESTRATOR, sage_prompt))
         all_errors = self.check_final_answer(executor, prompts)
@@ -501,7 +505,7 @@ class ExpandableStep(Step):
                  incremental_expansion: int=1,
                  max_expansion: int=4):
         super().__init__(previous=previous, description=description, role=role)
-        self.choices = choices
+        self.choices = choices if choices is not None else []
         self.first_expansion = first_expansion
         self.incremental_expansion = incremental_expansion
         self.max_expansion = max_expansion
@@ -509,16 +513,15 @@ class ExpandableStep(Step):
         self._ptr = 0
         self.n_expanded = 0
         self._new_criticisms: {int: {str}} = dict()
-        if self.choices is not None:
-            for next_step in self.choices:
-                next_step.previous = self
+        for next_step in self.choices:
+            next_step.previous = self
 
     @property
     def step_title(self) -> str:
         return "A step-by-step plan"
 
     def __repr_local__(self) -> str:
-        desc = ','.join([step.__class__.__name__ for step in self.choices] if self.choices is not None else [])
+        desc = ','.join([step.__class__.__name__ for step in self.choices])
         return f"[{desc}],ptr={self._ptr}"
 
     @property
@@ -534,8 +537,6 @@ class ExpandableStep(Step):
         system_prompt, base_prompts = self.build_prompts(executor, collapse_contents)
         if self.n_expanded > 0:
             base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_error_noted))
-        if self.choices is None:
-            self.choices = []
         llm = executor.sage_llm if executor.is_first_solving_expansion() \
                                    and executor.config.use_sage_llm_for_initial_expansion else executor.llm
         while self.n_expanded < upto_branches:
@@ -586,13 +587,45 @@ class ExpandableStep(Step):
         direct_answer = direct_answer.format(notes_for_files=prompt_db.tao_template_notes_for_files)
         tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
         base_prompts: _t.List[(str, str)] = executor.show_conversation_thread()
-        files = add_files_to_prompts(executor, base_prompts)
+        add_files_to_prompts(executor, base_prompts)
         base_prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
         if first:
             collapse_contents['tao_templates'] = tao_templates
         else:
             collapse_contents['tao_templates_first_expansion'] = tao_templates
         return system_prompt, base_prompts
+
+    def ask_for_intuition(self, executor: Executor) -> Step|None:
+        prompts: _t.List[(str, str)] = executor.show_conversation_thread(selector=lambda i, step: step is not self)
+        prompt_db = executor.prompts
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_proceed_intuitively.format(step=self.step_name)))
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_template_notes_for_files))
+        collapse_contents = {'notes_for_files': prompt_db.tao_template_notes_for_files}
+        add_files_to_prompts(executor, prompts)
+        intuition = executor.llm.ask(
+            None, prompts,
+            reason=self._expansion_reason,
+            step_id=f"{self.step_id}/intuition#{0}",
+            temperature=executor.config.first_try_temperature,
+            log_request=True,
+            collapse_contents=collapse_contents).strip()
+        if len(intuition) == 0:
+            return None
+
+        if executor.is_first_solving_expansion():
+            intuition = f"""{intuition}
+
+### {NEXT_I_WANT_TO_WORK_AT}:
+None. This is the final step.
+"""
+        match: re.Match = step_type_re.search(intuition)
+        if match is not None:
+            step = parse_to_step(self, intuition, executor.config, self.step_name)
+        else:
+            step = DirectAnswerStep.create(self, intuition, role=ROLE_TAO, config=executor.config)
+            if self.step_name is not None:
+                step.set_step_name(self.step_name)
+        return step
 
     def rank_choices(self, executor: Executor, n_existing_choices: int = 0):
         question_indices = [i for i in range(n_existing_choices, len(self.choices))
@@ -625,7 +658,7 @@ class ExpandableStep(Step):
         work_prompt = prompt_db.orchestrator_rank_choices.format(
             tao_templates='', # skip template
             approaches='\n\n---\n\n'.join([
-                f"# [Approach {i+1}] {_fix_desc_heading(plan.description_with_header)}"
+                f"# [Approach {i+1}] {_fix_desc_heading(plan.description_with_header_and_extras(True, True))}"
                 for i, plan in enumerate(self.choices)
             ])
         )
@@ -698,7 +731,6 @@ class ExpandableStep(Step):
                 scores[dupe] = -_math.fabs(scores[original])
 
     def retryable(self, config):
-        assert self.choices is not None
         return self.n_expanded < config.max_search_expansion \
             or self._ptr < len(self.choices) - 1 # consume existing expansions
 
@@ -733,9 +765,16 @@ class ExpandableStep(Step):
 Looks like the final answer was rejected by Sage. Do you want to backtrack and try alternative?""")
 
     def eval_only(self, executor: Executor) -> Step | None:
+        tried_intuition = False
+        if len(self.choices) == 0 and executor.config.always_try_intuition:
+            intuition = self.ask_for_intuition(executor)
+            if intuition is not None:
+                self.choices.append(intuition)
+                self.max_expansion += 1
+                tried_intuition = True
         logger = executor.logger
         old_length = self.n_expanded
-        if (self.choices is None or self._ptr >= len(self.choices)) and old_length < self.max_expansion:
+        if (tried_intuition or self._ptr >= len(self.choices)) and old_length < self.max_expansion:
             incr = self.first_expansion if old_length == 0 else self.incremental_expansion
             logger.log_debug(f"{self.step_id}/'{self.step_name}' expanding from {self.n_expanded} by {incr} to:"
                     f" {self._ptr + incr}. max={self.max_expansion}")
@@ -745,7 +784,7 @@ Looks like the final answer was rejected by Sage. Do you want to backtrack and t
                 self.rank_choices(executor, n_existing_choices=old_length)
             if executor.is_first_solving_expansion() and executor.config.pause_after_initial_solving_expansion:
                 raise Pause("Pause after initial solving expansion", self)
-        if self.choices is None or len(self.choices) == 0:
+        if len(self.choices) == 0:
             raise Backtrack('No viable options.', blame=self)
         if self._ptr < len(self.choices):
             return self.choices[self._ptr]

@@ -4,9 +4,13 @@ import typing as _t
 from io import TextIOBase as _TextIOBase
 import pickle as _pickle
 
-from langchain_openai import ChatOpenAI
 from taogpt import Pause, MarkdownLogger, PromptDb, Config, GeneratedFile
-from taogpt.llm_model import LangChainLLM, fix_model_name, get_long_model
+from taogpt.llm_model import (
+    LangChainLLM,
+    fix_model_name,
+    get_long_model,
+    ChatOpenAIWithGenInfo as _ChatOpenAI
+)
 from taogpt.orchestrator import Orchestrator
 from io import TextIOBase as _TextIO
 
@@ -48,7 +52,7 @@ def load_and_resume_problem(
     pause: _t.Optional[Pause] = None
     log_final_chain(executor, log_path, console_out=console_out)
     try:
-        executor.resume(0, unblock_initial_expansion=True)
+        executor.resume(0)
     except Pause as e:
         pause = e
     _continue_solving(executor, log_path, console_out, pause)
@@ -65,8 +69,7 @@ def _continue_solving(executor, log_path, console_out, pause):
             break
         pause = None
         try:
-            executor.resume(additional_tokens=int(resume), unblock_initial_expansion=True,
-                            additional_sage_tokens=int(resume) // 3)
+            executor.resume(additional_tokens=int(resume), additional_sage_tokens=int(resume) // 3)
         except Pause as e:
             pause = e
     log_final_chain(executor, log_path, console_out=console_out)
@@ -109,15 +112,15 @@ def create_orchestrator(
     long_sage_llm = fix_model_name(get_long_model(long_sage_llm), default_to=sage_llm)
     prompts = PromptDb.load_defaults()
     logger = MarkdownLogger(_p.Path(log_path) / 'taogpt_log.md', log_debug=debug, console_out=log_to_stdout)
-    long_ctx_llm = ChatOpenAI(model_name=long_llm) if long_llm is not None and long_llm != llm else None
-    primary_model = LangChainLLM(ChatOpenAI(model_name=llm), logger=logger,
+    long_ctx_llm = _ChatOpenAI(model_name=long_llm) if long_llm is not None and long_llm != llm else None
+    primary_model = LangChainLLM(_ChatOpenAI(model_name=llm), logger=logger,
                                  long_context_llm=long_ctx_llm,
                                  long_context_token_threshold=long_context_token_threshold)
     sage_model: _t.Optional[LangChainLLM] = None
     if sage_llm is not None and sage_llm != llm:
-        long_ctx_llm = ChatOpenAI(model_name=long_sage_llm) \
+        long_ctx_llm = _ChatOpenAI(model_name=long_sage_llm) \
             if long_sage_llm is not None and long_sage_llm != sage_llm else None
-        sage_model = LangChainLLM(ChatOpenAI(model_name=sage_llm), logger=logger,
+        sage_model = LangChainLLM(_ChatOpenAI(model_name=sage_llm), logger=logger,
                                   long_context_llm=long_ctx_llm,
                                   long_context_token_threshold=long_context_token_threshold)
     executor = Orchestrator(

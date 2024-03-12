@@ -1,3 +1,4 @@
+from __future__ import annotations
 import typing as _t
 
 import pytest
@@ -28,7 +29,7 @@ class MockLLM(LLM):
     def total_tokens(self):
         return self._total_tokens
 
-    def ask(self, system_prompt: str, conversation: _t.List[_t.Tuple[str, str]], reason=None,
+    def ask(self, system_prompt: str|None, conversation: _t.List[_t.Tuple[str, str]], reason=None,
             temperature: float=None, log_request=True, collapse_contents: {str: str}=None,
             step_id='0', **_) -> str:
         self.collapsed_contents.update(collapse_contents or dict())

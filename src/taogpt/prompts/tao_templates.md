@@ -38,7 +38,7 @@ following template **strictly** so the orchestrator can parse it and show the qu
 
 ## Strategy: Step-by-step Plan
 
-In this strategy, the problem task is turned into a top-down, high-level, step-by-step plan of which you and 
+In this strategy, the current step is turned into a top-down, high-level, step-by-step plan of which you and 
 Orchestrator will solve using tree traversal and backtracking.
 
 * Think abstract. Come up with generic, and high-level. Avoid detailed, specific, fixed-value, and low-level ones. 
@@ -47,6 +47,7 @@ Orchestrator will solve using tree traversal and backtracking.
   values" instead of "Set 2nd and 5th elements to 22".
 * Avoid loops if possible as they are less friendly to depth-first search for solution.
 * Worship Occam's razor.
+* Do not jump ahead. Plan only for this step.
 
 Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
 
