@@ -157,5 +157,5 @@ def set_openai_credentials(path: str):
             config = _config.ConfigParser()
             config.read_file(f)
             credentials = config['DEFAULT']
-    _os.environ["OPENAI_API_KEY"] = credentials['key']
-    _os.environ["OPENAI_API_BASE"] = credentials['url']
+    for k, v in credentials.items():
+        _os.environ[k] = v
