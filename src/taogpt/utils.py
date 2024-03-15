@@ -158,4 +158,4 @@ def set_openai_credentials(path: str):
             config.read_file(f)
             credentials = config['DEFAULT']
     for k, v in credentials.items():
-        _os.environ[k] = v
+        _os.environ[k.upper()] = v

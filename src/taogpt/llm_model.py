@@ -17,6 +17,7 @@ import taogpt.md_logging
 from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_TAO, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
 import taogpt.utils as _utils
 from . import LLM
+from taogpt.parsing import fix_fenced_block_backticks
 
 _last_conversation: _t.List|None = None
 
@@ -167,7 +168,8 @@ class LangChainLLM(LLM):
             if self.long_context_llm is not None and context_tokens > self.long_context_token_threshold:
                 llm = self.long_context_llm
                 token_factor = self.long_context_llm_token_factor
-            reply_content = self.invoke_llm(llm, messages)
+            reply_content, context_tokens = self.invoke_llm(
+                llm, messages, return_context_token_usages=True)
             reply_content_logged = reply_content
             is_json = ''
             try:
@@ -179,7 +181,7 @@ class LangChainLLM(LLM):
                 pass
             reply_tokens = self.count_tokens(reply_content)
             token_count = context_tokens + reply_tokens
-            self._logger.log(f"{is_json}Reply: temperature={temperature}n")
+            self._logger.log(f"{is_json}Reply: temperature={temperature}")
             self._logger.log(reply_content_logged, demote_h1=True)
 
             eff_tokens = f" (eff. tokens: {token_count * token_factor})" if token_factor != 1.0 else ''
@@ -196,8 +198,23 @@ class LangChainLLM(LLM):
                 self.merge_collapsed_contents(collapse_contents)
 
     def invoke_llm(self, llm: _ChatOpenAI, messages: list[BaseMessage],
-                   max_tokens: int|None=None):
+                   max_tokens: int|None=None, return_context_token_usages=False):
+        context_tokens = 0
+        for msg in messages:
+            role = LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[ROLE_SYSTEM] # just in case we can't tell the role
+            if isinstance(msg, ChatMessage):
+                role = msg.role
+            context_tokens += self.count_tokens(role)
+            context_tokens += self.count_tokens(msg.content)
+        total_context_tokens = context_tokens
         if isinstance(llm, ChatOpenAIWithGenInfo):
+            if max_tokens is None:
+                max_tokens = GPT_OUTPUT_TOKEN_LIMITS.get(self.model_id, None)
+                if max_tokens is not None and max_tokens < 0:
+                    max_tokens = abs(max_tokens) - context_tokens
+                assert max_tokens is None or max_tokens > 0, f"No more output tokens allowed: {max_tokens}"
+
+            total_context_tokens = 0
             to_be_sent = messages.copy()
             reply_content = ''
             while True:
@@ -213,10 +230,13 @@ class LangChainLLM(LLM):
 
                 to_be_sent.append(ChatMessage(
                     role=LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[ROLE_SYSTEM], content=CONTINUATION_PROMPT))
+                total_context_tokens += (context_tokens + self.count_tokens(reply_content)
+                                         + self.count_tokens(CONTINUATION_PROMPT))
         else:
             reply = llm.invoke(messages, max_tokens=max_tokens)
             reply_content = reply.content
-        return reply_content
+        reply_content = fix_fenced_block_backticks(reply_content)
+        return (reply_content, total_context_tokens) if return_context_token_usages else reply_content
 
     def count_tokens(self, text: str) -> int:
         text = _utils.str_or_blank(text)

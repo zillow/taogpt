@@ -14,7 +14,7 @@ from taogpt import utils as _utils
 class LLM:
 
     def __init__(self):
-        self.collapsed_contents: {str: str} = dict()
+        self.collapsed_contents: dict[str, str] = dict()
 
     @property
     @_abc.abstractmethod
@@ -25,8 +25,8 @@ class LLM:
     def total_tokens(self):
         return 0
 
-    def ask(self, system_prompt: str|None, conversation: _t.List[_t.Tuple[str, str]], reason=None,
-            temperature: float=None, log_request=True, collapse_contents: {str: str}=None,**_) -> str:
+    def ask(self, system_prompt: str|None, conversation: list[_t.Tuple[str, str]], reason=None,
+            temperature: float=None, log_request=True, collapse_contents: dict[str, str]=None,**_) -> str:
         pass
 
     def reset(self):
@@ -66,7 +66,8 @@ class Config:
     first_try_temperature: float = 0.0
     alternative_temperature: float = 0.7
     max_search_expansion: int = 4
-    always_try_intuition: bool = True
+    try_intuition: bool = True
+    try_intuition_first_expansion: bool = True
     votes: int = 1
 
     # behavioral
@@ -90,7 +91,7 @@ class Config:
 class Executor(_abc.ABC):
 
     def __init__(self, input_fn: _t.Callable[[str], str]=None, **kwargs):
-        self._pending_pause: _t.Optional[str] = None
+        self._pending_pause: str|None = None
         self._input_fn = local()
         if input_fn is not None:
             self._input_fn.callback = input_fn
@@ -142,20 +143,20 @@ class Executor(_abc.ABC):
     @_abc.abstractmethod
     def show_conversation_thread(self, with_header=True, with_extras=False,
                                  selector: _t.Callable[[int, StepABC], bool] | None=None) \
-            -> [(str, str)]:
+            -> list[tuple[str, str]]:
         pass
 
-    def record_criticisms(self, criticisms: [str]):
+    def record_criticisms(self, criticisms: list[str]):
         pass
 
     @_abc.abstractmethod
     def is_first_solving_expansion(self) -> bool:
         pass
 
-    def ask_questions(self, questions: [str]) -> {str: str}:
+    def ask_questions(self, questions: list[str]) -> dict[str, str]:
         raise NotImplementedError('No user agent feature in the base')
 
-    def ask_genie(self, codes: [str], step: StepABC) -> [str]:
+    def ask_genie(self, codes: list[str], step: StepABC) -> list[str]:
         raise NotImplementedError('No ask genie agent feature in the base')
 
     @property
@@ -166,22 +167,22 @@ class Executor(_abc.ABC):
     def handle_parse_error(self,
                            e: Exception,
                            n_retries: int,
-                           prompts: [(str, str)],
-                           prompts_to_be_sent: [(str, str)],
+                           prompts: list[tuple[str, str]],
+                           prompts_to_be_sent: list[tuple[str, str]],
                            response: str,
                            retry_prompt: str):
         raise e # base just re-throw without retry
 
     @property
-    def pending_pause(self) -> _t.Optional[str]:
+    def pending_pause(self) -> str|None:
         return self._pending_pause
 
-    def request_pause(self, reason: _t.Optional[str]):
+    def request_pause(self, reason: str|None):
         self._pending_pause = reason
 
 class StepABC(_abc.ABC):
 
-    def __init__(self, *, previous: _t.Optional[StepABC], description: str, role: str):
+    def __init__(self, *, previous: StepABC|None, description: str, role: str):
         self.previous = previous
         self.description = description
         self.role = role
@@ -219,7 +220,7 @@ class StepABC(_abc.ABC):
         self._visible = visible
 
     @property
-    def collected_files(self) -> _t.Dict[str, GeneratedFile]:
+    def collected_files(self) -> dict[str, GeneratedFile]:
         return dict()
 
     @property
@@ -260,7 +261,7 @@ class GeneratedFile:
     description: str
 
     @staticmethod
-    def collect_files(chain: _t.List[StepABC]) -> _t.Dict[str, GeneratedFile]:
+    def collect_files(chain: list[StepABC]) -> dict[str, GeneratedFile]:
         files = dict()
         for step in chain:
             for path, file in step.collected_files.items():

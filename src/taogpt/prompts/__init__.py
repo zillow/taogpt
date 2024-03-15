@@ -29,6 +29,7 @@ class PromptDb:
     sage_intro: str
     sage_final_check: str
     sage_blame: str
+    sage_fix_issues: str
 
     @staticmethod
     def load_defaults():
@@ -63,4 +64,5 @@ class PromptDb:
             sage_intro=_read(_template_dir / 'sage.md'),
             sage_final_check=_read(_template_dir / 'sage_final_check.md'),
             sage_blame=_read(_template_dir / 'sage_blame.md'),
+            sage_fix_issues=_read(_template_dir / 'sage_fix_issues.md'),
         )

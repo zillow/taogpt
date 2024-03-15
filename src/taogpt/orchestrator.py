@@ -17,7 +17,7 @@ class Orchestrator(Executor):
                  config: Config,
                  llm: LLM,
                  prompts: PromptDb,
-                 markdown_logger: taogpt.logging.MarkdownLogger,
+                 markdown_logger: taogpt.md_logging.MarkdownLogger,
                  sage_llm: LLM | None = None,
                  **kwargs):
         super().__init__(**kwargs)
@@ -27,7 +27,8 @@ class Orchestrator(Executor):
         self._markdown_logger = markdown_logger
         self._sage_llm = sage_llm
 
-        self._chain: _t.List[Step] = []
+        self._chain: list[Step] = []
+        self._reverted_steps: list[Step]|None = None
         self._create_python_scope()
         if self.config.max_tokens_for_sage_llm is None:
             if self._sage_llm is not None and self._llm is not self._sage_llm:
@@ -108,7 +109,6 @@ class Orchestrator(Executor):
         """, role='debug')
 
     def resume(self, additional_tokens: int=None,
-               unblock_initial_expansion: bool=False,
                additional_sage_tokens: int=None):
         if additional_tokens is not None:
             self.config.max_tokens += additional_tokens
@@ -144,19 +144,22 @@ class Orchestrator(Executor):
         self._execute_with_backtracking()
 
     def backtrack(self, backtrack: Backtrack):
+        reverted_steps = []
+        last_step: Step|None = None
         while len(self._chain) > 0:
             last_step = self._chain.pop(-1)
             if last_step is backtrack.blame: # found the culprit
-                self._halt_on_initial_steps(last_step)
                 break
+            else:
+                reverted_steps.append(last_step)
 
+        if last_step is None:
+            return
+        self._reverted_steps = reverted_steps
         while len(self._chain) > 0:
-            last_step = self._chain.pop(-1)
             self._halt_on_initial_steps(last_step)
             retryable = last_step.retryable(self.config)
             if retryable:
-                last_step.backtrack(self, backtrack)
-                self._chain.append(last_step)
                 cls = last_step.__class__.__name__
                 desc = _utils.safe_subn(
                     last_step.step_name if last_step.step_name is not None else last_step.description)
@@ -164,7 +167,10 @@ class Orchestrator(Executor):
                 self.logger.log(f"# BACKTRACK to {desc}@{cls}/{last_step.step_id}\n")
                 self.logger.log(f"Why: {str(backtrack)}\n")
                 self.logger.log(f"</div>\n")
+                self._chain.append(last_step) # put back
+                last_step.backtrack(self, backtrack)
                 break
+            last_step = self._chain.pop(-1)
         if len(self._chain) == 0: # empty, nothing to backtrack
             raise UnsolvableError('Fail to solve! No more viable options')
 
@@ -189,7 +195,8 @@ class Orchestrator(Executor):
             if _utils.safe_is_instance(last_step, FinalAnswerStep): # and successfully eval/checked
                 return
             if new_step is not None:
-                self._chain.append(new_step)
+                if new_step is not self.chain[-1]:
+                    self._chain.append(new_step)
             else:
                 self.next_step()
 
@@ -203,8 +210,8 @@ class Orchestrator(Executor):
 
     def show_conversation_thread(self, with_header=True, with_extras=False,
                                  selector: _t.Callable[[int, StepABC], bool] | None=None) \
-            -> [(str, str)]:
-        conversation: [(str, str)] = []
+            -> list[tuple[str, str]]:
+        conversation: list[tuple[str, str]] = []
         for i, step in enumerate(self._chain):
             if not step.visible_in_chain and i < len(self._chain) - 1:
                 continue # skip the expandable step except the last one
@@ -224,10 +231,7 @@ class Orchestrator(Executor):
             work_next_step.set_step_name("start working on the problem")
             self._chain.append(work_next_step)
         else:
-            ask_next_step = NextStep(previous=step, description='', role=ROLE_ORCHESTRATOR,
-                                     first_expansion=1,
-                                     max_expansion=self.config.max_search_expansion)
-            ask_next_step.set_step_name(self.current_step_name)
+            ask_next_step = NextStep(previous=step, description='', role=ROLE_ORCHESTRATOR)
             self._chain.append(ask_next_step)
 
     def is_first_solving_expansion(self):
@@ -263,20 +267,19 @@ class Orchestrator(Executor):
                                        role=ROLE_ORCHESTRATOR,
                                        first_expansion=1,
                                        max_expansion=self.config.max_search_expansion)
-        summarize_step.set_step_name(self.current_step_name)
         self._chain.append(summarize_step)
 
-    def record_criticisms(self, criticisms: [str]):
+    def record_criticisms(self, criticisms: list[str]):
         for step in reversed(self._chain):
             if _utils.safe_is_instance(step, ExpandableStep):
                 step: ExpandableStep
                 step.record_criticism(criticisms)
 
-    def ask_questions(self, questions: [str]) -> {str: str}:
+    def ask_questions(self, questions: list[str]) -> dict[str, str]:
         # for now just use the console input
         return ask_questions(self.input_fn, questions, self.config.ask_user_questions_in_one_prompt)
 
-    def ask_genie(self, codes: [str], step: StepABC) -> [str]:
+    def ask_genie(self, codes: list[str], step: StepABC) -> list[str]:
         self._verify_python_scope()
         prompt = "Tao asks to execute the following codes:" \
             if self.config.ask_user_before_execute_codes else None
@@ -296,6 +299,7 @@ class Orchestrator(Executor):
         super().reset()
         self.llm.reset()
         self._chain = []
+        self._reverted_steps = None
         self._create_python_scope()
 
     def _create_python_scope(self):
@@ -305,7 +309,7 @@ class Orchestrator(Executor):
         assert self._python_scope is not None
         assert _utils.safe_is_instance(self._python_scope['_taogpt_orchestrator_python_scope_sig'], float)
 
-    def vote(self, system_prompt: str, prompts: [(str, str)], parser: _t.Callable[[str], _t.Any],
+    def vote(self, system_prompt: str, prompts: list[tuple[str, str]], parser: _t.Callable[[str], _t.Any],
              reason: str=None, step_id:str=None, min_threshold=0.0, majority=1,
              collapse_contents: {str: str}=None) -> (_t.Any, int|float):
         assert majority == 1 # todo: can't handle multiple votes yet
@@ -345,8 +349,8 @@ class Orchestrator(Executor):
     def handle_parse_error(self,
                            e: Exception,
                            n_retries: int,
-                           prompts: [(str, str)],
-                           prompts_to_be_sent: [(str, str)],
+                           prompts: list[tuple[str, str]],
+                           prompts_to_be_sent: list[tuple[str, str]],
                            response: str,
                            retry_prompt: str):
         if n_retries >= self.config.max_retries:
@@ -357,7 +361,7 @@ class Orchestrator(Executor):
             prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))
             self.logger.log(f"\n***RETRY***\n{message}")
 
-def ask_questions(input_fn, questions: [str], one_prompt: bool) -> {str: str}:
+def ask_questions(input_fn, questions: list[str], one_prompt: bool) -> dict[str, str]:
     if one_prompt:
         user_prompt = "Tao wants to ask:\n"
         user_prompt += "\n".join([f"{i+1}. {questions[i]}" for i in range(len(questions))])

@@ -1,3 +1,6 @@
+**NOTE:**: the Zodiac sign calculation is incorrect due to wrong ordering of animals in this method. And it is not 
+caught. Direct default prompt on this GPT version may also encounter this hallucination problem.
+
 Date: 2024/03/12
 
 **Configurations for Orchestrator**

@@ -20,6 +20,8 @@ Scoring criteria:
   different values in detailed plans in case of errors. Likewise, choose linear, decomposable steps over looping. 
   For example, rate "Find and set missing elements to fill-in values" higher than "Set 2nd and 5th elements to 22". 
   Tao is good at handling details himself.
+  * Sub-steps need and should only focus on the current steps; other concerns should be addressed by higher or 
+    sibling plans.
 * Try to avoid identical scores (except 0's;) you can use decimal points (e.g. 9.5) to distinguish two different 
   approaches.
 * Among similar approaches, mark others as duplicates of the best one; note: an approach can only duplicate another 

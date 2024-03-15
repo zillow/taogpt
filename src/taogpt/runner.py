@@ -18,12 +18,12 @@ from io import TextIOBase as _TextIO
 def solve_problem(user_task: str, log_path: str, config: Config,
                   llm: str, long_llm: str, long_sage_llm: str, sage_llm: str,
                   long_context_token_threshold: int,
-                  user_input_fn: _t.Callable[[str], str], console_out: _t.Optional[_TextIO],
+                  user_input_fn: _t.Callable[[str], str], console_out: _TextIO|None,
                   debug=False):
     executor = create_orchestrator(config, log_path, llm, long_llm, sage_llm, long_sage_llm,
                                    long_context_token_threshold, console_out, debug=debug)
     executor.set_input_fn(user_input_fn)
-    pause: _t.Optional[Pause] = None
+    pause: Pause|None = None
     try:
         executor.start(user_task)
     except Pause as e:
@@ -32,7 +32,7 @@ def solve_problem(user_task: str, log_path: str, config: Config,
 
 
 def load_and_resume_problem(
-        states: _t.Dict[str, _t.Any],
+        states: dict[str, _t.Any],
         log_path: str,
         config: Config,
         llm: str,
@@ -41,7 +41,7 @@ def load_and_resume_problem(
         sage_llm: str=None,
         long_context_token_threshold: int=3000,
         user_input_fn: _t.Callable[[str], str]=input,
-        console_out: _t.Optional[_TextIO]=None,
+        console_out: _TextIO=None,
         debug=False):
     executor = create_orchestrator(config, log_path, llm, long_llm, sage_llm, long_sage_llm,
                                    long_context_token_threshold, console_out, debug=debug)
@@ -49,7 +49,7 @@ def load_and_resume_problem(
     executor._chain = states['chain']
     for step in executor.chain:
         print(step)
-    pause: _t.Optional[Pause] = None
+    pause: Pause|None = None
     log_final_chain(executor, log_path, console_out=console_out)
     try:
         executor.resume(0)
@@ -61,7 +61,7 @@ def load_and_resume_problem(
 def _continue_solving(executor, log_path, console_out, pause):
     while pause is not None:
         log_final_chain(executor, log_path, console_out=console_out)
-        resume: _t.Optional[str] = None
+        resume: str|None = None
         while resume is None or re.match(r"\d+|no", resume) is None:
             resume = input(f"{str(pause)}\nReply amount of tokens to add (0 is OK) and continue, 'no' to cancel: ") \
                 .strip().lower()
@@ -104,7 +104,7 @@ def create_orchestrator(
         sage_llm: str=None,
         long_sage_llm: str=None,
         long_context_token_threshold: int=3000,
-        log_to_stdout: _t.Optional[_TextIO]=None,
+        log_to_stdout: _TextIO=None,
         debug=False):
     llm = fix_model_name(llm, required=True)
     sage_llm = fix_model_name(sage_llm, default_to=llm)
@@ -116,7 +116,7 @@ def create_orchestrator(
     primary_model = LangChainLLM(_ChatOpenAI(model_name=llm), logger=logger,
                                  long_context_llm=long_ctx_llm,
                                  long_context_token_threshold=long_context_token_threshold)
-    sage_model: _t.Optional[LangChainLLM] = None
+    sage_model: LangChainLLM|None = None
     if sage_llm is not None and sage_llm != llm:
         long_ctx_llm = _ChatOpenAI(model_name=long_sage_llm) \
             if long_sage_llm is not None and long_sage_llm != sage_llm else None

@@ -24,8 +24,9 @@ later.
 ## Strategy: Ask Questions
 
 Many problems requires clarifications. Use this strategy to ask questions, but avoid obvious, trivial, 
-redundant, or useless questions. You should try to ask all questions you need up front. You must follow the
-following template **strictly** so the orchestrator can parse it and show the questions to the user.
+redundant, useless questions, or questions which you should be answering. You should try to ask all questions you 
+need up front. You must follow the following template **strictly** so the orchestrator can parse it and show the 
+questions to the user.
 
 ```markdown
 # I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED
@@ -47,7 +48,7 @@ Orchestrator will solve using tree traversal and backtracking.
   values" instead of "Set 2nd and 5th elements to 22".
 * Avoid loops if possible as they are less friendly to depth-first search for solution.
 * Worship Occam's razor.
-* Do not jump ahead. Plan only for this step.
+* Don't jump ahead. Plan **only for this step** and not something else from the higher plans.
 
 Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
 
