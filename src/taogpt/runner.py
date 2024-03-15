@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pathlib as _p
 import re
 import typing as _t

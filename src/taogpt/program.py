@@ -366,7 +366,12 @@ class FinalAnswerStep(TaoReplyStep):
             return None
 
         def _select(_: int, step: StepABC) -> bool:
-            return _utils.safe_is_instance(step, (PresentTaskStep, AskQuestionStep, FinalAnswerStep))
+            return _utils.safe_is_instance(step, (
+                PresentTaskStep,
+                AskQuestionStep,
+                AskPythonGenieStep, # this is less ideal
+                PythonGenieReplyStep,
+                FinalAnswerStep))
 
         prompts = executor.show_conversation_thread(selector=_select)
         add_files_to_prompts(executor, prompts, role=ROLE_TAO)
@@ -573,8 +578,6 @@ def parse_to_step(prev_step: Step, response: str, config: Config,
     else:
         if step_type == DirectAnswerStep.TYPE_SPEC:
             step_class = DirectAnswerStep
-        elif step_type == FinalAnswerStep.TYPE_SPEC:
-            step_class = FinalAnswerStep
         elif step_type == AskQuestionStep.TYPE_SPEC:
             step_class = AskQuestionStep
         elif step_type == AskPythonGenieStep.TYPE_SPEC:
@@ -1005,6 +1008,10 @@ class SummarizeStep(ExpandableStep):
         prompts.append((ROLE_ORCHESTRATOR, summarize_prompt))
         collapse_contents['summarize'] = summarize_prompt
         return system_prompt, prompts
+
+    def parse_reply(self, response, executor: Executor) -> Step:
+        return FinalAnswerStep.create(self, response, role=ROLE_TAO, config=executor.config)
+
 
 
 class PresentTaskStep(Step):
