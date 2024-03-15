@@ -130,15 +130,17 @@ A problem solving session typically flows like:
 
 ### Limitations
 
-* TaoGPT currently works best with GPT-4. While GPT-3.5 is supported, it is found to be not intelligent enough to
-  work with the templates and instructions in most cases. Supports for other LLMs can be added in the future.
+* This is a research work demonstrating the feasibility of the approach. Practical applicability is currently limited.
+* TaoGPT currently works best with GPT-4 and GPT-4-turbo. While GPT-3.5 is supported, it is found to be not intelligent 
+  enough to work with the templates and instructions in most cases. Supports for other LLMs may be used via 
+  OpenAI-compatible REST API adapters.
 * Given the lengthy and backtrackable conversations necessary to solve problems, users should be mindful about token
   usages. TaoGPT sets the initial token usage limit to 10,000, check token consumptions at resumable check-points, and
   will ask user to grant more tokens if limit is exceeded.
 * Maximum conversation context lengths in most LLMs including GPT-4 are quite low. This hinders TaoGPT's ability to
   work on large problem such as full blown implementation of an application project.
 
-Some of these limitations and costs can be reduced over time as hardward availability, costs and performances improve.
+Some of these limitations and costs can be reduced over time as hardware availability, costs and performances improve.
 
 ## Examples
 
@@ -355,9 +357,13 @@ Formal citations will be provided with pending publications. Here are some prior
 
 The Responsible Artificial Intelligence Source Code License, Version 11
 
+# Acknowledgements
+
+This work is supported by the Data Science and Machine Learning Group at [Zillow Rental](https://www.zillow.com/homes/for_rent/).
+
 # Citation
 
-Please consider citing our work if you use the data or code in this repo.
+Please consider citing our work if you reference to our work or use the data or code in this repo.
 
 ```
 @software{taogpt,
