@@ -17,6 +17,7 @@ class PromptDb:
     orchestrator_at_step: str
     orchestrator_next_step: str
     orchestrator_proceed: str
+    orchestrator_proceed_intuitively: str
     orchestrator_proceed_to_step: str
     orchestrator_expand_parse_error: str
     orchestrator_parse_error: str
@@ -28,6 +29,7 @@ class PromptDb:
     sage_intro: str
     sage_final_check: str
     sage_blame: str
+    sage_fix_issues: str
 
     @staticmethod
     def load_defaults():
@@ -50,6 +52,7 @@ class PromptDb:
             orchestrator_at_step=_read(_template_dir / 'orchestrator_at_step.md'),
             orchestrator_next_step=_read(_template_dir / 'orchestrator_next_step.md'),
             orchestrator_proceed=_read(_template_dir / 'orchestrator_proceed.md'),
+            orchestrator_proceed_intuitively=_read(_template_dir / 'orchestrator_proceed_intuitively.md'),
             orchestrator_proceed_to_step=_read(_template_dir / 'orchestrator_proceed_to_step.md'),
             orchestrator_expand_parse_error=_read(_template_dir / 'orchestrator_expand_parse_error.md'),
             orchestrator_parse_error=_read(_template_dir / 'orchestrator_parse_error.md'),
@@ -61,4 +64,5 @@ class PromptDb:
             sage_intro=_read(_template_dir / 'sage.md'),
             sage_final_check=_read(_template_dir / 'sage_final_check.md'),
             sage_blame=_read(_template_dir / 'sage_blame.md'),
+            sage_fix_issues=_read(_template_dir / 'sage_fix_issues.md'),
         )

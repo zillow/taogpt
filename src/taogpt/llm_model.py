@@ -6,10 +6,18 @@ import time as _time
 import math as _math
 import tiktoken as _tiktoken
 from langchain_openai import ChatOpenAI as _ChatOpenAI
+# subclassing ChatOpenAI, see https://github.com/langchain-ai/langchain/discussions/18561
+from langchain_core.language_models.base import LanguageModelInput, BaseMessage
+from langchain.schema.messages import ChatMessage, SystemMessage
+from langchain_core.runnables.config import ensure_config
+from langchain_core.runnables import RunnableConfig
+from langchain_core.outputs import ChatGeneration
+
 import taogpt.md_logging
 from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_TAO, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
 import taogpt.utils as _utils
 from . import LLM
+from taogpt.parsing import fix_fenced_block_backticks
 
 _last_conversation: _t.List|None = None
 
@@ -23,6 +31,30 @@ def get_last_conversation() -> _t.List|None:
     """
     global _last_conversation
     return _last_conversation
+
+
+class ChatOpenAIWithGenInfo(_ChatOpenAI):
+    def invoke_with_gen_info(
+            self,
+            input: LanguageModelInput,
+            config: _t.Optional[RunnableConfig] = None,
+            *,
+            stop: _t.Optional[_t.List[str]] = None,
+            **kwargs: _t.Any,
+    ) -> ChatGeneration:
+        config = ensure_config(config)
+        return _t.cast(
+            ChatGeneration,
+            self.generate_prompt(
+                [self._convert_input(input)],
+                stop=stop,
+                callbacks=config.get("callbacks"),
+                tags=config.get("tags"),
+                metadata=config.get("metadata"),
+                run_name=config.get("run_name"),
+                **kwargs,
+            ).generations[0][0],
+        )
 
 
 class LangChainLLM(LLM):
@@ -79,7 +111,7 @@ class LangChainLLM(LLM):
     def total_tokens(self):
         return self._total_tokens
 
-    def ask(self,  system_prompt: str, conversation: _t.List[_t.Tuple[str, str]],
+    def ask(self,  system_prompt: str|None, conversation: _t.List[_t.Tuple[str, str]],
             reason=None, always_shown=False, step_id = None, log_request = True,
             temperature: float|None=None,
             collapse_contents: {str:str}=None) -> str:
@@ -93,16 +125,15 @@ class LangChainLLM(LLM):
             if temperature is not None:
                 self.llm.temperature = old_temp
 
-    def _ask(self,  system_prompt: str, conversation: _t.List[_t.Tuple[str, str]],
+    def _ask(self,  system_prompt: str|None, conversation: _t.List[_t.Tuple[str, str]],
             reason=None, step_id = None, log_request = True,
             temperature: float|None=None,
             collapse_contents: _t.Dict[str, str]=None) -> str:
         self._logger.start_conversation_chain(f"# SEND TO LLM for {reason}/{step_id}")
-        from langchain.schema.messages import ChatMessage, SystemMessage
 
         if temperature is not None:
             self.llm.temperature = temperature
-        messages: [ChatMessage] = []
+        messages: list[BaseMessage] = []
         context_tokens = 0
 
         if system_prompt is not None and len(system_prompt) > 0:
@@ -137,13 +168,9 @@ class LangChainLLM(LLM):
             if self.long_context_llm is not None and context_tokens > self.long_context_token_threshold:
                 llm = self.long_context_llm
                 token_factor = self.long_context_llm_token_factor
-            max_tokens = GPT_OUTPUT_TOKEN_LIMITS.get(self.model_id, None)
-            if max_tokens is not None and max_tokens < 0:
-                max_tokens = abs(max_tokens) - context_tokens
-            # todo: try the `continue` trick to using multiple calls
-            assert max_tokens is None or max_tokens > 0, f"No more output tokens allowed: {max_tokens}"
-            reply = llm.invoke(messages, max_tokens=max_tokens)
-            reply_content_logged = reply.content
+            reply_content, context_tokens = self.invoke_llm(
+                llm, messages, return_context_token_usages=True)
+            reply_content_logged = reply_content
             is_json = ''
             try:
                 payload = json.loads(reply_content_logged)
@@ -152,16 +179,16 @@ class LangChainLLM(LLM):
                 is_json = 'JSON '
             except json.JSONDecodeError:
                 pass
-            reply_tokens = self.count_tokens(reply.content)
+            reply_tokens = self.count_tokens(reply_content)
             token_count = context_tokens + reply_tokens
-            self._logger.log(f"{is_json}Reply: temperature={temperature}n")
+            self._logger.log(f"{is_json}Reply: temperature={temperature}")
             self._logger.log(reply_content_logged, demote_h1=True)
 
             eff_tokens = f" (eff. tokens: {token_count * token_factor})" if token_factor != 1.0 else ''
             self._logger.log(f"{context_tokens} context tokens, {reply_tokens} reply tokens. "
                              f" **Total tokens**: {token_count}{eff_tokens}\n", role='debug')
             self._total_tokens += token_count
-            return reply.content
+            return reply_content
         except Exception as e:
             print(e)
             _time.sleep(3)
@@ -169,6 +196,47 @@ class LangChainLLM(LLM):
         finally:
             if collapse_contents is not None:
                 self.merge_collapsed_contents(collapse_contents)
+
+    def invoke_llm(self, llm: _ChatOpenAI, messages: list[BaseMessage],
+                   max_tokens: int|None=None, return_context_token_usages=False):
+        context_tokens = 0
+        for msg in messages:
+            role = LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[ROLE_SYSTEM] # just in case we can't tell the role
+            if isinstance(msg, ChatMessage):
+                role = msg.role
+            context_tokens += self.count_tokens(role)
+            context_tokens += self.count_tokens(msg.content)
+        total_context_tokens = context_tokens
+        if isinstance(llm, ChatOpenAIWithGenInfo):
+            if max_tokens is None:
+                max_tokens = GPT_OUTPUT_TOKEN_LIMITS.get(self.model_id, None)
+                if max_tokens is not None and max_tokens < 0:
+                    max_tokens = abs(max_tokens) - context_tokens
+                assert max_tokens is None or max_tokens > 0, f"No more output tokens allowed: {max_tokens}"
+
+            total_context_tokens = 0
+            to_be_sent = messages.copy()
+            reply_content = ''
+            while True:
+                # will fail when reaching max
+                reply_with_gi = llm.invoke_with_gen_info(to_be_sent, max_tokens=max_tokens)
+                this_content = reply_with_gi.message.content
+                reply_content += this_content
+                if reply_with_gi.generation_info.get('finish_reason', '') != 'length':
+                    break
+                to_be_sent = messages.copy()
+                to_be_sent.append(ChatMessage(
+                    role=LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[ROLE_TAO], content=reply_content))
+
+                to_be_sent.append(ChatMessage(
+                    role=LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[ROLE_SYSTEM], content=CONTINUATION_PROMPT))
+                total_context_tokens += (context_tokens + self.count_tokens(reply_content)
+                                         + self.count_tokens(CONTINUATION_PROMPT))
+        else:
+            reply = llm.invoke(messages, max_tokens=max_tokens)
+            reply_content = reply.content
+        reply_content = fix_fenced_block_backticks(reply_content)
+        return (reply_content, total_context_tokens) if return_context_token_usages else reply_content
 
     def count_tokens(self, text: str) -> int:
         text = _utils.str_or_blank(text)
@@ -209,3 +277,9 @@ GPT_OUTPUT_TOKEN_LIMITS = {
     'gpt-4-32k': -32 * 1024,
     'gpt-4-1106-preview': 4096,
 }
+
+CONTINUATION_PROMPT = ("You reached output token limit in the last reply. "
+                       "Please complete the response starting exactly where you dropped off. "
+                       "Do not prepend any preambles in your new reply. "
+                       "My code will concatenate your previous outputs with your new outputs in one string 'as is'. "
+                       "If the last output is indeed completed, then respond empty message only to inform my program")

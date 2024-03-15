@@ -1,3 +1,5 @@
+import re
+
 from taogpt import parsing
 from taogpt.program import ExpandableStep
 from taogpt.constants import *
@@ -23,6 +25,21 @@ _RANKINGS_WITH_DUPES = """{
   "4": {"score": 5.1, "reason": "This looks like duplicate of 1.", "duplicate_of": 1}
 }
 """
+
+
+def test_fix_fenced_block_backticks():
+    original = """
+sometimes
+````text
+digits are inserted after the backticks
+```
+like this
+  ```
+  ````0
+other times OK
+"""
+    expected = re.sub(r"\d+", "", original)
+    assert parsing.fix_fenced_block_backticks(original) == expected
 
 
 def test_parse_step_type_spec():
@@ -230,7 +247,7 @@ z + foo()
 
 free text after
     """
-    parsed: [str] = parsing.parse_python_snippets(text)
+    parsed: list[str] = parsing.parse_python_snippets(text)
     assert len(parsed) == 2
     assert parsed[0].strip() == code_snippets[0].strip()
     assert parsed[1].strip() == code_snippets[1].strip()

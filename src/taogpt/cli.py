@@ -18,6 +18,10 @@ parser = argparse.ArgumentParser(
 
 # hyperparameters
 parser.add_argument('-i', '--initial-expansion', type=int, default=2, help='Initial expansion factor')
+parser.add_argument('-I0', '--try-intuition-first_expansion', type=bool, default=True,
+                    help='Always try intuition at first expansion)')
+parser.add_argument('-I1', '--try-intuition', type=bool, default=True,
+                    help='Always try intuition in subsequent expansions')
 parser.add_argument('-f', '--first-expansion', type=int, default=1, help='First expansion factor')
 parser.add_argument('-T0', '--first-try-temperature', type=float, default=0.0, help='First try temperature')
 parser.add_argument('-T1', '--alternative-temperature', type=float, default=0.7, help='Alternative temperature')
@@ -65,9 +69,9 @@ parser.add_argument('--long-context-threshold', type=int, default=3000,
                     help='Number of tokens before switching to long-context LLM')
 
 parser.add_argument('-C', '--openai-credential', type=str, default=None,
-                    help='File path of .ini file or .json containing `key` and `url` (in the `DEFAULT` section)'
-                         'corresponding to the `OPENAI_API_KEY` and `OPENAI_API_BASE` '
-                         'environment variables respectively')
+                    help='Path of .ini or .json file containing key-value pair for `OPENAI_API_KEY`, '
+                         '`OPENAI_API_BASE`, etc. (under the `DEFAULT` section for `.ini` file),'
+                         'corresponding to the same OpenAI credential environment variables respectively')
 parser.add_argument('-D', '--debug', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Enable debugging')
 parser.add_argument('-L', '--load-chain', type=bool, default=False,

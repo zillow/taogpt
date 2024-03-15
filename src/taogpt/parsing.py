@@ -19,7 +19,7 @@ _all_step_types = '|'.join([
     WILL_ANSWER_DIRECTLY,
     WILL_ASK_QUESTIONS
 ])
-_step_type_re = re.compile(
+step_type_re = re.compile(
     r"(^|\n)#{1,2}\s*(I_WILL_ANSWER_DIRECTLY"
     r"|LET_ME_ASK_THE_PYTHON_GENIE"
     r"|BACKTRACK_ON_ERROR"
@@ -31,17 +31,34 @@ _true_false_answer_re = re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
                                    flags=re.MULTILINE|re.DOTALL|re.IGNORECASE)
 _whitespace_re = re.compile(r"\s+", flags=re.DOTALL)
 _ordered_list_re = re.compile(r'\n\s*(\d+)\.\s+(.*?)(?=\n\s*(\d+)|\n\n|\Z)', flags=re.DOTALL)
+_fix_fenced_block_backticks_re = re.compile(r"(`{3,})(\d+)?")
+
 strip_quotes_re = re.compile(r"^\s+|[\s\"\'.,]+$|[\"\']", flags=re.DOTALL)
+step_name_re = re.compile(r"^\s*(((\d|\.)+)\s+)?(.+)")
+
+
+def fix_fenced_block_backticks(original: str|None) -> str|None:
+    if original is None:
+        return None
+    return _final_solution_check_re.sub(r"\1", original)
+
+
+def parse_step_name(text: str|None) -> tuple[str|None, str|None]:
+    if _utils.is_blank(text):
+        return None, None
+    match = step_name_re.search(text)
+    return (match.group(2), match.group(4)) if match is not None else (None, None)
+
 
 class ParseError(ValueError):
     pass
 
 
-def parse_step_type_spec(text: str) -> _t.Optional[(str, str)]:
+def parse_step_type_spec(text: str) -> tuple[str|None, str|None]|None:
     text = _utils.str_or_blank(text)
     if text == '':
         return None, None
-    match: re.Match = _step_type_re.search(text)
+    match: re.Match = step_type_re.search(text)
     if match is None:
         return None, None
     step_type, definition = match.group(2), _utils.str_or_blank(match.group(3))
@@ -50,7 +67,7 @@ def parse_step_type_spec(text: str) -> _t.Optional[(str, str)]:
     return step_type, definition
 
 
-def parse_sections(text: str, section_level: str='##') -> {str: str|None}:
+def parse_sections(text: str, section_level: str='##') -> dict[str, str|None]:
     try:
         fenced_blocks, text = extract_fenced_blocks(text)
     except SyntaxError as e:
@@ -71,7 +88,7 @@ def parse_sections(text: str, section_level: str='##') -> {str: str|None}:
             for k, text in matched_sections.items()}
 
 
-def parse_ordered_list(markdown_text) -> [str]:
+def parse_ordered_list(markdown_text) -> list[str]:
     """
     Parse a simplified markdown list without consideration to multi-line indentation.
     :param markdown_text: markdown text
@@ -97,12 +114,12 @@ _step_re = re.compile(r"^( *\[? *at +step[ :]+)?(.*?)[\s\]]*$", flags=re.IGNOREC
 
 
 def parse_verification_response(text: str) \
-        -> _t.Tuple[bool, _t.Dict[str, _t.Tuple[str, str|None]], _t.Dict[str, _t.Tuple[str, str|None]]]:
-    judgements: _t.Dict[str, _t.Dict[str, _t.Union[bool, str]]] = parse_json_hash(text, two_level_hashes=True)
+        -> tuple[bool, dict[str, tuple[str, str|None]], dict[str, tuple[str, str|None]]]:
+    judgements: dict[str, dict[str, _t.Union[bool, str]]] = parse_json_hash(text, two_level_hashes=True)
     if not _utils.safe_is_instance(judgements, dict) or not all([_utils.safe_is_instance(x, dict) for x in judgements.values()]):
         raise ParseError("The response must be a JSON hash of hashes")
-    concerns: _t.Dict[str, _t.Tuple[str, str|None]] = dict()
-    errors: _t.Dict[str, _t.Tuple[str, str|None]] = dict()
+    concerns: dict[str, tuple[str, str|None]] = dict()
+    errors: dict[str, tuple[str, str|None]] = dict()
     overall_correctness: bool = True
     for concern, judgement in judgements.items():
         has_ok = 'ok' in judgement
@@ -128,10 +145,10 @@ def parse_verification_response(text: str) \
 class StepDescriptor:
     description: str
     why: str|None
-    sub_steps: _t.Dict[str, _t.Any]|None = None
+    sub_steps: dict[str, _t.Any]|None = None
 
 
-def parse_step_by_step_plan(text: str) -> _t.Dict[int, StepDescriptor]:
+def parse_step_by_step_plan(text: str) -> dict[int, StepDescriptor]:
     try:
         plan = parse_json_hash(text, two_level_hashes=True)
     except ParseError as ex:
@@ -141,8 +158,8 @@ def parse_step_by_step_plan(text: str) -> _t.Dict[int, StepDescriptor]:
     return validate_step_by_step_plan(plan)
 
 
-def validate_step_by_step_plan(plan: _t.Dict[str, _t.Any]) -> _t.Dict[int, StepDescriptor]:
-    results: _t.Dict[int, StepDescriptor] = dict()
+def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> dict[int, StepDescriptor]:
+    results: dict[int, StepDescriptor] = dict()
     last_index = -1
     for i, item in plan.items():
         if not re.match(r"^\d+$", i):
@@ -166,7 +183,7 @@ def validate_step_by_step_plan(plan: _t.Dict[str, _t.Any]) -> _t.Dict[int, StepD
     return results
 
 
-def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[int, float], _t.Dict[int, int]]:
+def parse_ranking_response(text: str, expected_number: int) -> tuple[dict[int, float], dict[int, int]]:
     rankings = parse_json_hash(text, two_level_hashes=True)
     results: {int: float} = dict()
     dupes: {int: int} = dict()
@@ -201,7 +218,7 @@ def parse_ranking_response(text: str, expected_number: int) -> _t.Tuple[_t.Dict[
 
 def parse_json_hash(text, two_level_hashes=False):
     match = _json_response_re.match(text)
-    responses: _t.Dict[str, _t.Any]
+    responses: dict[str, _t.Any]
     if match is None:
         try:
             responses = json.loads(text)
@@ -226,7 +243,7 @@ def parse_json_list(text):
         raise ParseError("no JSON hash found")
     json_text = match.group(3) if match.group(3) is not None else match.group(5)
     try:
-        responses: _t.List[str] = json.loads(json_text)
+        responses: list[str] = json.loads(json_text)
     except json.JSONDecodeError as e:
         raise ParseError(f"JSON parse error: {e}")
     if not _utils.safe_is_instance(responses, list) or not all([_utils.safe_is_instance(x, str) for x in responses]):
@@ -234,15 +251,15 @@ def parse_json_list(text):
     return responses
 
 
-def parse_next_step_reply(text: str) -> (str, str|None):
-    sections: _t.Dict[str, str] = parse_sections(text, section_level='#')
+def parse_next_step_reply(text: str) -> tuple[str, tuple[str, str|None]]:
+    sections: dict[str, str] = parse_sections(text, section_level='#')
     sections.pop(FREE_TEXT)
     for section in [FINAL_ANSWER, UNSOLVABLE]:
         if section in sections:
             remaining = sections.pop(section)
             return section, (f"# {section}\n{remaining}", None)
     if NEXT_I_WANT_TO_WORK_AT not in sections:
-        raise ParseError(f"No section header `# NEXT_I_WANT_TO_WORK_AT`")
+        raise ParseError(f"No section header `# {NEXT_I_WANT_TO_WORK_AT}`")
     next_step_desc = sections.pop(NEXT_I_WANT_TO_WORK_AT).strip()
     next_step_desc = _utils.single_space(strip_quotes_re.sub('', next_step_desc))
     if _utils.str_or_blank(next_step_desc) == '':
@@ -258,14 +275,14 @@ def is_final_answer(next_step) -> bool:
 _python_response_re = re.compile(r"```python\n+(.+?)```", flags=re.DOTALL | re.IGNORECASE)
 
 
-def parse_python_snippets(text: str) -> [str]:
+def parse_python_snippets(text: str) -> list[str]:
     return [m.group(1) for m in _python_response_re.finditer(text)]
 
 
 _markdown_fenced_block_re = re.compile(r"```+", flags=re.DOTALL | re.IGNORECASE)
 
 
-def extract_fenced_blocks(text) -> _t.Tuple[_t.Dict[str, str], str]:
+def extract_fenced_blocks(text) -> tuple[dict[str, str], str]:
     fenced_blocks = dict()
     key_prefix = f"fenced_{_random.randint(1000, 10000000)}_"
     while True:
@@ -288,7 +305,7 @@ def extract_fenced_blocks(text) -> _t.Tuple[_t.Dict[str, str], str]:
     return fenced_blocks, text
 
 
-def restore_fenced_block(text: str, fenced_blocks: _t.Dict[str, str]):
+def restore_fenced_block(text: str, fenced_blocks: dict[str, str]):
     for key, original in fenced_blocks.items():
         text = text.replace(key, original)
     return text
@@ -297,7 +314,7 @@ def restore_fenced_block(text: str, fenced_blocks: _t.Dict[str, str]):
 _markdown_fenced_block_content_re = re.compile(r'(?P<snippet>```(?P<type>[^\n]*?)\n(?P<content>.*?)```)',
                                                flags=re.DOTALL)
 
-def extract_fenced_content(text) -> _t.Tuple[_t.Optional[str], _t.Optional[str], _t.Optional[str]]:
+def extract_fenced_content(text) -> tuple[str|None, str|None, str|None]:
     match = _markdown_fenced_block_content_re.search(text)
     if match is not None:
         return match.group('type'), match.group('content').strip(), match.group('snippet').strip()
@@ -307,10 +324,10 @@ def extract_fenced_content(text) -> _t.Tuple[_t.Optional[str], _t.Optional[str],
 file_section_re = re.compile(r"FILE[\s:]+[\s\"\'`]*([^\s\"\'`]+)[\s\"\'`]*")
 
 
-def gather_file_contents(sections: _t.Dict[str, str], pop_file_sections=False) \
-        -> _t.Dict[str, _t.Tuple[str, str, str, str]]:
+def gather_file_contents(sections: dict[str, str], pop_file_sections=False) \
+        -> dict[str, tuple[str, str, str, str]]:
     file_sections = set()
-    results: _t.Dict[str, _t.Tuple[str, str, str, str]] = dict()
+    results: dict[str, tuple[str, str, str, str]] = dict()
     for section, markdown_full_content in sections.items():
         match = re.match(file_section_re, section)
         if match is None:

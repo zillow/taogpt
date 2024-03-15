@@ -24,8 +24,9 @@ later.
 ## Strategy: Ask Questions
 
 Many problems requires clarifications. Use this strategy to ask questions, but avoid obvious, trivial, 
-redundant, or useless questions. You should try to ask all questions you need up front. You must follow the
-following template **strictly** so the orchestrator can parse it and show the questions to the user.
+redundant, useless questions, or questions which you should be answering. You should try to ask all questions you 
+need up front. You must follow the following template **strictly** so the orchestrator can parse it and show the 
+questions to the user.
 
 ```markdown
 # I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED
@@ -38,7 +39,7 @@ following template **strictly** so the orchestrator can parse it and show the qu
 
 ## Strategy: Step-by-step Plan
 
-In this strategy, the problem task is turned into a top-down, high-level, step-by-step plan of which you and 
+In this strategy, the current step is turned into a top-down, high-level, step-by-step plan of which you and 
 Orchestrator will solve using tree traversal and backtracking.
 
 * Think abstract. Come up with generic, and high-level. Avoid detailed, specific, fixed-value, and low-level ones. 
@@ -47,6 +48,7 @@ Orchestrator will solve using tree traversal and backtracking.
   values" instead of "Set 2nd and 5th elements to 22".
 * Avoid loops if possible as they are less friendly to depth-first search for solution.
 * Worship Occam's razor.
+* Don't jump ahead. Plan **only for this step** and not something else from the higher plans.
 
 Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
 

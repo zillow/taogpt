@@ -74,7 +74,7 @@ class MarkdownLogger:
         result = '\n'.join(lines)
         return restore_fenced_block(result, fenced_blocks)
 
-    def log_conversation(self, conversation: [(str, str)], skip_system_message=1, title='Final path history'):
+    def log_conversation(self, conversation: list[tuple[str, str]], skip_system_message=1, title='Final path history'):
         if title:
             self.log('<div style="background-color: beige; text-align: center; padding: 5px">\n\n')
             self.log(f'# {title}')
