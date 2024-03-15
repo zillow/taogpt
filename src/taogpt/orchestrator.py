@@ -256,7 +256,7 @@ class Orchestrator(Executor):
                     break
             if is_direct_answer_only: # replace
                 self._chain[-1].set_visible_in_chain(False)
-                final_answer_step = FinalAnswerStep(previous=self._chain[-2],
+                final_answer_step = FinalAnswerStep(previous=self._chain[-1],
                                                     description=last_step.description,
                                                     role=ROLE_TAO)
                 self._chain.append(final_answer_step)

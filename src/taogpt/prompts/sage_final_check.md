@@ -4,7 +4,7 @@ content, if any, for  each item, carefully verify each item. Respond using the f
 ```json
 {
   "<verify step 1>": {
-    "content": "<extract relevant content>", "error": "<something is incorrect>"
+    "content": "<extract relevant content>", "error": "<something factually incorrect>"
   },
   "<verify step 2>": {
     "content": "<extract relevant content>", "warning": "<something can be improved>",
