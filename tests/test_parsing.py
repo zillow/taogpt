@@ -67,7 +67,7 @@ def test_parse_step_type_spec():
 
 def test_ranking_prompt_format():
     prompts: PromptDb = PromptDb.load_defaults()
-    prompts.orchestrator_rank_choices.format(approaches='\n\n'.join(
+    prompts.sage_rank_choices.format(approaches='\n\n'.join(
         [f"[Approach # {i+1}]" for i in range(4)]))
 
 
@@ -124,27 +124,17 @@ def test_parsing_rankings_with_dupes():
     assert dupes[4] == 1
 
 
-def test_parse_next_step_done():
-    final_answer = """# FINAL_ANSWER
-This is my final answer"""
-    decision, (answer, decision_detail) = parsing.parse_next_step_reply(final_answer)
-    assert decision == FINAL_ANSWER
-    assert decision_detail is None
-    assert answer == final_answer.strip()
-
-
 def test_parse_next_step_done2():
     answer_details = """I give up."""
-    final_answer = f"""## BACKTRACK_ON_ERROR
+    final_answer = f"""## I_FOUND_ERRORS
 {answer_details}
 """
     decision, (answer, decision_detail) = parsing.parse_next_step_reply(final_answer)
-    assert decision == UNSOLVABLE
-    assert answer == f"# {UNSOLVABLE}\n{answer_details}".strip()
+    assert decision == REPORT_ERROR
+    assert answer == f"# {REPORT_ERROR}\n{answer_details}".strip()
     step_type, step_def = parsing.parse_step_type_spec(answer)
-    assert step_type == UNSOLVABLE
+    assert step_type == REPORT_ERROR
     assert step_def == answer_details
-
 
 
 def test_parse_next_step_next_missing_next_work_at():

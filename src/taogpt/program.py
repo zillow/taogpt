@@ -1,10 +1,10 @@
 from __future__ import annotations
 import time
 import typing as _t
-from _collections import defaultdict
+from _collections import defaultdict as _defaultdict
 import math as _math
 import json as _json
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
 
 import taogpt
 import taogpt.llm_model
@@ -85,40 +85,45 @@ class Step(StepABC):
         returned = self.eval_only(executor)
         return returned
 
-    def backtrack(self, executor: Executor, backtrack: Backtrack | None):
-        pass
-
     def eval_only(self, executor) -> Step | None:
         return None
 
 
-class FixableStep(metaclass=ABCMeta):
-
-    def __init__(self, **_):
-        pass
+class FixableStep(Step):
 
     @abstractmethod
     def retryable(self, config):
         pass
 
+    @property
     @abstractmethod
-    def record_criticism(self, additional_criticisms: list[str]):
+    def n_tries(self) -> int:
         pass
 
     @abstractmethod
-    def backtrack(self, executor, backtrack):
+    def record_criticisms(self, criticisms: list[str]):
         pass
-
-    @abstractmethod
-    def on_backtrack(self, executor):
-        pass
-
-
-class PythonGenieReplyStep(Step):
 
     @property
-    def step_title(self) -> str:
-        return 'The Python Genie Replies'
+    @abstractmethod
+    def criticisms(self) -> list[str]:
+        pass
+
+    def format_critic_text(self):
+        all_criticisms = [f'* {c}' if not c.startswith('* ') else c for c in self.criticisms]
+        return "\n".join(all_criticisms)
+
+    @abstractmethod
+    def repair(self, executor: Executor):
+        pass
+
+    def log_repair(self, executor):
+        critic_text = self.format_critic_text()
+        executor.logger.log(f'---\n<div style="color: white; background-color: gray">\n')
+        executor.logger.log(f"# REPAIRING {self.step_name}/{self.step_id}#{self.n_tries} for:\n")
+        executor.logger.log(critic_text)
+        executor.logger.log(f"\n</div>\n")
+        return critic_text
 
 
 class AnalysisStep(Step):
@@ -136,35 +141,35 @@ class AnalysisStep(Step):
             return None
         prompt_db: PromptDb  = executor.prompts
         if self.description is None or len(_utils.str_or_blank(self.description)) == 0:
-            self.description = prompt_db.orchestrator_ask_init_analysis
+            self.description = prompt_db.tao_ask_init_analysis
         system_prompt = prompt_db.tao_intro
         prompts: list[tuple[str, str]] = executor.show_conversation_thread()
         llm = executor.sage_llm if executor.config.use_sage_llm_for_initial_expansion else executor.llm
-        n_retries = 0
-        while n_retries < executor.config.max_retries:
-            try:
-                desc = llm.ask(
-                    system_prompt, prompts,
-                    reason='request_analysis',
-                    temperature=0.0,
-                    step_id=f"{self.step_id}/{n_retries}",
-                    log_request=n_retries == 0)
-                self.description = desc
-                self.role = ROLE_TAO
-                self._analyzed = True
-                return None
-            except Exception as e:
-                n_retries += 1
-                if n_retries >= executor.config.max_retries:
-                    raise e
+        desc = llm.ask(
+            system_prompt, prompts,
+            reason='analyze',
+            temperature=0.0,
+            step_id=f"{self.step_id}")
+        self.description = desc
+        self.role = ROLE_TAO
+        self._analyzed = True
+        return None
 
 
 class TaoReplyStep(Step):
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str):
+    def __init__(self, *, previous: StepABC|None, description: str, role: str, **_):
         super().__init__(previous=previous, description=description, role=role)
+        self._criticisms: list[str] = list()
         sections = parse_sections(self.description)
         self.description = sections[FREE_TEXT]
+
+    def record_criticisms(self, additional_criticisms: list[str]):
+        self._criticisms.extend(additional_criticisms)
+
+    @property
+    def criticisms(self) -> list[str]:
+        return self._criticisms
 
 
 class DirectAnswerStep(TaoReplyStep, FixableStep):
@@ -177,7 +182,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
     def __init__(self, *, previous: StepABC|None, description: str, role: str, is_final_step=False):
         super().__init__(previous=previous, description=description, role=role)
         self.is_final_step = is_final_step
-        self._prior_tries_and_criticisms: dict[str, list[str]] = dict()
+        self._n_tries = 1 # already evaluated once since the description is the result
         self.build(description)
 
     def build(self, description: str):
@@ -197,31 +202,23 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         self.description = '\n\n'.join(reconstructed)
         self.description = re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=re.IGNORECASE)
 
-    def record_criticism(self, additional_criticisms: list[str]):
-        last_try = self.description_with_header_and_extras(with_header=True, with_extras=True)
-        self._prior_tries_and_criticisms[last_try] = additional_criticisms
-
-    def on_backtrack(self, executor):
-        pass
-
     def retryable(self, config: Config):
-        return len(self._prior_tries_and_criticisms) < config.max_retries
+        return self.n_tries < config.max_retries
 
-    def backtrack(self, executor: Executor, backtrack: Backtrack | None):
+    @property
+    def n_tries(self) -> int:
+        return self._n_tries
+
+    def repair(self, executor: Executor):
+        critic_text = self.log_repair(executor)
+
         prompt_db: PromptDb  = executor.prompts
         self.set_visible_in_chain(True)
         prompts = executor.show_conversation_thread(with_header=True, with_extras=True)
-        all_criticisms = []
-        for _, criticisms in self._prior_tries_and_criticisms.items():
-            criticism_list = [f'* {c}' if not c.startswith('* ') else c for c in criticisms]
-            all_criticisms.extend(criticism_list)
-        critic_text = "\n".join(all_criticisms)
-        instr = prompt_db.sage_fix_issues.format(spec=DirectAnswerStep.TYPE_SPEC, critic_text=critic_text)
-        prompts.append((ROLE_SAGE, instr))
-        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_template_notes_for_files))
-        collapse_contents = {'notes_for_files': prompt_db.tao_template_notes_for_files}
-        # blame_prompt = executor.prompts.sage_blame
-        # prompts.append((ROLE_ORCHESTRATOR, blame_prompt))
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_notes_for_files))
+        instr = prompt_db.tao_fix_issues.format(critic_text=critic_text)
+        prompts.append((ROLE_ORCHESTRATOR, instr))
+
         to_be_sent = prompts.copy()
         n_retries = 0
         response: str | None = None
@@ -231,8 +228,10 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                     executor.prompts.tao_intro,
                     prompts,
                     temperature=0.0 if n_retries == 0.0 else executor.config.alternative_temperature,
-                    reason=f"fix/{len(self._prior_tries_and_criticisms)}#{n_retries}",
-                    collapse_contents=collapse_contents)
+                    reason=f"fix/{len(self._criticisms)}#{n_retries}")
+                response = _utils.str_or_blank(response)
+                if not response.startswith(f"# {self.TYPE_SPEC}"):
+                    response = f"# {self.TYPE_SPEC}\n\n" + response
                 dummy = parse_to_step(_t.cast(Step, self.previous), response, executor.config, working_on=self.step_name,
                                       limit_to={self.__class__})
                 self.build(dummy.description_with_header_and_extras(with_header=False, with_extras=True))
@@ -241,13 +240,14 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                 n_retries += 1
                 executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
                                             executor.prompts.orchestrator_parse_error)
-
+        self._criticisms.clear()
         self.set_step_name(self.step_name)
+        self._n_tries += 1
 
     def eval_only(self, executor) -> Step | None:
         if not _utils.is_blank(self.next_step) and not self.is_final_step:
             prompt_db: PromptDb  = executor.prompts
-            work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.next_step)
+            work_prompt = prompt_db.tao_proceed_to_step.format(step=self.next_step)
             next_step = ProceedStep(previous=self, description=work_prompt, role=ROLE_ORCHESTRATOR)
             next_step.set_step_name(self.next_step)
             return next_step
@@ -266,7 +266,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
 
 
 class GiveUpStep(TaoReplyStep):
-    TYPE_SPEC = UNSOLVABLE
+    TYPE_SPEC = REPORT_ERROR
 
     @property
     def step_title(self) -> str:
@@ -274,13 +274,13 @@ class GiveUpStep(TaoReplyStep):
 
     def __init__(self, *, previous: StepABC|None, description: str, role: str):
         super().__init__(previous=previous, description=description, role=role)
-        if len(self.description) == 0:
-            raise ParseError("Must provide explanation why you gave up.")
-        self.issues = [issue.replace('\n', '').strip() for issue in parse_json_list(self.description)]
+        self.issues = parse_give_up_response(self.description)
 
     def eval_only(self, executor):
         if len(self.issues) > 0:
-            executor.record_criticisms(self.issues)
+            culprits = identify_culprits(executor, self.issues)
+            first_culprit, errors = next(iter(culprits.items()))
+            raise Backtrack(errors[0], first_culprit)
         raise Backtrack(f"Problem or step is unsolvable. I gave up.", self)
 
 
@@ -340,139 +340,179 @@ class StepByStepPlan(TaoReplyStep):
     def eval_only(self, executor) -> Step | None:
         # when evaluating this node, we are always at the first step
         prompt_db: PromptDb  = executor.prompts
-        work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=self.first_step)
+        work_prompt = prompt_db.tao_proceed_to_step.format(step=self.first_step)
         # note: we insert the update file step at the end, this cannot be update file step.
         next = ProceedStep(previous=self, description=work_prompt, role=ROLE_ORCHESTRATOR)
         next.set_step_name(self.first_step)
         return next
 
 
-class FinalAnswerStep(TaoReplyStep):
-    TYPE_SPEC = FINAL_ANSWER
+class SummarizeStep(TaoReplyStep, FixableStep):
+    TYPE_SPEC = SUMMARIZE_FINAL_ANSWER
 
     def __init__(self, *, previous: StepABC|None, description: str, role: str):
         super().__init__(previous=previous, description=description, role=role)
-        self.set_visible_in_chain(False)
+        self._n_tries = 0
+        self._evaluated = False
+        self.set_step_name(None)
 
     @property
     def step_title(self) -> str:
-        return "Tao's Final Answer"
+        return ""
 
     def set_step_name(self, name: str | None, forced=False):
-        pass # no step name for final answer
+        super().set_step_name(SUMMARIZE_FINAL_ANSWER)
+
+    def retryable(self, config: Config):
+        return self._n_tries < config.max_retries
+
+    @property
+    def n_tries(self) -> int:
+        return self._n_tries
+
+    def repair(self, executor: Executor):
+        critic_text = self.format_critic_text()
+        executor.logger.log(f'---\n<div style="color: white; background-color: gray">\n')
+        executor.logger.log(f"# REPAIRING {self.step_name}/{self.step_id}#{self._n_tries} for:\n")
+        executor.logger.log(critic_text)
+        executor.logger.log(f"\n</div>\n")
+        self._evaluated = False
+        self.eval_only(executor)
 
     def eval_only(self, executor: Executor) -> Step | None:
+        if self._evaluated:
+            return None
+        system_prompt = executor.prompts.tao_intro
+        prompts = executor.show_conversation_thread(with_extras=True, except_step=self)
+        prompts.append((ROLE_ORCHESTRATOR, executor.prompts.tao_summarize))
+        if len(self.criticisms) > 0:
+            critic_text = self.format_critic_text()
+            prompts.append((ROLE_ORCHESTRATOR, executor.prompts.tao_fix_issues.format(critic_text=critic_text)))
+        self.description = executor.llm.ask(
+            system_prompt, prompts,
+            reason='summarize',
+            step_id=f"{self.step_id}",
+            temperature=0.0,
+            log_request=True)
+        self._evaluated = True
+        self._criticisms.clear()
+        self.set_step_name(SUMMARIZE_FINAL_ANSWER)
+        self._n_tries += 1
+        return None
+
+    def eval(self, executor: Executor) -> Step | None:
+        self.eval_only(executor)
+
         if not executor.config.check_final:
             return None
 
-        def _select(_: int, step: StepABC) -> bool:
-            return _utils.safe_is_instance(step, (
-                PresentTaskStep,
-                AskQuestionStep,
-                AskPythonGenieStep, # this is less ideal
-                PythonGenieReplyStep,
-                FinalAnswerStep))
-
-        prompts = executor.show_conversation_thread(selector=_select)
-        add_files_to_prompts(executor, prompts, role=ROLE_TAO)
-        sage_prompt = executor.prompts.sage_final_check
-        prompts.append((ROLE_ORCHESTRATOR, sage_prompt))
-        all_errors = self.check_final_answer(executor, prompts)
-        if len(all_errors) == 0:
+        # concern: (issue, [step desc])
+        all_issues = self.check_final_answer(executor)
+        if len(all_issues) == 0:
             return None
 
-        step_and_blames = {
-            step: finding for finding, step in all_errors.values()
-            if step is not None
-        }
-        if len(step_and_blames) == 0:
-            prompts = executor.show_conversation_thread(with_extras=True)
-            all_errors = {k: v[0] for k, v in all_errors.items()}
-            prompts.append((ROLE_SAGE, f"```json\n{_json.dumps(all_errors)}\n```"))
-            blame_prompt = executor.prompts.sage_blame
-            prompts.append((ROLE_ORCHESTRATOR, blame_prompt))
-            response = executor.sage_llm.ask(executor.prompts.sage_intro, prompts, temperature=0.0,
-                                             reason="blame_step",
-                                             collapse_contents={"sage_blame_step": blame_prompt})
-            try:
-                step_and_blames = parse_json_hash(response)
-                if not isinstance(step_and_blames, dict):
-                    raise ParseError(f"Expecting JSON hash, got {type(step_and_blames)}")
-            except json.JSONDecodeError as e:
-                raise ParseError(f"Invalid JSON: {str(e)}")
-        blame = self.find_first_culprit(executor, step_and_blames) or self
-        raise Backtrack(f'final answer verification failed.', blame=blame)
+        culprits = identify_culprits(executor,all_issues)
+        if self not in culprits: # we will always summarize again
+            culprits[self].append('')
+        for blamed_step, blames in culprits.items():
+            if len(blames) == 0: # shouldn't happen
+                continue
+            n_fatals = sum(b.startswith('fatal') for b in blames)
+            n_errors = sum(b.startswith('error') for b in blames)
+            if n_fatals == 0 and isinstance(blamed_step, FixableStep):
+                if blamed_step.retryable(executor.config):
+                    _t.cast(FixableStep, blamed_step).repair(executor)
+                elif n_errors > 0:
+                    raise Backtrack(blames[0], blame=blamed_step)
+            else:
+                raise Backtrack(blames[0], blame=blamed_step)
+        return self
 
     def check_final_answer(self,
                            executor: Executor,
-                           prompts: list[tuple[str, str]],
                            votes: int=None,
-                           reason='check_final_answer',
-                           collapse_contents: dict[str, str]=None) \
-            -> dict[str, tuple[str, str|None]]:
+                           reason='check_final_answer') \
+            -> dict[str, tuple[str, list[str]|None]]:
+        config = executor.config
+        votes = votes or config.votes
         system_prompt = executor.prompts.sage_intro
-        votes = votes or executor.config.votes
-        all_errors: dict[str, _t.Tuple[str, str|None]] = dict()
-        min_yes_needed = int(_math.ceil(votes * _CONTINUE_VOTE_QUORUM))
-        max_no_allowed = int(_math.ceil(votes * (1 - _CONTINUE_VOTE_QUORUM)))
-        n_success, n_true = 0, 0
+        prompts = executor.show_conversation_thread(with_extras=True)
+        prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_final_check))
+
+        # issue: (level, [step desc])
+        all_issues: dict[str, _t.Tuple[str, list[str]|None]] = dict()
+        issues_by_critic: list[dict] = []
         for i in range(votes):
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
             response: str = ''
-            while n_retries < executor.config.max_retries:
+            while n_retries < config.max_retries:
                 try:
                     response = executor.sage_llm.ask(
                         system_prompt,
                         prompts_to_be_sent,
                         reason=reason,
-                        step_id=f"{self.step_id}/{i}",
-                        temperature=0.0 if n_success == 0 else 0.1,
-                        collapse_contents=collapse_contents,
-                        log_request=i == 0)
-                    result, warnings, errors = parse_verification_response(response)
-                    n_success += 1
-                    if result:
-                        n_true += 1
-                    all_errors.update(errors)
-                    if n_true >= min_yes_needed:
-                        break
-                    if (n_success - n_true) >= max_no_allowed:
-                        break
+                        step_id=f"{self.step_id}/{i}#{n_retries}",
+                        temperature=config.first_try_temperature if i == 0 else config.alternative_temperature)
+                    issues, full_json = parse_verification_response(response)
+                    if len(issues) > 0:
+                        issues_by_critic.append(full_json)
+                        all_issues.update(issues)
+                    break
                 except Exception as e:
                     n_retries += 1
                     executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
                                                 executor.prompts.orchestrator_parse_error)
-        if n_success == 0:
-            raise RuntimeError('Sage failed to perform execution state check')
-        if (n_true / n_success) < _CONTINUE_VOTE_QUORUM:
-            return all_errors
-        return dict()
-
-    def find_first_culprit(self, executor: Executor, blames: dict[str, str]) -> Step|None:
-        first_step_i = len(executor.chain)
-        for blamed_step in blames.keys():
-            for i in range(len(executor.chain)-1, -1, -1):
-                step = executor.chain[i]
-                if step.step_name == blamed_step: # todo: more robust way to identify blames
-                    if _utils.safe_is_instance(step, FixableStep):
-                        step.record_criticism([blames[step.step_name]])
-                    previous = step.previous
-                    while previous is not None:
-                        if _utils.safe_is_instance(previous, ExpandableStep):
-                            parent = _t.cast(ExpandableStep, previous)
-                            parent.record_criticism([blames[step.step_name]])
-                            break
-                        previous = previous.previous
-                    if i < first_step_i:
-                        first_step_i = i
+        if len(issues_by_critic) > 0 and votes > 1:
+            critic_text = "\n\n".join([
+                f"Critic {i+1}:\n```json\n{_json.dumps(report)}\n```"
+                for i, report in enumerate(issues_by_critic)
+            ])
+            system_prompt = executor.prompts.sage_intro
+            prompts = executor.show_conversation_thread(with_extras=True)
+            prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_final_check))
+            prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_merge_criticisms.format(criticisms=critic_text)))
+            prompts_to_be_sent = prompts.copy()
+            n_retries = 0
+            response: str = ''
+            while n_retries < config.max_retries:
+                try:
+                    response = executor.sage_llm.ask(
+                        system_prompt,
+                        prompts_to_be_sent,
+                        reason=reason,
+                        step_id=f"{self.step_id}/merge_criticisms#{n_retries}",
+                        temperature=config.first_try_temperature)
+                    all_issues, _ = parse_verification_response(response)
                     break
-        if 0 <= first_step_i < len(executor.chain):
-            return executor.chain[first_step_i]
-        return None
+                except Exception as e:
+                    n_retries += 1
+                    executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
+                                                executor.prompts.orchestrator_parse_error)
+        return all_issues
 
 
-class AskPythonGenieStep(TaoReplyStep):
+def identify_culprits(
+        executor: Executor,
+        issues: dict[str, tuple[str, list[str]]]=None, # issue: (level, [step desc])
+) -> dict[Step, list[str]]:
+    # step desc: [issue desc with level]
+    blames: dict[str, list[str]] = _defaultdict(list)
+    for issue, (level, steps) in issues.items():
+        for step_desc in steps:
+            blames[step_desc].append(f"{level}: {issue}")
+    # step: [issue desc with level]
+    culprits: dict[Step, list[str]] = _defaultdict(list)
+    for i, step in enumerate(executor.chain):
+        for step_desc, issues_of_step in blames.items():
+            if _utils.normalized_levenstein_distance(step.step_name, step_desc) < 0.05:
+                if _utils.safe_is_instance(step, (FixableStep, TaoReplyStep)):
+                    step.record_criticisms(issues_of_step)
+                culprits[step].extend(issues_of_step)
+    return culprits
+
+
+class AskPythonGenieStep(TaoReplyStep, FixableStep):
 
     TYPE_SPEC = WILL_ASK_GENIE
 
@@ -482,21 +522,91 @@ class AskPythonGenieStep(TaoReplyStep):
 
     def __init__(self, *, previous: StepABC|None, description: str, role: str):
         super().__init__(previous=previous, description=description, role=role)
+        self._n_tries = 0
+        self._build(description)
+
+    def _build(self, description: str):
+        self.description = description
+        self._evaluated = False
         self._code_snippets = parse_python_snippets(self.description)
         if len(self._code_snippets) == 0:
             raise ParseError("No python code snippet inside markdown fenced block.")
         pitch = "Python Genie, Python Genie, run the Python snippet underneath"
         if pitch not in self.description:
             self.description = f"{pitch}:\n\n{self.description}"
+        self._original_description = self.description
 
     def eval_only(self, executor) -> Step | None:
-        results = executor.ask_genie(self._code_snippets, self)
-        result_markdown = '\n\n'.join(f"""```text\n{r}\n```""" for r in results)
+        if self._evaluated:
+            return None
+        if not self.execute_python_snippet(executor):
+            self.repair(executor)
+        return None
+
+    def execute_python_snippet(self, executor: Executor) -> bool:
         logger = executor.logger
-        logger.new_message_section(ROLE_GENIE, self.step_id)
-        logger.log(result_markdown)
-        logger.close_message_section()
-        return PythonGenieReplyStep(previous=self, description=result_markdown, role=ROLE_GENIE)
+        try:
+            results = executor.ask_genie(self._code_snippets, self)
+            result_markdown = '\n\n'.join(f"""```text\n{r}\n```""" for r in results)
+            logger.new_message_section(ROLE_GENIE, self.step_id)
+            logger.log(result_markdown)
+            logger.close_message_section()
+            self.description += f"\n\nResults:\n\n{result_markdown}"
+            self._evaluated = True
+            self._n_tries += 1
+            return True
+        except _utils.PythonGenieRuntimeError as e:
+            error_text = f"""error: {str(e.error)} when executing this code snippet."""
+            logger.new_message_section(ROLE_GENIE, self.step_id)
+            logger.log(error_text)
+            logger.close_message_section()
+            self._evaluated = True
+            self._n_tries += 1
+            self.record_criticisms([error_text])
+            return False
+
+    def repair(self, executor: Executor):
+        while self.retryable(executor.config):
+            if self._repair(executor):
+                return
+        raise Backtrack("Python code execution error", blame=self)
+
+    def _repair(self, executor: Executor) -> bool:
+        critic_text = self.log_repair(executor)
+        prompt_db: PromptDb  = executor.prompts
+        self.set_visible_in_chain(True)
+        prompts = executor.show_conversation_thread(with_header=True, with_extras=True)
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_fix_issues.format(critic_text=critic_text)))
+
+        to_be_sent = prompts.copy()
+        n_retries = 0
+        response: str | None = None
+        while n_retries < executor.config.max_retries:
+            try:
+                response = executor.llm.ask(
+                    executor.prompts.tao_intro,
+                    prompts,
+                    temperature=0.0 if n_retries == 0.0 else executor.config.alternative_temperature,
+                    reason="repair",
+                    step_id=f"{self.n_tries}#{n_retries}")
+                response = _utils.str_or_blank(response)
+                response = response.replace(f"# {self.TYPE_SPEC}", "").strip()
+                self._build(description=response)
+                break
+            except ParseError as ex:
+                n_retries += 1
+                executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
+                                            executor.prompts.orchestrator_parse_error)
+        self._criticisms.clear()
+        self.set_step_name(self.step_name)
+        return self.execute_python_snippet(executor)
+
+    def retryable(self, config):
+        return self.n_tries < config.max_retries
+
+    @property
+    def n_tries(self) -> int:
+        return self._n_tries
 
 
 class AskQuestionStep(TaoReplyStep):
@@ -553,7 +663,7 @@ class AskQuestionStep(TaoReplyStep):
     def consolidate_questions(self, executor: taogpt.Executor,
                               conversation_chain: list[tuple[str, str]]) -> str:
         conversation_chain.append((ROLE_TAO, self.description))
-        conversation_chain.append((ROLE_ORCHESTRATOR, executor.prompts.orchestrator_summarize_questions))
+        conversation_chain.append((ROLE_ORCHESTRATOR, executor.prompts.tao_summarize_questions))
         llm: taogpt.LLM = executor.llm
         n_retries = 0
         while True:
@@ -597,7 +707,7 @@ def parse_to_step(prev_step: Step, response: str, config: Config,
     return step
 
 
-class ExpandableStep(Step, FixableStep):
+class ExpandableStep(Step):
 
     def __init__(self, *, previous: StepABC|None, description: str, role: str,
                  choices: list[Step]=None,
@@ -611,14 +721,12 @@ class ExpandableStep(Step, FixableStep):
         self.max_expansion = max_expansion
         self.set_visible_in_chain(False)
         self._ptr = 0
-        self._new_criticisms: dict[int, list[str]] = dict()
         for next_step in self.choices:
             next_step.previous = self
 
     def reset_choices(self):
         self.choices.clear()
         self._ptr = 0
-        self._new_criticisms.clear()
 
     @property
     def step_title(self) -> str:
@@ -637,18 +745,17 @@ class ExpandableStep(Step, FixableStep):
 
     def expand_choices(self, executor: Executor, upto_branches: int):
         prompt_db: PromptDb  = executor.prompts
-        collapse_contents = dict()
-        system_prompt, base_prompts = self.build_prompts(executor, collapse_contents)
-        if len(self.collected_criticisms) > 0:
-            base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_error_noted))
+        system_prompt, base_prompts = self.build_prompts(executor)
         llm = executor.sage_llm if executor.is_first_solving_expansion() \
                                    and executor.config.use_sage_llm_for_initial_expansion else executor.llm
         while len(self.choices) < upto_branches:
             prompts = base_prompts.copy()
             if len(self.choices) > 0:
-                prior_plans = [f"[Prior approach#{i + 1}] {prior.description_with_header}"
-                               for i, prior in enumerate(self.choices)]
-                prior_desc = prompt_db.orchestrator_prior_approaches.format(prior='\n\n---\n'.join(prior_plans))
+                prior_plans = [
+                    f"[Prior approach#{i + 1}] {prior.description_with_header}{self._collect_criticism(prior)}"
+                    for i, prior in enumerate(self.choices)
+                ]
+                prior_desc = prompt_db.tao_prior_approaches.format(prior='\n\n---\n'.join(prior_plans))
                 prompts.append((ROLE_ORCHESTRATOR, prior_desc))
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
@@ -662,8 +769,7 @@ class ExpandableStep(Step, FixableStep):
                         reason=self._expansion_reason,
                         step_id=f"{self.step_id}/{len(self.choices)}#{n_retries}",
                         temperature=temperature,
-                        log_request=(len(self.choices) == 0 and n_retries == 0),
-                        collapse_contents=collapse_contents)
+                        log_request=(len(self.choices) == 0 and n_retries == 0))
                     choice = self.parse_reply(plan, executor)
                     if executor.is_first_solving_expansion() and _utils.safe_is_instance(choice, DirectAnswerStep):
                         _t.cast(DirectAnswerStep, choice).is_final_step = True
@@ -674,44 +780,40 @@ class ExpandableStep(Step, FixableStep):
                     executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent,
                                                 plan, self.get_parse_error_instruction(prompt_db))
 
+    def _collect_criticism(self, choice: Step) -> str:
+        if isinstance(choice, FixableStep):
+            return f"\n---\nCriticisms received for this:\n{choice.format_critic_text()}"
+        return ''
+
     def get_parse_error_instruction(self, prompt_db) -> str:
-        return prompt_db.orchestrator_expand_parse_error
+        return prompt_db.orchestrator_parse_error
 
     def parse_reply(self, plan, executor: Executor) -> Step:
         choice = parse_to_step(self, plan, config=executor.config, working_on=self.step_name)
         return choice
 
-    def build_prompts(self, executor: Executor, collapse_contents: {str: str}) \
+    def build_prompts(self, executor: Executor) \
             -> _t.Tuple[str, list[_t.Tuple[str, str]]]:
         prompt_db = executor.prompts
         system_prompt = prompt_db.tao_intro
         first = executor.is_first_solving_expansion()
-        direct_answer = prompt_db.tao_template_intuitive_answer if first else prompt_db.tao_template_direct_step_answer
-        direct_answer = direct_answer.format(notes_for_files=prompt_db.tao_template_notes_for_files)
-        tao_templates = prompt_db.tao_templates.format(examples='', direct_answer_template=direct_answer)
-        base_prompts: list[tuple[str, str]] = executor.show_conversation_thread()
-        add_files_to_prompts(executor, base_prompts)
+        tao_templates = prompt_db.tao_expand_first_step if first else prompt_db.tao_expand_any_step
+        base_prompts: list[tuple[str, str]] = executor.show_conversation_thread(with_extras=True)
         base_prompts.insert(-1, (ROLE_ORCHESTRATOR, tao_templates))
-        if first:
-            collapse_contents['tao_templates'] = tao_templates
-        else:
-            collapse_contents['tao_templates_first_expansion'] = tao_templates
         return system_prompt, base_prompts
 
     def ask_for_intuition(self, executor: Executor) -> Step|None:
         prompts: list[tuple[str, str]] = executor.show_conversation_thread(selector=lambda i, step: step is not self)
         prompt_db = executor.prompts
-        prompts.append((ROLE_ORCHESTRATOR, prompt_db.orchestrator_proceed_intuitively.format(step=self.step_name)))
-        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_template_notes_for_files))
-        collapse_contents = {'notes_for_files': prompt_db.tao_template_notes_for_files}
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_proceed_intuitively.format(step=self.step_name)))
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_notes_for_files))
         add_files_to_prompts(executor, prompts)
         intuition = executor.llm.ask(
             None, prompts,
             reason=self._expansion_reason,
             step_id=f"{self.step_id}/intuition#{0}",
             temperature=executor.config.first_try_temperature,
-            log_request=True,
-            collapse_contents=collapse_contents).strip()
+            log_request=True).strip()
         if len(intuition) == 0:
             return None
 
@@ -745,8 +847,6 @@ None. This is the final step.
                 return # nothing left to rank, skip ranking
         prompt_db: PromptDb  = executor.prompts
         system_prompt = prompt_db.sage_intro
-        rank_choice_instruction = prompt_db.orchestrator_rank_choices.split('---')[-1].strip()
-        collapse_contents = {'rank_choices': rank_choice_instruction}
 
         def _select_except_self(_: int, step: StepABC) -> bool:
             return step != self
@@ -758,8 +858,7 @@ None. This is the final step.
                 return desc.replace('# ', '', 1)
             return desc
 
-        work_prompt = prompt_db.orchestrator_rank_choices.format(
-            tao_templates='', # skip template
+        work_prompt = prompt_db.sage_rank_choices.format(
             approaches='\n\n---\n\n'.join([
                 f"# [Approach {i+1}] {_fix_desc_heading(plan.description_with_header_and_extras(True, True))}"
                 for i, plan in enumerate(self.choices)
@@ -767,7 +866,8 @@ None. This is the final step.
         )
 
         prompts.append((ROLE_ORCHESTRATOR, work_prompt))
-        rankings_one_based: dict[int, float] = defaultdict(lambda: 0.0)
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.sage_rank_instructions))
+        rankings_one_based: dict[int, float] = _defaultdict(lambda: 0.0)
         ranking_types = {i+1: plan.step_title for i, plan in enumerate(self.choices)}
         n_success = 0
         response: str|None = None
@@ -781,8 +881,7 @@ None. This is the final step.
                         reason='rank_choices',
                         step_id=f"{self.step_id}/{n_success}#{n_retries}",
                         temperature=0.0 if n_success == 0 else 0.1,
-                        log_request=(n_success == 0 and n_retries == 0),
-                        collapse_contents=collapse_contents)
+                        log_request=(n_success == 0 and n_retries == 0))
                     scores, dupes = parse_ranking_response(response, len(self.choices))
                     for plan, score in scores.items():
                         rankings_one_based[plan] += score
@@ -837,35 +936,12 @@ None. This is the final step.
         return len(self.choices) < config.max_search_expansion \
             or self._ptr < len(self.choices) - 1 # consume existing expansions
 
-    @property
-    def collected_criticisms(self):
-        return self._new_criticisms
-
-    def record_criticism(self, additional_criticisms: list[str]):
-        assert self._ptr >= 0
-        if not self._ptr in self._new_criticisms:
-            self._new_criticisms[self._ptr] = set()
-        self._new_criticisms[self._ptr].update(additional_criticisms)
-
     def backtrack(self, executor: Executor, backtrack: Backtrack | None):
-        for i, criticisms in self._new_criticisms.items():
-            criticism_list = [f'* {c}' if not c.startswith('* ') else c for c in criticisms]
-            note = executor.prompts.orchestrator_criticisms.format(criticisms='\n'.join(criticism_list))
-            self.choices[i].description += '\n' + note
-        self._new_criticisms.clear()
         self._ptr += 1
-        self.on_backtrack(executor)
         if self._ptr < self.max_expansion:
             return
         # should not happen due to the retryable(), this is just defensive programming
         raise Backtrack("No more alternative", blame=self.previous)
-
-    def on_backtrack(self, executor: Executor):
-        last_choice = self.choices[self._ptr - 1] # was incremented in backtrack()
-        if executor.config.pause_after_final_answer_rejected and _utils.safe_is_instance(last_choice, FinalAnswerStep):
-            executor.request_pause(f"""{last_choice.description_with_header}
-
-Looks like the final answer was rejected by Sage. Do you want to backtrack and try alternative?""")
 
     def eval_only(self, executor: Executor) -> Step | None:
         old_length = len(self.choices)
@@ -922,9 +998,7 @@ class NextStep(Step):
         prompt_db = executor.prompts
         system_prompt = prompt_db.tao_intro
         prompts = executor.show_conversation_thread(with_header=True, with_extras=True)
-        next_step_prompt = prompt_db.orchestrator_next_step
-        prompts.append((ROLE_ORCHESTRATOR, next_step_prompt))
-        collapse_contents = {'next_step_prompt': next_step_prompt}
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_next_step))
         n_retries = 0
         response: str|None = None
         to_be_sent = prompts.copy()
@@ -935,8 +1009,7 @@ class NextStep(Step):
                     reason='next_step',
                     step_id=f"{self.step_id}#{n_retries}",
                     temperature=0.0 if n_retries == 0 else executor.config.alternative_temperature,
-                    log_request=n_retries == 0,
-                    collapse_contents=collapse_contents)
+                    log_request=n_retries == 0)
                 proceed_step = self.parse_reply(response, executor)
                 self.set_visible_in_chain(False)
                 return proceed_step
@@ -946,9 +1019,6 @@ class NextStep(Step):
                                             prompt_db.orchestrator_parse_error)
         return None # unreachable
 
-    def get_parse_error_instruction(self, prompt_db) -> str:
-        return prompt_db.orchestrator_parse_error
-
     def parse_reply(self, plan: str, executor: Executor) -> Step:
         prompt_db, config = executor.prompts, executor.config
         decision, (answer, plan) = parse_next_step_reply(plan)
@@ -957,12 +1027,8 @@ class NextStep(Step):
         if decision == NEXT_I_WANT_TO_WORK_AT:
             step_id, step_name = parse_step_name(answer)
             if _utils.is_blank(step_name) or step_name.lower().startswith('none'):
-                return SummarizeStep(previous=self,
-                                     description='',
-                                     role=ROLE_ORCHESTRATOR,
-                                     first_expansion=1,
-                                     max_expansion=executor.config.max_search_expansion)
-            work_prompt = prompt_db.orchestrator_proceed_to_step.format(step=step_name)
+                return SummarizeStep(previous=self, description='', role=ROLE_ORCHESTRATOR)
+            work_prompt = prompt_db.tao_proceed_to_step.format(step=step_name)
             choices = [parse_to_step(self, plan, config=config, working_on=step_name)] if plan is not None else []
             proceed = ProceedStep(
                 previous=self,
@@ -976,42 +1042,6 @@ class NextStep(Step):
             return proceed
         else:
             return parse_to_step(self, answer, config=config, working_on=self.step_name)
-
-
-class SummarizeStep(ExpandableStep):
-
-    def __init__(self, *, previous: StepABC|None, description: str, role: str, choices: list[Step]=None,
-                 max_expansion:int=4, **_):
-        super().__init__(previous=previous, description=description, role=role, choices=choices,
-                         first_expansion=1, incremental_expansion=1, max_expansion=max_expansion)
-
-    def should_try_intuition(self, executor: Executor):
-        return False
-
-    @property
-    def step_title(self) -> str:
-        return "Summarize final answer"
-
-    @property
-    def _expansion_reason(self) -> str:
-        return "summarize"
-
-    def get_parse_error_instruction(self, prompt_db) -> str:
-        return prompt_db.orchestrator_parse_error
-
-    def build_prompts(self, executor: Executor, collapse_contents: dict[str, str]) \
-            -> _t.Tuple[str, list[_t.Tuple[str, str]]]:
-        system_prompt = executor.prompts.tao_intro
-        prompts = executor.show_conversation_thread()
-        add_files_to_prompts(executor, prompts)
-        summarize_prompt = executor.prompts.orchestrator_summarize
-        prompts.append((ROLE_ORCHESTRATOR, summarize_prompt))
-        collapse_contents['summarize'] = summarize_prompt
-        return system_prompt, prompts
-
-    def parse_reply(self, response, executor: Executor) -> Step:
-        return FinalAnswerStep.create(self, response, role=ROLE_TAO, config=executor.config)
-
 
 
 class PresentTaskStep(Step):

@@ -17,5 +17,3 @@ Follow this template:
 ### NEXT_I_WANT_TO_WORK_AT:
 None. This is the final step.
 `````
-
-{notes_for_files}

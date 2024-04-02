@@ -33,11 +33,6 @@ def safe_is_instance(obj, class_or_tuple: _t.Type|_t.Iterable[_t.Type]) -> bool:
     return any(check_class in mro_classes for check_class in check_classes)
 
 
-def cast(obj, to_class: _t.Type[_T]) -> _T:
-    _ = to_class
-    return obj
-
-
 def single_space(s: str) -> str:
     return re.sub(r"\s{2,}", " ", str_or_blank(s))
 
@@ -107,6 +102,13 @@ def exec_then_eval(code, global_scope: _t.Dict[str, _t.Any]):
         if last is not None else 'Python Genie: no return value from last statement'
 
 
+class PythonGenieRuntimeError(RuntimeError):
+    def __init__(self, codes: str, error: Exception):
+        super().__init__(str(error))
+        self.codes = codes
+        self.error = error
+
+
 # credit: https://stackoverflow.com/questions/64209815/python-how-can-i-save-the-output-of-eval-in-a-variable
 def eval_and_collect(codes: str, global_scope: _t.Dict[str, _t.Any],
                      return_value_indicator='=> ',
@@ -119,7 +121,7 @@ def eval_and_collect(codes: str, global_scope: _t.Dict[str, _t.Any],
             output = mystdout.getvalue()
         except Exception as e:
             if raise_on_error:
-                raise e
+                raise PythonGenieRuntimeError(codes, e)
             output = str(e)
             ret = None
         finally:

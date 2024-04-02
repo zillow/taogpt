@@ -12,9 +12,7 @@ from taogpt import utils as _utils
 
 
 class LLM:
-
-    def __init__(self):
-        self.collapsed_contents: dict[str, str] = dict()
+    collapsed_contents: dict[str, str] = dict()
 
     @property
     @_abc.abstractmethod
@@ -26,33 +24,27 @@ class LLM:
         return 0
 
     def ask(self, system_prompt: str|None, conversation: list[_t.Tuple[str, str]], reason=None,
-            temperature: float=None, log_request=True, collapse_contents: dict[str, str]=None,**_) -> str:
+            temperature: float=None, log_request=True, **_) -> str:
         pass
 
     def reset(self):
         self.collapsed_contents.clear()
 
-    def deduplicate_for_logging(self, message, role: str):
-        for key, collapsible in self.collapsed_contents.items():
-            if collapsible == message:
-                return f"[..{key}:{len(message)}..]"
-        for i in range(1, 1000):
-            key = f"{role}/{i}"
-            if key not in self.collapsed_contents:
-                self.collapsed_contents[key] = message
-                break
-        return message
+    @_abc.abstractmethod
+    def count_tokens(self, text: str) -> int:
+        pass
+
+    @staticmethod
+    def deduplicate_for_logging(message, role: str):
+        content = _utils.str_or_blank(message)
+        return LLM.collapsed_contents.get(content.lower(), content)
 
     def merge_collapsed_contents(self, collapse_contents: _t.Dict[str, str]):
-        # preferring supplied content name over generated content name
-        supplied = {content: key for key, content in collapse_contents.items()}
-        evict_keys = set()
-        for existing_key, content in self.collapsed_contents.items():
-            if content in supplied and existing_key != supplied[content]:
-                evict_keys.add(existing_key)
-        for key in evict_keys:
-            self.collapsed_contents.pop(key)
-        self.collapsed_contents.update(collapse_contents)
+        for key, content in collapse_contents.items():
+            content = _utils.str_or_blank(content).lower()
+            tokens = self.count_tokens(content)
+            if len(content) > 0 and tokens > 32:
+                LLM.collapsed_contents[content] = f"[..{key}:{tokens}..]"
 
     def __repr__(self) -> str:
         return self.model_id
@@ -86,6 +78,8 @@ class Config:
     pause_after_initial_solving_expansion: bool = True
     pause_after_final_answer_rejected: bool = False
     file_generation_support: bool = False
+    # logging
+    collapse_long_prompts: bool = True
 
 
 class Executor(_abc.ABC):
@@ -142,11 +136,8 @@ class Executor(_abc.ABC):
 
     @_abc.abstractmethod
     def show_conversation_thread(self, with_header=True, with_extras=False,
-                                 selector: _t.Callable[[int, StepABC], bool] | None=None) \
+                                 selector: _t.Callable[[int, StepABC], bool] | None=None, except_step:StepABC=None) \
             -> list[tuple[str, str]]:
-        pass
-
-    def record_criticisms(self, criticisms: list[str]):
         pass
 
     @_abc.abstractmethod

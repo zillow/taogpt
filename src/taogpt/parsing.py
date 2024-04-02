@@ -12,7 +12,7 @@ from taogpt.constants import (
     FREE_TEXT,
     NEXT_I_WANT_TO_WORK_AT,
     FINAL_ANSWER,
-    UNSOLVABLE
+    REPORT_ERROR
 )
 
 _all_step_types = '|'.join([
@@ -22,7 +22,7 @@ _all_step_types = '|'.join([
 step_type_re = re.compile(
     r"(^|\n)#{1,2}\s*(I_WILL_ANSWER_DIRECTLY"
     r"|LET_ME_ASK_THE_PYTHON_GENIE"
-    r"|BACKTRACK_ON_ERROR"
+    r"|I_FOUND_ERRORS"
     r"|FINAL_ANSWER"
     r"|I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED"
     r"|HERE_IS_MY_STEP_BY_STEP_PLAN).*\n((.|\n)+)"
@@ -40,7 +40,7 @@ step_name_re = re.compile(r"^\s*(((\d|\.)+)\s+)?(.+)")
 def fix_fenced_block_backticks(original: str|None) -> str|None:
     if original is None:
         return None
-    return _final_solution_check_re.sub(r"\1", original)
+    return _fix_fenced_block_backticks_re.sub(r"\1", original)
 
 
 def parse_step_name(text: str|None) -> tuple[str|None, str|None]:
@@ -113,32 +113,53 @@ _final_solution_check_re = re.compile(r"^\s*(yes|no)[.,]?\s+(.+)$", flags=re.DOT
 _step_re = re.compile(r"^( *\[? *at +step[ :]+)?(.*?)[\s\]]*$", flags=re.IGNORECASE)
 
 
-def parse_verification_response(text: str) \
-        -> tuple[bool, dict[str, tuple[str, str|None]], dict[str, tuple[str, str|None]]]:
-    judgements: dict[str, dict[str, _t.Union[bool, str]]] = parse_json_hash(text, two_level_hashes=True)
-    if not _utils.safe_is_instance(judgements, dict) or not all([_utils.safe_is_instance(x, dict) for x in judgements.values()]):
+def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[str]|None]], dict]:
+    judgements: dict[str, dict[str, _t.Union[bool, str]]] = parse_json_hash(text, nested_hashes=True)
+    if (not _utils.safe_is_instance(judgements, dict)
+            or not all([_utils.safe_is_instance(x, dict) for x in judgements.values()])):
         raise ParseError("The response must be a JSON hash of hashes")
     concerns: dict[str, tuple[str, str|None]] = dict()
-    errors: dict[str, tuple[str, str|None]] = dict()
     overall_correctness: bool = True
     for concern, judgement in judgements.items():
         has_ok = 'ok' in judgement
         has_warning = 'warning' in judgement
         has_error = 'error' in judgement
-        total = int(has_ok) + int(has_warning) + int(has_error)
+        has_fatal = 'fatal' in judgement
+        total = int(has_ok) + int(has_warning) + int(has_error) + int(has_fatal)
         if total != 1:
             raise ParseError(f"{concern} must have exactly one of 'ok', 'warning',or 'error' field.")
-        overall_correctness = (overall_correctness and not has_error)
+        overall_correctness = (overall_correctness and not has_error and not has_fatal)
         blame = judgement.get('blame', None)
-        if blame is not None and len(blame) > 0:
-            blame = _step_re.search(blame).group(2)
-        if blame is not None and len(blame) == 0:
-            blame = None
-        if has_error:
-            errors[concern] = (judgement['error'], blame)
+        if blame is not None:
+            if isinstance(blame, str):
+                blame = [blame]
+            blame = [_step_re.search(b).group(2) for b in blame if len(_utils.str_or_blank(b)) > 0]
         if has_warning:
-            concerns[concern] = (judgement['warning'], blame)
-    return overall_correctness, concerns, errors
+            concerns[judgement['warning']] = ('warning', blame)
+        if has_error:
+            concerns[judgement['error']] = ('error', blame)
+        if has_fatal:
+            concerns[judgement['fatal']] = ('fatal', blame)
+    return concerns, judgements
+
+
+def parse_give_up_response(description: str) -> dict[str, tuple[str, list[str]]]:
+    description = _utils.str_or_blank(description)
+    if len(description) == 0:
+        raise ParseError("Must provide explanation why you gave up.")
+    parsed = parse_json_hash(description, nested_list=True)
+    issues: dict[str, tuple[str, list[str]]] = dict()
+
+    def extract(subset, level):
+        for issue, blamed_steps in subset.items():
+            if isinstance(blamed_steps, str):
+                blamed_steps = [blamed_steps]
+            issues[issue] = (level, blamed_steps)
+    extract(parsed['errors'], 'fatal')
+    extract(parsed['warnings'], 'warning')
+    if len(issues) == 0:
+        raise ParseError("Must list issues under `errors` or `warning` JSON keys.")
+    return issues
 
 
 @_dc.dataclass
@@ -150,7 +171,7 @@ class StepDescriptor:
 
 def parse_step_by_step_plan(text: str) -> dict[int, StepDescriptor]:
     try:
-        plan = parse_json_hash(text, two_level_hashes=True)
+        plan = parse_json_hash(text, nested_hashes=True)
     except ParseError as ex:
         if not 'no JSON hash found' in str(ex):
             raise ex
@@ -184,7 +205,7 @@ def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> dict[int, StepDescrip
 
 
 def parse_ranking_response(text: str, expected_number: int) -> tuple[dict[int, float], dict[int, int]]:
-    rankings = parse_json_hash(text, two_level_hashes=True)
+    rankings = parse_json_hash(text, nested_hashes=True)
     results: {int: float} = dict()
     dupes: {int: int} = dict()
     for i, item in rankings.items():
@@ -216,7 +237,7 @@ def parse_ranking_response(text: str, expected_number: int) -> tuple[dict[int, f
     return results, dupes
 
 
-def parse_json_hash(text, two_level_hashes=False):
+def parse_json_hash(text, nested_hashes=False, nested_list=False):
     match = _json_response_re.match(text)
     responses: dict[str, _t.Any]
     if match is None:
@@ -232,8 +253,10 @@ def parse_json_hash(text, two_level_hashes=False):
             raise ParseError(f"JSON parse error: {e}")
     if not _utils.safe_is_instance(responses, dict):
         raise ParseError("The response must be a JSON hash")
-    if two_level_hashes and not all([_utils.safe_is_instance(x, dict) for x in responses.values()]):
+    if nested_hashes and not all([_utils.safe_is_instance(x, dict) for x in responses.values()]):
         raise ParseError("The response must be a JSON hash of hashes")
+    elif nested_list and not all([_utils.safe_is_instance(x, list) for x in responses.values()]):
+        raise ParseError("The response must be a JSON hash of lists")
     return responses
 
 
@@ -254,7 +277,7 @@ def parse_json_list(text):
 def parse_next_step_reply(text: str) -> tuple[str, tuple[str, str|None]]:
     sections: dict[str, str] = parse_sections(text, section_level='#')
     sections.pop(FREE_TEXT)
-    for section in [FINAL_ANSWER, UNSOLVABLE]:
+    for section in [REPORT_ERROR]:
         if section in sections:
             remaining = sections.pop(section)
             return section, (f"# {section}\n{remaining}", None)

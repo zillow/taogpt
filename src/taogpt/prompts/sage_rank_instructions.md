@@ -1,16 +1,10 @@
-Tao has proposed the following different approaches:
-
-{approaches}
-
----
-
 Based on proposed problem solving approaches, the state of execution, and the partial answers which can be seen in
 the conversation thread, we want to determine if we are on the good track to solve the task problem and score 
 the proposed approaches in the range of [0.0, 10.0], the higher the score the more preferable.
 
 Scoring criteria: 
 * If the original task problem contains error and not solvable or we are at a dead-end or infinite loop trying to 
-  solve the original, then all approaches except `BACKTRACK_ON_ERROR` get 0 scores.
+  solve the original, then all approaches except `I_FOUND_ERRORS` get 0 scores.
 * Direct answers are acceptable unless the answer is incorrect in which case it should get a score of 0.
 * The approaches which lead to incorrect results should get a score of 0.
 * The assumption implied/used should be correct.
@@ -30,9 +24,9 @@ Scoring criteria:
 Response must be in valid JSON like this:
 
 ```json
-{{
-  "1": {{"score": 9.8, "reason": "your reasoning"}},
-  "2": {{"score": 9.65, "duplicate_of": 1, "reason": "your explanation"}},
-  "3": {{"score": 7.5, "reason": "workable but too detail, over specific"}}
-}}
+{
+  "1": {"score": 9.8, "reason": "your reasoning"},
+  "2": {"score": 9.65, "duplicate_of": 1, "reason": "your explanation"},
+  "3": {"score": 7.5, "reason": "workable but too detail, over specific"}
+}
 ```
