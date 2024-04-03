@@ -17,8 +17,8 @@ questions to the user.
 # I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED
 <optional introductory and analysis>
 
-1. <question> [<explanation>]
-2. <question> [<explanation>]
+1. <question>
+2. <question>
 ...
 ```
 

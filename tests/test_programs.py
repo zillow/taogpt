@@ -18,12 +18,10 @@ def test_consolidate_multiple_questions():
                                 f"{choices[4].description}"
     indices = [3, 2, 4, 1]
     ask_step: AskQuestionStep = choices[2]
-    assert not ask_step.need_consolidate
     ExpandableStep.consolidate_questions(choices, indices)
     assert choices == original_choices # no changes to choices
     assert indices == [3, 2]
     assert ask_step.description == expected_merged_questions
-    assert ask_step.need_consolidate
 
 
 def test_consolidate_do_nothing_if_one_question():
@@ -36,12 +34,10 @@ def test_consolidate_do_nothing_if_one_question():
     expected_merged_questions = choices[1].description
     indices = [2, 1, 0]
     ask_step: AskQuestionStep = choices[1]
-    assert not ask_step.need_consolidate
     ExpandableStep.consolidate_questions(choices, indices)
     assert choices == original_choices # no changes to choices
     assert indices == [2, 1, 0]
     assert ask_step.description == expected_merged_questions
-    assert not ask_step.need_consolidate
 
 
 def test_consolidate_do_nothing_if_no_questions():

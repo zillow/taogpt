@@ -53,7 +53,7 @@ class LLM:
 @_dc.dataclass
 class Config:
     # hyperparameters
-    initial_expansion: int = 1
+    initial_expansion: int = 3
     first_expansion: int = 1
     first_try_temperature: float = 0.0
     alternative_temperature: float = 0.7

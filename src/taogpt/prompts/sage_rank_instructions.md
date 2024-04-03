@@ -8,7 +8,7 @@ Scoring criteria:
 * Direct answers are acceptable unless the answer is incorrect in which case it should get a score of 0.
 * The approaches which lead to incorrect results should get a score of 0.
 * The assumption implied/used should be correct.
-* The questions asked by Tao should be relevant and not trivial.
+* The questions gets high scores if they are relevant and not trivial.
 * Among `HERE_IS_MY_STEP_BY_STEP_PLAN` strategies, simple, generic, and high-level ones get higher scores. 
   Overly detailed, specific, and low-level ones get lower scores. Because it is impossible to backtrack and try 
   different values in detailed plans in case of errors. Likewise, choose linear, decomposable steps over looping. 

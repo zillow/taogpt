@@ -167,7 +167,7 @@ class Orchestrator(Executor):
             reverted_steps.append(self._chain.pop(-1))
         if len(self.chain) == 0:
             raise UnsolvableError('Fail to solve! No more viable options')
-        self._reverted_steps = reverted_steps
+        self._reverted_steps = reversed(reverted_steps)
         assert last_step is self.chain[-1] # exactly at the end
 
         desc = _utils.safe_subn(
@@ -255,7 +255,6 @@ class Orchestrator(Executor):
                 elif _utils.safe_is_instance(self._chain[i], (DirectAnswerStep, AskPythonGenieStep, StepByStepPlan)):
                     break
             if is_direct_answer_only: # replace
-                self._chain[-1].set_visible_in_chain(False)
                 final_answer_step = SummarizeStep(previous=self._chain[-1],
                                                   description=last_step.description,
                                                   role=ROLE_TAO)

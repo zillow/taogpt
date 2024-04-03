@@ -88,7 +88,7 @@ def parse_sections(text: str, section_level: str='##') -> dict[str, str|None]:
             for k, text in matched_sections.items()}
 
 
-def parse_ordered_list(markdown_text) -> list[str]:
+def parse_ordered_list(markdown_text, at_least_one_list=True) -> list[str]:
     """
     Parse a simplified markdown list without consideration to multi-line indentation.
     :param markdown_text: markdown text
@@ -103,7 +103,7 @@ def parse_ordered_list(markdown_text) -> list[str]:
             raise ParseError("Unexpected bullet number or multiple lists presented.")
         expected_number += 1
         matches.append(_whitespace_re.sub(' ', m.group(2)).strip())
-    if len(matches) == 0:
+    if at_least_one_list and len(matches) == 0:
         raise ParseError("No list presented.")
     return matches
 

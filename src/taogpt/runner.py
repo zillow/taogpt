@@ -83,7 +83,7 @@ def log_final_chain(executor, log_path,
                     console_out: _TextIOBase=None):
     logger = MarkdownLogger(_p.Path(log_path) / file_name, console_out=console_out)
     executor.log_configs(logger)
-    logger.log_conversation(executor.show_conversation_thread(with_header=True))
+    logger.log_conversation(executor.show_conversation_thread(with_header=False))
     logger.log(f"**total tokens**: {executor.llm.total_tokens}")
     for path, file in GeneratedFile.collect_files(executor.chain).items():
         path = re.sub(r"[\"\'`]", "", path)
