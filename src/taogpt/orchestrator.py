@@ -283,6 +283,7 @@ class Orchestrator(Executor):
         self._create_python_scope()
 
     def _create_python_scope(self):
+        import time
         self._python_scope = {'_taogpt_orchestrator_python_scope_sig': time.time()}
 
     def _verify_python_scope(self):
