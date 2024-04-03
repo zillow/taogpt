@@ -1,5 +1,4 @@
 from __future__ import annotations
-import time
 import typing as _t
 from _collections import defaultdict as _defaultdict
 import math as _math
@@ -14,8 +13,6 @@ from .constants import *
 import taogpt.utils as _utils
 from .utils import safe_subn
 from taogpt.prompts import PromptDb
-
-_CONTINUE_VOTE_QUORUM = 0.51
 
 
 def add_files_to_prompts(executor, prompts, role=ROLE_ORCHESTRATOR) -> dict[str, GeneratedFile]:
@@ -227,7 +224,8 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                     executor.prompts.tao_intro,
                     prompts,
                     temperature=0.0 if n_retries == 0.0 else executor.config.alternative_temperature,
-                    reason=f"fix/{len(self._criticisms)}#{n_retries}")
+                    reason=f"fix",
+                    step_id=f"{len(self._criticisms)}#{n_retries}")
                 response = _utils.str_or_blank(response)
                 if not response.startswith(f"# {self.TYPE_SPEC}"):
                     response = f"# {self.TYPE_SPEC}\n\n" + response
@@ -370,11 +368,7 @@ class SummarizeStep(TaoReplyStep, FixableStep):
         return self._n_tries
 
     def repair(self, executor: Executor):
-        critic_text = self.format_critic_text()
-        executor.logger.log(f'---\n<div style="color: white; background-color: gray">\n')
-        executor.logger.log(f"# REPAIRING {self.step_name}/{self.step_id}#{self._n_tries} for:\n")
-        executor.logger.log(critic_text)
-        executor.logger.log(f"\n</div>\n")
+        self.log_repair(executor)
         self._evaluated = False
         self.eval_only(executor)
 
@@ -421,7 +415,7 @@ class SummarizeStep(TaoReplyStep, FixableStep):
             n_fatals = sum(b.startswith('fatal') for b in blames)
             n_errors = sum(b.startswith('error') for b in blames)
             total_errors += n_fatals + n_errors
-            if n_fatals == 0 and isinstance(blamed_step, FixableStep):
+            if n_fatals == 0 and _utils.safe_is_instance(blamed_step, FixableStep):
                 if blamed_step.retryable(executor.config):
                     _t.cast(FixableStep, blamed_step).repair(executor)
                 elif n_errors > 0:
@@ -653,7 +647,8 @@ class AskQuestionStep(TaoReplyStep):
             else:
                 self._answers = dict()
             previous = self.previous
-            if isinstance(previous, ExpandableStep):
+            if _utils.safe_is_instance(previous, ExpandableStep):
+                previous = _t.cast(ExpandableStep, previous)
                 assert executor.chain[-1] is self
                 executor.chain.pop(-1)
                 if len(questions) > 0:
@@ -777,15 +772,12 @@ class ExpandableStep(Step):
                 except Exception as e:
                     n_retries += 1
                     executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent,
-                                                plan, self.get_parse_error_instruction(prompt_db))
+                                                plan, prompt_db.orchestrator_parse_error)
 
     def _collect_criticism(self, choice: Step) -> str:
-        if isinstance(choice, FixableStep):
-            return f"\n---\nCriticisms received for this:\n{choice.format_critic_text()}"
+        if _utils.safe_is_instance(choice, FixableStep):
+            return f"\n---\nCriticisms received for this:\n{_t.cast(FixableStep, choice).format_critic_text()}"
         return ''
-
-    def get_parse_error_instruction(self, prompt_db) -> str:
-        return prompt_db.orchestrator_parse_error
 
     def parse_reply(self, plan, executor: Executor) -> Step:
         choice = parse_to_step(self, plan, config=executor.config, working_on=f"response to {self.step_name}")

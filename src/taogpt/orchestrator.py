@@ -289,42 +289,6 @@ class Orchestrator(Executor):
         assert self._python_scope is not None
         assert _utils.safe_is_instance(self._python_scope['_taogpt_orchestrator_python_scope_sig'], float)
 
-    def vote(self, system_prompt: str, prompts: list[tuple[str, str]], parser: _t.Callable[[str], _t.Any],
-             reason: str=None, step_id:str=None, min_threshold=0.0, majority=1) -> (_t.Any, int|float):
-        assert majority == 1 # todo: can't handle multiple votes yet
-        prompt_db: PromptDb = self.prompts
-        min_threshold = min_threshold * majority
-        rankings = dict()
-        i = 0
-        while i < majority:
-            n_retries = 0
-            prompts_to_be_sent = prompts.copy()
-            response: str = ''
-            while n_retries < self.config.max_retries:
-                try:
-                    response = self.llm.ask(system_prompt,
-                                            prompts_to_be_sent,
-                                            reason=reason,
-                                            step_id=f"{step_id}",
-                                            temperature=0.0 if i == 0 else 0.1,
-                                            log_request=i == 0)
-                    result, data = parser(response)
-                    existing = rankings.get(result, (0, data))
-                    existing = existing[0] + 1, data # todo this can't handle multiple votes yet
-                    rankings[result] = existing
-                    i += 1
-                    break
-                except Exception as e:
-                    n_retries += 1
-                    self.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
-                                            prompt_db.orchestrator_parse_error)
-        choices = sorted([item for item in rankings.items() if item[1][0] >= min_threshold],
-                         key=lambda item: item[1][0], reverse=True)
-        if len(choices) == 0:
-            raise Backtrack('No candidate passes min. threshold.', blame=self._chain[-1])
-        result = choices[0]
-        return result[0], result[1][1]
-
     def handle_parse_error(self,
                            e: Exception,
                            n_retries: int,
