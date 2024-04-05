@@ -3,11 +3,11 @@ from __future__ import annotations
 import abc as _abc
 import dataclasses as _dc
 import typing as _t
-import re as _re
 from threading import local
 
 from taogpt.prompts import PromptDb
 from taogpt.md_logging import MarkdownLogger
+from taogpt import parsing as _parsing
 from taogpt import utils as _utils
 
 
@@ -28,7 +28,7 @@ class LLM:
         pass
 
     def reset(self):
-        self.collapsed_contents.clear()
+        pass
 
     @_abc.abstractmethod
     def count_tokens(self, text: str) -> int:
@@ -59,7 +59,7 @@ class Config:
     alternative_temperature: float = 0.7
     max_search_expansion: int = 4
     try_intuition: bool = True
-    try_intuition_first_expansion: bool = True
+    try_intuition_initial_expansion: bool = True
     votes: int = 1
 
     # behavioral
@@ -135,6 +135,10 @@ class Executor(_abc.ABC):
         pass
 
     @_abc.abstractmethod
+    def step_id(self, step):
+        pass
+
+    @_abc.abstractmethod
     def show_conversation_thread(self, with_header=True, with_extras=False,
                                  selector: _t.Callable[[int, StepABC], bool] | None=None, except_step:StepABC=None) \
             -> list[tuple[str, str]]:
@@ -175,15 +179,10 @@ class StepABC(_abc.ABC):
 
     def __init__(self, *, previous: StepABC|None, description: str, role: str):
         self.previous = previous
-        self.description = description
+        self.description = _parsing.at_step_re.sub('', description).strip()
         self.role = role
         self._step_name = None
         self._visible = True
-
-    @property
-    @_abc.abstractmethod
-    def step_id(self) -> int:
-        pass
 
     @property
     def step_name(self) -> str|None:
@@ -195,13 +194,8 @@ class StepABC(_abc.ABC):
             return
         if self._step_name is None or forced:
             self._step_name = name
-            self._prepend_step_name_header(name)
         else:
             raise RuntimeError(f"step name has already been set to {self._step_name}")
-
-    def _prepend_step_name_header(self, name):
-        self.description = _re.sub(r"\[at step:[^]]+]\s*", "", self.description)
-        self.description = f"[at step: {name}]\n\n{self.description}"
 
     @property
     def visible_in_chain(self) -> bool:
@@ -213,11 +207,6 @@ class StepABC(_abc.ABC):
     @property
     def collected_files(self) -> dict[str, GeneratedFile]:
         return dict()
-
-    @property
-    @_abc.abstractmethod
-    def description_with_header(self) -> str:
-        pass
 
     @_abc.abstractmethod
     def eval(self, executor: Executor) -> StepABC | None:

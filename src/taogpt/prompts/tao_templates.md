@@ -6,6 +6,9 @@ Given problem solving session so far, choose one of the following strategies:
 
 {snippet_report_errors}
 
+Error report is only for previous executed steps. Do NOT errors in other proposals. If you found issues in other 
+proposals, you should come up with a new proposal avoiding those issues.
+
 ## Strategy: Ask Questions
 
 Many problems requires clarifications. Use this strategy to ask questions, but avoid obvious, trivial, 

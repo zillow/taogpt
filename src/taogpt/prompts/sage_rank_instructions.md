@@ -1,25 +1,27 @@
-Based on proposed problem solving approaches, the state of execution, and the partial answers which can be seen in
-the conversation thread, we want to determine if we are on the good track to solve the task problem and score 
-the proposed approaches in the range of [0.0, 10.0], the higher the score the more preferable.
+We are on a journey to solve the task problem. Please score choices in the range [0.0, 10.0] for the
+current step, higher is better. Note: choices not directly providing the answer but still lead to solution are OK.
 
-Scoring criteria: 
-* If the original task problem contains error and not solvable or we are at a dead-end or infinite loop trying to 
-  solve the original, then all approaches except `I_FOUND_ERRORS` get 0 scores.
-* Direct answers are acceptable unless the answer is incorrect in which case it should get a score of 0.
-* The approaches which lead to incorrect results should get a score of 0.
-* The assumption implied/used should be correct.
-* The questions gets high scores if they are relevant and not trivial.
-* Among `HERE_IS_MY_STEP_BY_STEP_PLAN` strategies, simple, generic, and high-level ones get higher scores. 
-  Overly detailed, specific, and low-level ones get lower scores. Because it is impossible to backtrack and try 
-  different values in detailed plans in case of errors. Likewise, choose linear, decomposable steps over looping. 
-  For example, rate "Find and set missing elements to fill-in values" higher than "Set 2nd and 5th elements to 22". 
-  Tao is good at handling details himself.
-  * Sub-steps need and should only focus on the current steps; other concerns should be addressed by higher or 
-    sibling plans.
-* Try to avoid identical scores (except 0's;) you can use decimal points (e.g. 9.5) to distinguish two different 
-  approaches.
-* Among similar approaches, mark others as duplicates of the best one; note: an approach can only duplicate another 
-  approach if the two are of same kinds, e.g. two direct answers.
+* `HERE_IS_MY_STEP_BY_STEP_PLAN` choices provide a step-by-step plan to tackle the current problem step. These should
+  be scored based on the correctness and efficiency of the plan. They are plans! The problem solver will work on each
+  step later.
+* `MY_THOUGHT` choices provides intuitive thought to the problem step and should be scored according to correctness
+  and clarity of the thought. Remember: you are asked to **rank** the choices, even if direct answers are provided,
+  they don't exclude other answers or choices.
+* `I_FOUND_ERRORS` choices report errors found in preceding problem solving trajectory and should be scored by
+  severity and accuracy of the reports.
+* `I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED` choices seek clarifications from the user and should be scored
+  according to the usefulness of the questions to the solving the problem.
+* `LET_ME_ASK_THE_PYTHON_GENIE` choices try to execute a Python code snippet to provide the answer and should be
+  scored according to the usefulness, correctness, and efficiency of the code snippet. Coding style here is not an
+  issue.
+
+Score deduplication:
+
+* One choice does not preclude other choices but try to avoid identical scores; you can use decimal points (e.g. 9.5)
+  to distinguish two different choices.
+* Among similar choices, mark others as duplicates of the best one; note: a choice can only duplicate another
+  choice if the two are of the same kind.
+* Avoid score 0 unless the choice totally sucks.
 
 Response must be in valid JSON like this:
 
@@ -27,6 +29,6 @@ Response must be in valid JSON like this:
 {
   "1": {"score": 9.8, "reason": "your reasoning"},
   "2": {"score": 9.65, "duplicate_of": 1, "reason": "your explanation"},
-  "3": {"score": 7.5, "reason": "workable but too detail, over specific"}
+  "3": {"score": 7.5, "reason": "workable but too detailed, over specific"}
 }
 ```

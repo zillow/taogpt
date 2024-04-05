@@ -1,4 +1,4 @@
-These are prior strategies attempted:
+These are prior proposals attempted:
 
 {prior}
 

@@ -173,7 +173,7 @@ class Orchestrator(Executor):
         desc = _utils.safe_subn(
             last_step.step_name if last_step.step_name is not None else last_step.description)
         self.logger.log(f'---\n<div style="color: white; background-color: black">\n')
-        self.logger.log(f"# BACKTRACK to {desc}/{last_step.step_id} for: {str(backtrack)}\n")
+        self.logger.log(f"# BACKTRACK to {desc}/{self.step_id(last_step)} for: {str(backtrack)}\n")
         self.logger.log(f"</div>\n")
         _t.cast(ExpandableStep, last_step).backtrack(self, backtrack)
 
@@ -206,6 +206,12 @@ class Orchestrator(Executor):
             raise TokenUsageError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
                                   f"exceeded allowance of {self.config.max_tokens_for_sage_llm}", self.chain[-1])
 
+    def step_id(self, step):
+        assert step is not None
+        for i, elem in enumerate(self._chain):
+            if elem is step:
+                return i
+
     def show_conversation_thread(self, with_header=True, with_extras=False,
                                  selector: _t.Callable[[int, StepABC], bool] | None=None, except_step:StepABC=None) \
             -> list[tuple[str, str]]:
@@ -216,7 +222,7 @@ class Orchestrator(Executor):
             if step is except_step:
                 continue
             if selector is None or selector(i, step):
-                conversation.extend(step.show_in_thread(with_header=with_header, with_extras=with_extras))
+                conversation.extend(step.show_in_thread(i, with_header=with_header, with_extras=with_extras))
         return conversation
 
     def next_step(self):
@@ -261,7 +267,7 @@ class Orchestrator(Executor):
                 self._chain.append(final_answer_step)
                 return
 
-        summarize_step = SummarizeStep(previous=self.chain[-1], description='', role=ROLE_ORCHESTRATOR)
+        summarize_step = SummarizeStep(previous=self.chain[-1], description='', role=ROLE_TAO)
         self._chain.append(summarize_step)
 
     def ask_questions(self, questions: list[str]) -> dict[str, str]:

@@ -1,5 +1,5 @@
-If you see any errors or inconsistencies, response with **specific** errors and prior steps responsible in the
-following format:
+If you see any errors or inconsistencies in the step executed so far, response with **specific** errors and prior steps 
+responsible in the following format:
 
  `````markdown
  # I_FOUND_ERRORS
@@ -7,8 +7,8 @@ following format:
 ```json
 {
   "errors" {
-      "<issue 1>": ["<at_step_description>", ...],
-      "<issue 2>": ["<at_step_description>", ...],
+      "<issue 1>": ["<step#>: <step description>", ...],
+      "<issue 2>": ["<step#>: <step description>", ...],
   },
   "warnings": {
       // ...
@@ -17,6 +17,9 @@ following format:
 ```
 `````
 
-where `<at_step_description>` can be found in the bracket "[at step: <at_step_description>]" of the steps.
+where `"<step#>: <step description>"` can be found in the bracket "[at step#<num>: <step_description>]" of the steps 
+(and not elsewhere.)
+
+Do NOT report intermittent errors that have already been fixed.
 
 Do NOT try to fix the errors since Orchestrator wouldn't understand. Instead it will let you try to fix later.

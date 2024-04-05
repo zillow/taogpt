@@ -1,3 +1,4 @@
+import typing as _t
 from taogpt.program import *
 from mocks import logger
 
@@ -65,12 +66,46 @@ def test_final_direct_answer_with_nonstandard_heading():
 # return constant
 1234
 ```"""
-    text = f"""# {WILL_ANSWER_DIRECTLY}
+    text = f"""# {MY_THOUGHT}
 {content}
 
 # {NEXT_I_WANT_TO_WORK_AT}
 None. I'm done.
 """
-    step: DirectAnswerStep = parse_to_step(None, text, config=Config())
+    step = _t.cast(DirectAnswerStep, parse_to_step(None, text, config=Config()))
     assert step.is_final_step
     assert step.description == '22'
+
+
+def test_parse_error_report_with_blame_list(logger):
+    step = GiveUpStep(previous=None, description="""
+{
+  "errors": {
+      "Incorrect placement of numbers": ["at step#4: response to Fill in the missing numbers in the first row",
+                                         "at step#7: response to Fill in the missing numbers in the second row",
+                                         "at step#10: response to Fill in the missing numbers in the third row"]
+  },
+  "warnings": {}
+}""", role='tao')
+
+    assert step.description.strip() == """
+Incorrect placement of numbers:
+* fatal at [step#4: response to Fill in the missing numbers in the first row]
+* fatal at [step#7: response to Fill in the missing numbers in the second row]
+* fatal at [step#10: response to Fill in the missing numbers in the third row]
+""".strip()
+
+
+def test_parse_error_report_with_blame_string(logger):
+    step = GiveUpStep(previous=None, description="""
+{
+  "errors": {
+      "Incorrect placement of numbers": "at step#4: response to Fill in the missing numbers in the first row"
+  },
+  "warnings": {}
+}""", role='tao')
+
+    assert step.description.strip() == """
+Incorrect placement of numbers:
+* fatal at [step#4: response to Fill in the missing numbers in the first row]
+""".strip()

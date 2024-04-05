@@ -20,8 +20,8 @@ parser = argparse.ArgumentParser(
 
 # hyperparameters
 parser.add_argument('-i', '--initial-expansion', type=int, default=2, help='Initial expansion factor')
-parser.add_argument('-I0', '--try-intuition-first_expansion', type=bool, default=True,
-                    help='Always try intuition at first expansion)')
+parser.add_argument('-I0', '--try-intuition-initial-expansion', type=bool, default=True,
+                    help='Always try intuition at the initial expansion)')
 parser.add_argument('-I1', '--try-intuition', type=bool, default=True,
                     help='Always try intuition in subsequent expansions')
 parser.add_argument('-f', '--first-expansion', type=int, default=1, help='First expansion factor')

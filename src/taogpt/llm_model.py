@@ -206,7 +206,7 @@ class LangChainLLM(LLM):
             if max_tokens is None:
                 max_tokens = GPT_OUTPUT_TOKEN_LIMITS.get(self.model_id, None)
                 if max_tokens is not None and max_tokens < 0:
-                    max_tokens = abs(max_tokens) - context_tokens
+                    max_tokens = None # let it reach the remaining allowance
                 assert max_tokens is None or max_tokens > 0, f"No more output tokens allowed: {max_tokens}"
 
             total_context_tokens = 0
@@ -217,6 +217,10 @@ class LangChainLLM(LLM):
                 reply_with_gi = llm.invoke_with_gen_info(to_be_sent, max_tokens=max_tokens)
                 this_content = reply_with_gi.message.content
                 reply_content += this_content
+                if _fix_fenced_block_backticks_re.search(reply_content) is not None:
+                    print(f"%%%%%%%%% LLM reason {reply_with_gi.generation_info.get('finish_reason', '')} %%%%%%%%")
+                    print(reply_content)
+                    print("%%%%%%%%%%%%%%%%%")
                 if reply_with_gi.generation_info.get('finish_reason', '') != 'length':
                     break
                 to_be_sent = messages.copy()
@@ -230,7 +234,18 @@ class LangChainLLM(LLM):
         else:
             reply = llm.invoke(messages, max_tokens=max_tokens)
             reply_content = reply.content
+            if _fix_fenced_block_backticks_re.search(reply_content) is not None:
+                print(f"%%%%%%%%% LLM one call %%%%%%%%")
+                print(reply_content)
+                print("%%%%%%%%%%%%%%%%%")
         reply_content = fix_fenced_block_backticks(reply_content)
+        _old = reply_content
+        if _fix_fenced_block_backticks_re.search(reply_content) is not None:
+            print(f"%%%%%%%%% fenced block fixed %%%%%%%%")
+            print(_old)
+            print("%%%%%%%%%%%%%%%%%")
+            print(reply_content)
+            print("%%%%%%%%%%%%%%%%%")
         reply_content = _utils.str_or_blank(reply_content)
         return (reply_content, total_context_tokens) if return_context_token_usages else reply_content
 
@@ -245,6 +260,8 @@ class LangChainLLM(LLM):
         tokens = enc.encode(text)
         return len(tokens)
 
+
+_fix_fenced_block_backticks_re = _re.compile(r"(`{3,})(\d+)")
 
 def fix_model_name(model_name: str, required=False, default_to: str=None):
     if model_name is None:

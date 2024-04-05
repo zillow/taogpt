@@ -1,3 +1,3 @@
-Tao has proposed the following different approaches:
+Tao has proposed the following different choices:
 
-{approaches}
+{choices}

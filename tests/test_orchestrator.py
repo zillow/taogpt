@@ -18,40 +18,42 @@ _logger = logger
 def test_check_final_solution_success(logger):
     text = """{
     "rule conformance": {"ok": "All right!"},
-    "calculation": {"warning": "Can simplify", "blame": ["step13", "step22"]}
+    "calculation": {"warning": "Can simplify", "blame": ["step#13: bad step", "step#22: contradicting step"]}
     }
     """
     concerns, _ = parse_verification_response(text)
     assert len(concerns) == 1
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        if reason == 'check_final_answer':
+        if reason in ('check_final_answer', 'merge_criticisms'):
             return text
         elif reason == 'summarize':
             return "Here is your answer"
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
     step.eval(orchestrator)
-    assert len(llm.conversation_sequence) == 3
+    assert len(llm.conversation_sequence) == 5
     assert llm.conversation_sequence[0][0] == 'summarize'
     assert llm.conversation_sequence[1][0] == 'check_final_answer'
-    assert llm.conversation_sequence[2][0] == 'summarize'
+    assert llm.conversation_sequence[2][0] == 'check_final_answer'
+    assert llm.conversation_sequence[3][0] == 'merge_criticisms'
+    assert llm.conversation_sequence[4][0] == 'summarize'
 
 
 def test_check_final_solution_failed(logger):
     text = """{
-    "calculation": {"error": "1 + 1 != 3", "blame": "calculate total"},
+    "calculation": {"error": "1 + 1 != 3", "blame": "step#13: calculate total"},
     "etc": {"ok": "Good"}
     }
     """
     concerns, full_json = parse_verification_response(text)
-    assert concerns == {"1 + 1 != 3": ("error", ["calculate total"])}
+    assert concerns == {"1 + 1 != 3": ("error", [(13, "calculate total")])}
     assert json.loads(text).keys() == full_json.keys()
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         if reason == 'summarize':
             return "3"
-        if reason == 'check_final_answer':
+        if reason in ('check_final_answer', 'merge_criticisms'):
             return text
         assert False, f"Unexpected reason: {reason}"
 
@@ -96,7 +98,7 @@ def create_final_check_chain(reply, logger):
     step = DirectAnswerStep(previous=step, description="This is an answer", role=ROLE_TAO)
     step.set_step_name('calculate total')
     orchestrator.chain.append(step)
-    step = SummarizeStep(previous=step, description="This is the final answer", role=ROLE_TAO)
+    step = SummarizeStep(previous=step, description="", role=ROLE_TAO)
     orchestrator.chain.append(step)
     return step, llm, orchestrator
 
@@ -167,7 +169,7 @@ no_such_var * 123
 
 
 def test_parse_direct_answer_and_next_step():
-    text = """# I_WILL_ANSWER_DIRECTLY
+    text = """# MY_THOUGHT
 
 
 
@@ -180,12 +182,12 @@ Then, the third cell must be 2 because it's the only number left.
 So, the first row becomes: 4 3 2 1
 
 ### NEXT_I_WANT_TO_WORK_AT:
-Fill in the second row [None]
+Fill in the second row
 """
     step = parse_to_step(None, text, config=Config())
-    assert isinstance(step, DirectAnswerStep)
+    assert isinstance(step, DirectAnswerStep), str(type(step))
     assert not step.is_final_step
-    assert step.next_step == 'Fill in the second row [None]'
+    assert step.next_step == 'Fill in the second row'
 
 
 def test_parse_step_by_step_no_whys():

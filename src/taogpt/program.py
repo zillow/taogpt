@@ -40,40 +40,28 @@ class Step(StepABC):
         return ''
 
     def __repr__(self) -> str:
-        prev = self.previous.step_id if self.previous is not None else None
-        return f"{self.__class__.__name__}(step_id={self.step_id},prev={prev};{self.__repr_local__()})"
+        return f"{self.__class__.__name__}({self.__repr_local__()})"
 
     def __repr_local__(self) -> str:
         d = safe_subn(self.description)
         return f"description={d}"
 
     @property
-    def step_id(self) -> int:
-        return self.previous.step_id + 1 if self.previous is not None else 0
-
-    @property
-    def description_with_header(self) -> str:
-        """
-        Always emit the `# ` prefix. Caller can remove the `#` heading indicator if need to.
-        :return:
-        """
-        return f"# {self.step_title}\n\n{self.description}" if len(self.step_title) > 0 else self.description
-
-    @property
     def extras(self) -> str:
         return ''
 
-    def show_in_thread(self, with_header=True, with_extras=False) -> list[tuple[str, str]]:
-        content = self.description_with_header_and_extras(with_header, with_extras)
-        return [(self.role, content)]
-
-    def description_with_header_and_extras(self, with_header, with_extras):
-        content = self.description_with_header if with_header else self.description
+    def show_in_thread(self, step_index: int, with_header=True, with_extras=False) -> list[tuple[str, str]]:
+        content = ''
+        if with_header:
+            content += f"# {self.step_title}\n" if len(self.step_title) > 0 else ""
+            step_name = _utils.str_or_blank(self.step_name)
+            if step_name == '': # no name, use numeric index
+                step_name = f"step {step_index}"
+            content += f"[at step#{step_index}: {step_name}]\n\n"
+        content += self.description
         if with_extras:
-            extras = _utils.str_or_blank(self.extras)
-            if extras != '':
-                content += '\n\n' + extras
-        return content
+            content += self.extras
+        return [(self.role, content)]
 
     def retryable(self, config: Config):
         return False
@@ -117,7 +105,7 @@ class FixableStep(Step):
     def log_repair(self, executor):
         critic_text = self.format_critic_text()
         executor.logger.log(f'---\n<div style="color: white; background-color: gray">\n')
-        executor.logger.log(f"# REPAIRING {self.step_name}/{self.step_id}#{self.n_tries} for:\n")
+        executor.logger.log(f"# REPAIRING {self.step_name}/{executor.step_id(self)}#{self.n_tries} for:\n")
         executor.logger.log(critic_text)
         executor.logger.log(f"\n</div>\n")
         return critic_text
@@ -146,7 +134,7 @@ class AnalysisStep(Step):
             system_prompt, prompts,
             reason='analyze',
             temperature=0.0,
-            step_id=f"{self.step_id}")
+            step_id=f"{executor.step_id(self)}")
         self.description = desc
         self.role = ROLE_TAO
         self._analyzed = True
@@ -170,19 +158,20 @@ class TaoReplyStep(Step):
 
 
 class DirectAnswerStep(TaoReplyStep, FixableStep):
-    TYPE_SPEC = WILL_ANSWER_DIRECTLY
+    TYPE_SPEC = MY_THOUGHT
 
     @property
     def step_title(self) -> str:
         return DirectAnswerStep.TYPE_SPEC
 
     def __init__(self, *, previous: StepABC|None, description: str, role: str, is_final_step=False):
+        description = at_step_re.sub('', description).strip()
         super().__init__(previous=previous, description=description, role=role)
         self.is_final_step = is_final_step
         self._n_tries = 1 # already evaluated once since the description is the result
         self.build(description)
 
-    def build(self, description: str):
+    def build(self, description: str, next_step: str=None):
         self.description = re.sub(rf"#+\s+{NEXT_I_WANT_TO_WORK_AT}", f"### {NEXT_I_WANT_TO_WORK_AT}:",
                                   description, 1)
         sections: dict[str, str] = parse_sections(self.description)
@@ -191,9 +180,9 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
             file_path: taogpt.GeneratedFile(content_type, content, snippet, desc)
             for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
         }
-        self.next_step = sections.pop(NEXT_I_WANT_TO_WORK_AT, None)
+        self.next_step = sections.pop(NEXT_I_WANT_TO_WORK_AT, next_step)
         if self.next_step is not None:
-            self.next_step = _utils.single_space(strip_quotes_re.sub('', self.next_step))
+            self.next_step = parse_next_step_name(_utils.single_space(strip_quotes_re.sub('', self.next_step)))
         self.is_final_step = self.is_final_step or is_final_answer(self.next_step)
         reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
         self.description = '\n\n'.join(reconstructed)
@@ -231,7 +220,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                     response = f"# {self.TYPE_SPEC}\n\n" + response
                 dummy = parse_to_step(_t.cast(Step, self.previous), response, executor.config, working_on=self.step_name,
                                       limit_to={self.__class__})
-                self.build(dummy.description_with_header_and_extras(with_header=False, with_extras=True))
+                self.build(f"{dummy.description}\n\n{dummy.extras}", next_step=self.next_step)
                 break
             except ParseError as ex:
                 n_retries += 1
@@ -270,14 +259,21 @@ class GiveUpStep(TaoReplyStep):
         return GiveUpStep.TYPE_SPEC
 
     def __init__(self, *, previous: StepABC|None, description: str, role: str):
-        super().__init__(previous=previous, description=description, role=role)
-        self.issues = parse_give_up_response(self.description)
+        parsed_issues = parse_give_up_response(description)
+        desc = ''
+        for key, (issue, blamed_steps) in parsed_issues.items():
+            issue_text = '\n'.join([f"* {issue} at [step#{step_num}: {step_desc}]"
+                                    for step_num, step_desc in blamed_steps])
+            desc += f"{key}:\n{issue_text}\n\n"
+        super().__init__(previous=previous, description=desc, role=role)
+        self.issues = parsed_issues
 
     def eval_only(self, executor):
         if len(self.issues) > 0:
             culprits = identify_culprits(executor, self.issues)
-            first_culprit, errors = next(iter(culprits.items()))
-            raise Backtrack(errors[0], first_culprit)
+            if len(culprits) > 0:
+                first_culprit, errors = next(iter(culprits.items()))
+                raise Backtrack(errors[0], first_culprit)
         raise Backtrack(f"Problem or step is unsolvable. I gave up.", self)
 
 
@@ -347,10 +343,10 @@ class StepByStepPlan(TaoReplyStep):
 class SummarizeStep(TaoReplyStep, FixableStep):
     TYPE_SPEC = SUMMARIZE_FINAL_ANSWER
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str):
+    def __init__(self, *, previous: StepABC|None, description: str, role: str=ROLE_TAO):
         super().__init__(previous=previous, description=description, role=role)
         self._n_tries = 0
-        self._evaluated = False
+        self._evaluated = _utils.str_or_blank(self.description) != ''
         self.set_step_name(None)
 
     @property
@@ -384,7 +380,7 @@ class SummarizeStep(TaoReplyStep, FixableStep):
         self.description = executor.llm.ask(
             system_prompt, prompts,
             reason='summarize',
-            step_id=f"{self.step_id}",
+            step_id=f"{executor.step_id(self)}",
             temperature=0.0,
             log_request=True)
         self._evaluated = True
@@ -404,7 +400,7 @@ class SummarizeStep(TaoReplyStep, FixableStep):
         if len(all_issues) == 0:
             return None
 
-        culprits = identify_culprits(executor,all_issues)
+        culprits = identify_culprits(executor, all_issues)
         if self not in culprits: # we will always summarize again
             self._n_tries -= 1
             culprits[self].append('')
@@ -428,17 +424,24 @@ class SummarizeStep(TaoReplyStep, FixableStep):
                            executor: Executor,
                            votes: int=None,
                            reason='check_final_answer') \
-            -> dict[str, tuple[str, list[str]|None]]:
+            -> dict[str, tuple[str, list[tuple[int, str]]|None]]:
         config = executor.config
-        votes = votes or config.votes
+        votes = (votes or config.votes) + 1
         system_prompt = executor.prompts.sage_intro
-        prompts = executor.show_conversation_thread(with_extras=True)
-        prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_final_check))
+
+        def select_summary_steps(i, step):
+            return _utils.safe_is_instance(step, (PresentTaskStep, AskQuestionStep, SummarizeStep))
 
         # issue: (level, [step desc])
-        all_issues: dict[str, _t.Tuple[str, list[str]|None]] = dict()
+        all_issues: dict[str, _t.Tuple[str, list[tuple[int, str]]|None]] = dict()
         issues_by_critic: list[dict] = []
         for i in range(votes):
+            show_partial = i % 2 == 0
+            prompts = executor.show_conversation_thread(with_extras=not show_partial,
+                                                        selector=select_summary_steps if show_partial else None)
+            if show_partial:
+                add_files_to_prompts(executor, prompts, role=ROLE_TAO)
+            prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_final_check))
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
             response: str = ''
@@ -448,11 +451,11 @@ class SummarizeStep(TaoReplyStep, FixableStep):
                         system_prompt,
                         prompts_to_be_sent,
                         reason=reason,
-                        step_id=f"{self.step_id}/{i}#{n_retries}",
-                        temperature=config.first_try_temperature if i == 0 else config.alternative_temperature)
+                        step_id=f"{executor.step_id(self)}/{i}#{n_retries}",
+                        temperature=0.0)
                     issues, full_json = parse_verification_response(response)
+                    issues_by_critic.append(full_json)
                     if len(issues) > 0:
-                        issues_by_critic.append(full_json)
                         all_issues.update(issues)
                     break
                 except Exception as e:
@@ -461,13 +464,14 @@ class SummarizeStep(TaoReplyStep, FixableStep):
                                                 executor.prompts.orchestrator_parse_error)
         if len(issues_by_critic) > 0 and votes > 1:
             critic_text = "\n\n".join([
-                f"Critic {i+1}:\n```json\n{_json.dumps(report)}\n```"
+                f"Critic {i+1}:\n```json\n{_json.dumps(report, indent=2)}\n```"
                 for i, report in enumerate(issues_by_critic)
             ])
             system_prompt = executor.prompts.sage_intro
             prompts = executor.show_conversation_thread(with_extras=True)
             prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_final_check))
-            prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_merge_criticisms.format(criticisms=critic_text)))
+            prompts.append((ROLE_ORCHESTRATOR, critic_text))
+            prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_merge_criticisms))
             prompts_to_be_sent = prompts.copy()
             n_retries = 0
             response: str = ''
@@ -476,8 +480,8 @@ class SummarizeStep(TaoReplyStep, FixableStep):
                     response = executor.sage_llm.ask(
                         system_prompt,
                         prompts_to_be_sent,
-                        reason=reason,
-                        step_id=f"{self.step_id}/merge_criticisms#{n_retries}",
+                        reason='merge_criticisms',
+                        step_id=f"{executor.step_id(self)}#{n_retries}",
                         temperature=config.first_try_temperature)
                     all_issues, _ = parse_verification_response(response)
                     for issue, (level, steps) in all_issues.items():
@@ -494,20 +498,20 @@ class SummarizeStep(TaoReplyStep, FixableStep):
 
 def identify_culprits(
         executor: Executor,
-        issues: dict[str, tuple[str, list[str]]]=None, # issue: (level, [step desc])
+        issues: dict[str, tuple[str, list[tuple[int, str]]]]=None, # issue: (level, [(step#, step desc)])
 ) -> dict[Step, list[str]]:
-    # step desc: [issue desc with level]
-    blames: dict[str, list[str]] = _defaultdict(list)
+    # (step#, step desc): [issue desc with level]
+    blames: dict[tuple[int, str], list[str]] = _defaultdict(list)
     for issue, (level, steps) in issues.items():
         if steps is None or _utils.str_or_blank(level) == '':
             continue
-        for step_desc in steps:
-            blames[step_desc].append(f"{level}: {issue}")
+        for step_num, step_desc in steps:
+            blames[(step_num, step_desc)].append(f"{level}: {issue}")
     # step: [issue desc with level]
     culprits: dict[Step, list[str]] = _defaultdict(list)
     for i, step in enumerate(executor.chain):
-        for step_desc, issues_of_step in blames.items():
-            if _utils.normalized_levenstein_distance(step.step_name, step_desc) < 0.05:
+        for (step_num, step_desc), issues_of_step in blames.items():
+            if step_num == i or _utils.normalized_levenstein_distance(step.step_name, step_desc) < 0.05:
                 if _utils.safe_is_instance(step, (FixableStep, TaoReplyStep)):
                     step.record_criticisms(issues_of_step)
                 culprits[step].extend(issues_of_step)
@@ -525,7 +529,7 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
     def __init__(self, *, previous: StepABC|None, description: str, role: str):
         super().__init__(previous=previous, description=description, role=role)
         self._n_tries = 0
-        self._build(description)
+        self._build(self.description)
 
     def _build(self, description: str):
         self.description = description
@@ -550,7 +554,7 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
         try:
             results = executor.ask_genie(self._code_snippets, self)
             result_markdown = '\n\n'.join(f"""```text\n{r}\n```""" for r in results)
-            logger.new_message_section(ROLE_GENIE, self.step_id)
+            logger.new_message_section(ROLE_GENIE, executor.step_id(self))
             logger.log(result_markdown)
             logger.close_message_section()
             self.description += f"\n\nResults:\n\n{result_markdown}"
@@ -559,7 +563,7 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
             return True
         except _utils.PythonGenieRuntimeError as e:
             error_text = f"""error: {str(e.error)} when executing this code snippet."""
-            logger.new_message_section(ROLE_GENIE, self.step_id)
+            logger.new_message_section(ROLE_GENIE, executor.step_id(self))
             logger.log(error_text)
             logger.close_message_section()
             self._evaluated = True
@@ -674,7 +678,7 @@ class AskQuestionStep(TaoReplyStep):
         return reply
 
 
-def parse_to_step(prev_step: Step, response: str, config: Config,
+def parse_to_step(prev_step: Step|None, response: str, config: Config,
                   working_on: str = None, limit_to: set=None) -> Step:
     step_type, step_def = parse_step_type_spec(response)
     if step_type is None:
@@ -746,7 +750,8 @@ class ExpandableStep(Step):
             prompts = base_prompts.copy()
             if len(self.choices) > 0:
                 prior_plans = [
-                    f"[Prior approach#{i + 1}] {prior.description_with_header}{self._collect_criticism(prior)}"
+                    (f"[{PRIOR_PROPOSAL}#{i + 1}] {prior.description}\n\n{prior.extras}\n\n"
+                     f"{self._collect_criticism(prior)}")
                     for i, prior in enumerate(self.choices)
                 ]
                 prior_desc = prompt_db.tao_prior_approaches.format(prior='\n\n---\n'.join(prior_plans))
@@ -761,7 +766,7 @@ class ExpandableStep(Step):
                     plan = llm.ask(
                         system_prompt, prompts_to_be_sent,
                         reason=self._expansion_reason,
-                        step_id=f"{self.step_id}/{len(self.choices)}#{n_retries}",
+                        step_id=f"{executor.step_id(self)}/{len(self.choices)}#{n_retries}",
                         temperature=temperature,
                         log_request=(len(self.choices) == 0 and n_retries == 0))
                     choice = self.parse_reply(plan, executor)
@@ -776,7 +781,9 @@ class ExpandableStep(Step):
 
     def _collect_criticism(self, choice: Step) -> str:
         if _utils.safe_is_instance(choice, FixableStep):
-            return f"\n---\nCriticisms received for this:\n{_t.cast(FixableStep, choice).format_critic_text()}"
+            choice = _t.cast(FixableStep, choice)
+            if len(choice.criticisms) > 0:
+                return f"\n---\nCriticisms received for this:\n{choice.format_critic_text()}"
         return ''
 
     def parse_reply(self, plan, executor: Executor) -> Step:
@@ -803,7 +810,7 @@ class ExpandableStep(Step):
         intuition = executor.llm.ask(
             None, prompts,
             reason="intuition",
-            step_id=f"{self.step_id}",
+            step_id=f"{executor.step_id(self)}",
             temperature=executor.config.first_try_temperature).strip()
         if len(intuition) == 0:
             return None
@@ -824,6 +831,7 @@ None. This is the final step.
         return step
 
     def rank_choices(self, executor: Executor, n_existing_choices: int = 0):
+        config = executor.config
         question_indices = [i for i in range(n_existing_choices, len(self.choices))
                             if _utils.safe_is_instance(self.choices[i], AskQuestionStep)]
         if len(question_indices) > 1:
@@ -844,14 +852,9 @@ None. This is the final step.
 
         prompts = executor.show_conversation_thread(selector=_select_except_self)
 
-        def _fix_desc_heading(desc: str):
-            if desc.strip().startswith('# '):
-                return desc.replace('# ', '', 1)
-            return desc
-
         work_prompt = prompt_db.sage_rank_choices.format(
-            approaches='\n\n---\n\n'.join([
-                f"# [Approach {i+1}] {_fix_desc_heading(plan.description_with_header_and_extras(True, True))}"
+            choices='\n\n---\n\n'.join([
+                f"[Choice {i+1}] {plan.step_title}\n\n{plan.description}\n\n{plan.extras}"
                 for i, plan in enumerate(self.choices)
             ])
         )
@@ -862,16 +865,16 @@ None. This is the final step.
         ranking_types = {i+1: plan.step_title for i, plan in enumerate(self.choices)}
         n_success = 0
         response: str|None = None
-        while n_success < executor.config.votes:
+        while n_success < config.votes:
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
-            while n_retries < executor.config.max_retries:
+            while n_retries < config.max_retries:
                 try:
                     response = executor.sage_llm.ask(
                         system_prompt, prompts_to_be_sent,
                         reason='rank_choices',
-                        step_id=f"{self.step_id}/{n_success}#{n_retries}",
-                        temperature=0.0 if n_success == 0 else 0.1,
+                        step_id=f"{executor.step_id(self)}/{n_success}#{n_retries}",
+                        temperature=config.first_try_temperature if n_success == 0 else config.alternative_temperature,
                         log_request=(n_success == 0 and n_retries == 0))
                     scores, dupes = parse_ranking_response(response, len(self.choices))
                     for plan, score in scores.items():
@@ -916,8 +919,8 @@ None. This is the final step.
     def check_duplicates(dupes, scores, ranking_types):
         for dupe, original in dupes.items():
             if ranking_types[dupe] != ranking_types[original]:
-                raise ParseError(f"Approach#{dupe} is of type \"{ranking_types[dupe]}\" but "
-                                 f"Approach#{original} is of type \"{ranking_types[original]}\". "
+                raise ParseError(f"Choice#{dupe} is of type \"{ranking_types[dupe]}\" but "
+                                 f"Choice#{original} is of type \"{ranking_types[original]}\". "
                                  f"They cannot be duplicates of each other.")
             else:
                 scores[dupe] = -_math.fabs(scores[original])
@@ -935,27 +938,27 @@ None. This is the final step.
 
     def eval_only(self, executor: Executor) -> Step | None:
         old_length = len(self.choices)
-        intuition: Step|None = None
         config = executor.config
         first_expand = executor.is_first_solving_expansion()
         if self.should_try_intuition(executor):
             intuition = self.ask_for_intuition(executor)
+            self.max_expansion += 1
+            self.first_expansion += 1
+            self.choices.append(intuition)
         logger = executor.logger
         if self._ptr >= (len(self.choices) - 1) and old_length < self.max_expansion:
             incr = self.first_expansion if old_length == 0 else self.incremental_expansion
-            logger.log_debug(f"{self.step_id}/'{self.step_name}' expanding from {len(self.choices)} by {incr} to:"
-                    f" {self._ptr + incr}. max={self.max_expansion}")
+            logger.log_debug(f"{executor.step_id(self)}/'{self.step_name}'"
+                             f" expanding from {len(self.choices)} by {incr} "
+                             f"to: {self._ptr + incr}. max={self.max_expansion}")
             self.expand_choices(executor, upto_branches=self._ptr + incr)
-        if intuition is not None:
-            self.max_expansion += 1
-            self.choices.append(intuition)
         if len(self.choices) - old_length > 1:
-            logger.log_debug(f"{self.step_id}/'{self.step_name}' ranking choices from {old_length}")
+            logger.log_debug(f"{executor.step_id(self)}/'{self.step_name}' ranking choices from {old_length}")
             self.rank_choices(executor, n_existing_choices=old_length)
         if first_expand and config.pause_after_initial_solving_expansion:
             raise Pause("Pause after initial solving expansion", self)
         if len(self.choices) == 0 or self._ptr >= len(self.choices):
-            logger.log_debug(f"{self.step_id}/'{self.step_name}' no more options: {self._ptr}/{len(self.choices)}")
+            logger.log_debug(f"{executor.step_id(self)}/'{self.step_name}' no more options: {self._ptr}/{len(self.choices)}")
             raise Backtrack('No viable options.', blame=self.previous)
         return self.choices[self._ptr]
 
@@ -964,7 +967,7 @@ None. This is the final step.
         first_expand = executor.is_first_solving_expansion()
         return (len(self.choices) == 0
                 and (not first_expand and config.try_intuition
-                     or first_expand and config.try_intuition_first_expansion))
+                     or first_expand and config.try_intuition_initial_expansion))
 
 
 class ProceedStep(ExpandableStep):
@@ -997,7 +1000,7 @@ class NextStep(Step):
                 response = executor.llm.ask(
                     system_prompt, to_be_sent,
                     reason='next_step',
-                    step_id=f"{self.step_id}#{n_retries}",
+                    step_id=f"{executor.step_id(self)}#{n_retries}",
                     temperature=0.0 if n_retries == 0 else executor.config.alternative_temperature,
                     log_request=n_retries == 0)
                 proceed_step = self.parse_reply(response, executor)
@@ -1017,7 +1020,7 @@ class NextStep(Step):
         if decision == NEXT_I_WANT_TO_WORK_AT:
             step_id, step_name = parse_step_name(answer)
             if _utils.is_blank(step_name) or step_name.lower().startswith('none'):
-                return SummarizeStep(previous=self, description='', role=ROLE_ORCHESTRATOR)
+                return SummarizeStep(previous=self, description='', role=ROLE_TAO)
             work_prompt = prompt_db.tao_proceed_to_step.format(step=step_name)
             choices = [parse_to_step(self, plan, config=config, working_on=step_name)] if plan is not None else []
             proceed = ProceedStep(

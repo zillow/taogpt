@@ -35,7 +35,6 @@ class MockLLM(LLM):
     def ask(self, system_prompt: str|None, conversation: _t.List[_t.Tuple[str, str]], reason=None,
             temperature: float=None, log_request=True, collapse_contents: {str: str}=None,
             step_id='0', **_) -> str:
-        self.collapsed_contents.update(collapse_contents or dict())
         self._logger.log(f"# SEND TO LLM for {reason}/{step_id}\n")
         if len(str_or_blank(system_prompt)) > 0:
             self._total_tokens += self.send('system', system_prompt, -1)
