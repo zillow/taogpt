@@ -1,4 +1,5 @@
 from mocks import MockLLM, create_orchestrator, logger
+import typing as _t
 from taogpt.program import *
 from taogpt.parsing import ParseError, parse_verification_response
 
@@ -17,44 +18,47 @@ _logger = logger
 def test_check_final_solution_success(logger):
     text = """{
     "rule conformance": {"ok": "All right!"},
-    "calculation": {"warning": "Can simplify"}
+    "calculation": {"warning": "Can simplify", "blame": ["step#13: bad step", "step#22: contradicting step"]}
     }
     """
-    overall, concerns, errors = parse_verification_response(text)
-    assert overall
+    concerns, _ = parse_verification_response(text)
     assert len(concerns) == 1
-    assert len(errors) == 0
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        assert reason == 'check_final_answer'
-        return text
+        if reason in ('check_final_answer', 'merge_criticisms'):
+            return text
+        elif reason == 'summarize':
+            return "Here is your answer"
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
     step.eval(orchestrator)
-    assert len(llm.conversation_sequence) == 1
-    assert llm.conversation_sequence[-1][0] == 'check_final_answer'
+    assert len(llm.conversation_sequence) == 5
+    assert llm.conversation_sequence[0][0] == 'summarize'
+    assert llm.conversation_sequence[1][0] == 'check_final_answer'
+    assert llm.conversation_sequence[2][0] == 'check_final_answer'
+    assert llm.conversation_sequence[3][0] == 'merge_criticisms'
+    assert llm.conversation_sequence[4][0] == 'summarize'
 
 
 def test_check_final_solution_failed(logger):
     text = """{
-    "calculation": {"error": "1 + 1 != 3", "blame": "calculate total"},
+    "calculation": {"error": "1 + 1 != 3", "blame": "step#13: calculate total"},
     "etc": {"ok": "Good"}
     }
     """
-    overall, _, errors = parse_verification_response(text)
-    assert not overall
-    assert errors == {"calculation": ("1 + 1 != 3", "calculate total")}
+    concerns, full_json = parse_verification_response(text)
+    assert concerns == {"1 + 1 != 3": ("error", [(13, "calculate total")])}
+    assert json.loads(text).keys() == full_json.keys()
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        if reason == 'check_final_answer':
+        if reason == 'summarize':
+            return "3"
+        if reason in ('check_final_answer', 'merge_criticisms'):
             return text
-        elif reason == 'blame_step':
-            return """```json
-{"step22": "1 + 1 != 3"}
-```
-"""
+        assert False, f"Unexpected reason: {reason}"
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
+    _t.cast(DirectAnswerStep, step.previous)._n_tries = orchestrator.config.max_retries
     try:
         step.eval(orchestrator)
         assert False, "expecting Backtrack not raised"
@@ -74,8 +78,9 @@ def test_check_final_solution_parse_error(logger):
         pass
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        assert reason == 'check_final_answer'
-        return text
+        if reason == 'check_final_answer':
+            return text
+        return 'huh'
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
     try:
@@ -91,8 +96,9 @@ def create_final_check_chain(reply, logger):
     step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
     step = DirectAnswerStep(previous=step, description="This is an answer", role=ROLE_TAO)
+    step.set_step_name('calculate total')
     orchestrator.chain.append(step)
-    step = FinalAnswerStep(previous=step, description="This is the final answer", role=ROLE_TAO)
+    step = SummarizeStep(previous=step, description="", role=ROLE_TAO)
     orchestrator.chain.append(step)
     return step, llm, orchestrator
 
@@ -137,38 +143,12 @@ def test_no_full_expansion_at_subsequent_expandable_steps(logger):
     assert not orchestrator.is_first_solving_expansion()
 
 
-def test_record_criticism_to_expandable_steps(logger):
-    llm = MockLLM(logger)
-    orchestrator = create_orchestrator(llm, logger)
-    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
-    orchestrator.chain.append(step)
-    expandable: ProceedStep = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
-    orchestrator.chain.append(expandable)
-    plan_step: StepByStepPlan = StepByStepPlan(previous=expandable, description=EXAMPLE_STEP_BY_STEP_PLAN,
-                                               role=ROLE_TAO)
-    expandable.choices = []
-    expandable.choices.append(plan_step)
-    orchestrator.chain.append(plan_step)
-    expected = f"""[Prior approach#1] {plan_step.description_with_header}
---
-[[This approach has been tried and failed with following error:
-
-* error 1
-* error 2
-
-]]
-"""
-    errors = {'error 1', 'error 2'}
-    orchestrator.record_criticisms(errors)
-    assert len(expandable.collected_criticisms) == 1
-    assert expandable.collected_criticisms[0] == errors
-
-
 def test_backtracking(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
     orchestrator.config.ask_user_before_execute_codes = False
     orchestrator.config.max_search_expansion = 2
+    orchestrator.config.max_retries = 1
     step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
     proceed_step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
@@ -185,12 +165,11 @@ no_such_var * 123
         orchestrator.resume(1000)
     except ParseError:
         pass
-    assert "name 'no_such_var' is not defined" in step.description
-    assert 0 == len(proceed_step.collected_criticisms) # cleared
+    assert "name 'no_such_var' is not defined" in step.criticisms[0]
 
 
 def test_parse_direct_answer_and_next_step():
-    text = """# I_WILL_ANSWER_DIRECTLY
+    text = """# MY_THOUGHT
 
 
 
@@ -203,12 +182,12 @@ Then, the third cell must be 2 because it's the only number left.
 So, the first row becomes: 4 3 2 1
 
 ### NEXT_I_WANT_TO_WORK_AT:
-Fill in the second row [None]
+Fill in the second row
 """
     step = parse_to_step(None, text, config=Config())
-    assert isinstance(step, DirectAnswerStep)
+    assert isinstance(step, DirectAnswerStep), str(type(step))
     assert not step.is_final_step
-    assert step.next_step == 'Fill in the second row [None]'
+    assert step.next_step == 'Fill in the second row'
 
 
 def test_parse_step_by_step_no_whys():
@@ -229,3 +208,26 @@ This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must
     step = parse_to_step(None, text, config=Config())
     assert isinstance(step, StepByStepPlan)
     assert step.first_step == 'Fill in the first row'
+
+
+def test_python_genie_execution_error(logger):
+    def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
+        if reason == 'repair':
+            return """
+```python
+(10 ** 2) * 3.1415
+```
+"""
+        return 'huh'
+
+    llm = MockLLM(logger, reply_fn=reply)
+    orchestrator = create_orchestrator(llm, logger)
+    orchestrator.config.ask_user_before_execute_codes = False
+    code = f"""```python
+no_such_var * 123
+```
+    """
+    step = AskPythonGenieStep(previous=None, description=code, role=ROLE_TAO)
+    step.eval(orchestrator)
+    assert '314.15' in step.description
+    assert step.n_tries == 2

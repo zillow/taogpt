@@ -4,6 +4,7 @@ import json
 import typing as _t
 import time as _time
 import math as _math
+import re as _re
 import tiktoken as _tiktoken
 from langchain_openai import ChatOpenAI as _ChatOpenAI
 # subclassing ChatOpenAI, see https://github.com/langchain-ai/langchain/discussions/18561
@@ -113,22 +114,19 @@ class LangChainLLM(LLM):
 
     def ask(self,  system_prompt: str|None, conversation: _t.List[_t.Tuple[str, str]],
             reason=None, always_shown=False, step_id = None, log_request = True,
-            temperature: float|None=None,
-            collapse_contents: {str:str}=None) -> str:
+            temperature: float|None=None) -> str:
         old_temp = self.llm.temperature
         try:
             return self._ask(system_prompt, conversation,
                              reason=reason, step_id=step_id,
-                             log_request=log_request, temperature=temperature,
-                             collapse_contents=collapse_contents)
+                             log_request=log_request, temperature=temperature)
         finally:
             if temperature is not None:
                 self.llm.temperature = old_temp
 
     def _ask(self,  system_prompt: str|None, conversation: _t.List[_t.Tuple[str, str]],
             reason=None, step_id = None, log_request = True,
-            temperature: float|None=None,
-            collapse_contents: _t.Dict[str, str]=None) -> str:
+            temperature: float|None=None) -> str:
         self._logger.start_conversation_chain(f"# SEND TO LLM for {reason}/{step_id}")
 
         if temperature is not None:
@@ -140,7 +138,7 @@ class LangChainLLM(LLM):
             tokens = self.count_tokens(system_prompt)
             context_tokens += tokens
             self._logger.new_message_section(ROLE_SYSTEM, -1, tokens=tokens)
-            content_to_be_logged = self.deduplicate_for_logging(system_prompt, ROLE_SYSTEM)
+            content_to_be_logged = LLM.deduplicate_for_logging(system_prompt, ROLE_SYSTEM)
             self._logger.log(content_to_be_logged, demote_h1=True, role=ROLE_SYSTEM)
             self._logger.close_message_section()
             messages.append(SystemMessage(content=system_prompt))
@@ -152,11 +150,8 @@ class LangChainLLM(LLM):
             tokens = self.count_tokens(message)
             context_tokens += tokens
             self._logger.new_message_section(role, i, tokens=tokens)
-            if tokens > 500:
-                deduped_msg = self.deduplicate_for_logging(message, role=role)
-                self._logger.log(deduped_msg, demote_h1=True, role=role)
-            else:
-                self._logger.log(message, demote_h1=True, role=role)
+            deduped_msg = LLM.deduplicate_for_logging(message, role=role)
+            self._logger.log(deduped_msg, demote_h1=True, role=role)
             self._logger.close_message_section()
             chat_message = ChatMessage(role=effective_role, content=message)
             messages.append(chat_message)
@@ -168,8 +163,11 @@ class LangChainLLM(LLM):
             if self.long_context_llm is not None and context_tokens > self.long_context_token_threshold:
                 llm = self.long_context_llm
                 token_factor = self.long_context_llm_token_factor
-            reply_content, context_tokens = self.invoke_llm(
-                llm, messages, return_context_token_usages=True)
+            reply_content, context_tokens = self.invoke_llm(llm, messages, return_context_token_usages=True)
+            # if the whole reply is just a Markdown, then extract the markdown content
+            g = _re.match(r"^```+markdown\n(.*)```+$", reply_content, flags=_re.MULTILINE|_re.DOTALL)
+            if g is not None:
+                reply_content = g.group(1)
             reply_content_logged = reply_content
             is_json = ''
             try:
@@ -193,9 +191,6 @@ class LangChainLLM(LLM):
             print(e)
             _time.sleep(3)
             raise e
-        finally:
-            if collapse_contents is not None:
-                self.merge_collapsed_contents(collapse_contents)
 
     def invoke_llm(self, llm: _ChatOpenAI, messages: list[BaseMessage],
                    max_tokens: int|None=None, return_context_token_usages=False):
@@ -211,7 +206,7 @@ class LangChainLLM(LLM):
             if max_tokens is None:
                 max_tokens = GPT_OUTPUT_TOKEN_LIMITS.get(self.model_id, None)
                 if max_tokens is not None and max_tokens < 0:
-                    max_tokens = abs(max_tokens) - context_tokens
+                    max_tokens = None # let it reach the remaining allowance
                 assert max_tokens is None or max_tokens > 0, f"No more output tokens allowed: {max_tokens}"
 
             total_context_tokens = 0
@@ -222,6 +217,10 @@ class LangChainLLM(LLM):
                 reply_with_gi = llm.invoke_with_gen_info(to_be_sent, max_tokens=max_tokens)
                 this_content = reply_with_gi.message.content
                 reply_content += this_content
+                if _fix_fenced_block_backticks_re.search(reply_content) is not None:
+                    print(f"%%%%%%%%% LLM reason {reply_with_gi.generation_info.get('finish_reason', '')} %%%%%%%%")
+                    print(reply_content)
+                    print("%%%%%%%%%%%%%%%%%")
                 if reply_with_gi.generation_info.get('finish_reason', '') != 'length':
                     break
                 to_be_sent = messages.copy()
@@ -235,7 +234,19 @@ class LangChainLLM(LLM):
         else:
             reply = llm.invoke(messages, max_tokens=max_tokens)
             reply_content = reply.content
+            if _fix_fenced_block_backticks_re.search(reply_content) is not None:
+                print(f"%%%%%%%%% LLM one call %%%%%%%%")
+                print(reply_content)
+                print("%%%%%%%%%%%%%%%%%")
         reply_content = fix_fenced_block_backticks(reply_content)
+        _old = reply_content
+        if _fix_fenced_block_backticks_re.search(reply_content) is not None:
+            print(f"%%%%%%%%% fenced block fixed %%%%%%%%")
+            print(_old)
+            print("%%%%%%%%%%%%%%%%%")
+            print(reply_content)
+            print("%%%%%%%%%%%%%%%%%")
+        reply_content = _utils.str_or_blank(reply_content)
         return (reply_content, total_context_tokens) if return_context_token_usages else reply_content
 
     def count_tokens(self, text: str) -> int:
@@ -249,6 +260,8 @@ class LangChainLLM(LLM):
         tokens = enc.encode(text)
         return len(tokens)
 
+
+_fix_fenced_block_backticks_re = _re.compile(r"(`{3,})(\d+)")
 
 def fix_model_name(model_name: str, required=False, default_to: str=None):
     if model_name is None:

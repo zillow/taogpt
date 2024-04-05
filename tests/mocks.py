@@ -29,10 +29,12 @@ class MockLLM(LLM):
     def total_tokens(self):
         return self._total_tokens
 
+    def count_tokens(self, text: str) -> int:
+        return len(str_or_blank(text))
+
     def ask(self, system_prompt: str|None, conversation: _t.List[_t.Tuple[str, str]], reason=None,
             temperature: float=None, log_request=True, collapse_contents: {str: str}=None,
             step_id='0', **_) -> str:
-        self.collapsed_contents.update(collapse_contents or dict())
         self._logger.log(f"# SEND TO LLM for {reason}/{step_id}\n")
         if len(str_or_blank(system_prompt)) > 0:
             self._total_tokens += self.send('system', system_prompt, -1)
@@ -50,7 +52,7 @@ class MockLLM(LLM):
         tokens = len(self.encoder.encode(message))
         self._logger.new_message_section(role, i)
         self._logger.log(f"**{role} >>> said**:\n")
-        deduped_msg = self.deduplicate_for_logging(message, role=role)
+        deduped_msg = LLM.deduplicate_for_logging(message, role=role)
         self._logger.log(deduped_msg, demote_h1=True)
         self._logger.close_message_section()
         return tokens

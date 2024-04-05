@@ -1,34 +1,44 @@
-# GPT-4-turbo default system prompt (2024/03/10=2)
+# GPT-4-turbo default system prompt (2024/04/04)
 
 **user:**
 
 I want to travel to Moscow. I just need a detailed route plan.
-(I don't need the actual schedule.)
+(I don't need the actual schedule. And you don't have access to the internet.)
 
 **assistant:**
 
-Sure! Here's a simple route plan. I've used a generic starting point as you didn't specify where you are starting from.
+Creating a detailed route plan to Moscow without access to the internet for real-time information is challenging, but I can provide you with a general outline of how you might plan your trip. The specifics, such as transportation schedules and availability, will need to be confirmed with the relevant providers or through research on your part.
 
-1. **Home city to departure airport**: Start your journey by using a taxi, bus, or own transport to reach your departure airport.
+**Step 1: Determine Your Starting Location**
+The route to Moscow will vary greatly depending on your starting point. For this example, let's assume you are starting from New York City, USA.
 
-2. **Departure airport to Moscow Airport**: Book a direct or connecting flight from your city to one of the three airports in Moscow - Sheremetyevo International Airport (SVO), Domodedovo International Airport (DME), or Vnukovo International Airport (VKO).
+**Step 2: Travel to the Airport**
+- From within New York City, you can take a taxi, rideshare, or public transportation to John F. Kennedy International Airport (JFK), which is a major international airport with flights to Moscow.
 
-3. **Moscow Airport to Hotel**: From the airport, you can use the Aeroexpress train, a taxi, or a private transfer to get to your hotel in Moscow. I would recommend booking a hotel in the city center for convenience.
+**Step 3: Book a Flight to Moscow**
+- You will need to book a flight from JFK to one of Moscow's international airports. The main airport is Sheremetyevo International Airport (SVO), but there are also flights to Domodedovo International Airport (DME) and Vnukovo International Airport (VKO).
+- Direct flights are available, but depending on the airline and time of year, you may have to book a connecting flight.
 
-4. **Touring Moscow City**: Use the Moscow Metro to get around the city, it's efficient, cheap, and covers almost all attractions in Moscow.
+**Step 4: Arrive in Moscow**
+- Upon arrival in Moscow, you will go through customs and immigration. Make sure you have all the necessary visas and documentation required for entry into Russia.
 
-5. **Local sightseeing in Moscow**: Here are some must-visit places
-    - Red Square and the Kremlin
-    - Saint Basil's Cathedral
-    - Moscow Metro
-    - Tretyakov Gallery
-    - Bolshoi Theatre
-    - Gorky Park
+**Step 5: Travel from the Airport to Your Accommodation**
+- From the airport, you can take a taxi, airport express train, or bus to get to your accommodation in Moscow. The Aeroexpress train is a popular option for travel from SVO to the city center.
 
-6. **Moscow Hotel to Moscow Airport**: Use a taxi, private transfer, or the Aeroexpress train again to reach the airport from your hotel.
+**Step 6: Getting Around Moscow**
+- Moscow has an extensive and efficient metro system that can take you to most tourist destinations.
+- You can also use buses, trams, taxis, or rideshare services to get around the city.
 
-7. **Moscow Airport to Home city**: Fly back to your city from one of the Moscow airports.
+**Step 7: Sightseeing in Moscow**
+- Plan your sightseeing itinerary. Some must-see attractions include the Kremlin, Red Square, St. Basil's Cathedral, the Bolshoi Theatre, and the Tretyakov Gallery.
 
-8. **Airport to Home**: Use a taxi, bus, or own transportation to get home from the airport.
+**Step 8: Departure**
+- When your visit is over, you will need to reverse your route to return to the airport and fly back to your starting location.
 
-This is a very generalized route plan. Depending on your preferences, I could customize it further! Safe travels!
+**Additional Tips:**
+- Always check the visa requirements for Russia well in advance of your trip.
+- Consider travel insurance for your journey.
+- Learn some basic Russian phrases, as English is not widely spoken outside of tourist areas and hotels.
+- Keep an eye on travel advisories and local news for any changes that might affect your travel plans.
+
+Remember, this is a very general guide and you will need to fill in the details based on your specific circumstances and preferences. It's important to check the latest information on flights, local transportation, and entry requirements before you travel.

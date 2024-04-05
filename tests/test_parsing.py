@@ -57,18 +57,18 @@ def test_parse_step_type_spec():
 }}
 ```
 
-# {WILL_ANSWER_DIRECTLY}
+# {MY_THOUGHT}
 {reply_detail}
 """
     reply_type, step_def = parsing.parse_step_type_spec(text)
-    assert reply_type == WILL_ANSWER_DIRECTLY
+    assert reply_type == MY_THOUGHT
     assert step_def == reply_detail
 
 
 def test_ranking_prompt_format():
     prompts: PromptDb = PromptDb.load_defaults()
-    prompts.orchestrator_rank_choices.format(approaches='\n\n'.join(
-        [f"[Approach # {i+1}]" for i in range(4)]))
+    prompts.sage_rank_choices.format(choices='\n\n'.join(
+        [f"[Choice # {i+1}]" for i in range(4)]))
 
 
 def test_parsing_regular_rankings():
@@ -82,10 +82,10 @@ def test_parsing_regular_rankings():
 def test_checking_rankings_with_valid_dupes():
     results, dupes = parsing.parse_ranking_response(_RANKINGS_WITH_DUPES, 4)
     ranking_types = {
-        1: WILL_ANSWER_DIRECTLY,
+        1: MY_THOUGHT,
         2: HERE_IS_MY_STEP_BY_STEP_PLAN,
         3: HERE_IS_MY_STEP_BY_STEP_PLAN,
-        4: WILL_ANSWER_DIRECTLY
+        4: MY_THOUGHT
     }
     ExpandableStep.check_duplicates(dupes, results, ranking_types)
     assert len(results) == 4
@@ -98,7 +98,7 @@ def test_checking_rankings_with_valid_dupes():
 def test_checking_rankings_with_invalid_dupes():
     results, dupes = parsing.parse_ranking_response(_RANKINGS_WITH_DUPES, 4)
     ranking_types = {
-        1: WILL_ANSWER_DIRECTLY,
+        1: MY_THOUGHT,
         2: HERE_IS_MY_STEP_BY_STEP_PLAN,
         3: HERE_IS_MY_STEP_BY_STEP_PLAN,
         4: HERE_IS_MY_STEP_BY_STEP_PLAN
@@ -124,27 +124,17 @@ def test_parsing_rankings_with_dupes():
     assert dupes[4] == 1
 
 
-def test_parse_next_step_done():
-    final_answer = """# FINAL_ANSWER
-This is my final answer"""
-    decision, (answer, decision_detail) = parsing.parse_next_step_reply(final_answer)
-    assert decision == FINAL_ANSWER
-    assert decision_detail is None
-    assert answer == final_answer.strip()
-
-
 def test_parse_next_step_done2():
     answer_details = """I give up."""
-    final_answer = f"""## BACKTRACK_ON_ERROR
+    final_answer = f"""## I_FOUND_ERRORS
 {answer_details}
 """
     decision, (answer, decision_detail) = parsing.parse_next_step_reply(final_answer)
-    assert decision == UNSOLVABLE
-    assert answer == f"# {UNSOLVABLE}\n{answer_details}".strip()
+    assert decision == REPORT_ERROR
+    assert answer == f"# {REPORT_ERROR}\n{answer_details}".strip()
     step_type, step_def = parsing.parse_step_type_spec(answer)
-    assert step_type == UNSOLVABLE
+    assert step_type == REPORT_ERROR
     assert step_def == answer_details
-
 
 
 def test_parse_next_step_next_missing_next_work_at():
@@ -342,7 +332,7 @@ def test_replacement_with_multiple_identical_fenced_blocks():
     text = """
 These are previous proposals tried and criticisms received going down this step:
 
-[Prior approach 1] There is indeed an error in the last step.
+[Proposal 1] There is indeed an error in the last step.
 
 ```text
 +-+-+-+-+
@@ -352,7 +342,7 @@ These are previous proposals tried and criticisms received going down this step:
 Let's backtrack and correct this error.
 
 ---
-[Prior approach 2] I see that there was an error in the final step of filling in the Sudoku grid.
+[Proposal 2] I see that there was an error in the final step of filling in the Sudoku grid.
 
 ```text
 +-+-+-+-+
@@ -412,3 +402,35 @@ Implement the client-side logic for handling user inputs and actions"""
     sections = parsing.parse_sections(text, section_level='#')
     assert len(sections) == 2
     assert NEXT_I_WANT_TO_WORK_AT in sections
+
+
+def test_parse_next_step_name():
+    assert parsing.parse_next_step_name("some step") == "some step"
+    assert parsing.parse_next_step_name("[at step: some step]") == "some step"
+    assert parsing.parse_next_step_name("[at step: some step") == "some step"
+    assert parsing.parse_next_step_name("[at step#123: some step]") == "some step"
+    assert parsing.parse_next_step_name("[at step#123:some step]") == "some step"
+    assert parsing.parse_next_step_name("  [step#123: some step]") == "some step"
+
+
+def test_parse_step_id_and_name():
+    assert parsing.parse_step_id_and_name("step#100: some step") == (100, "some step")
+    assert parsing.parse_step_id_and_name("[at step#100: some step]") == (100, "some step")
+    assert parsing.parse_step_id_and_name("[at step#123: some step]") == (123, "some step")
+    assert parsing.parse_step_id_and_name("[at step#123:some step]") == (123, "some step")
+    assert parsing.parse_step_id_and_name("  [step#123: some step]") == (123, "some step")
+    for invalid in ["some step", "step#: some step"]:
+        try:
+            parsing.parse_step_id_and_name(invalid)
+            raise AssertionError(f"expecting ParseError not raised for patten '{invalid}'")
+        except parsing.ParseError:
+            pass
+
+
+def test_prior_proposal_in_step_id_name():
+    text = "Proposal#1: The given solution does not meet the rules"
+    try:
+        result = parsing.parse_step_id_and_name(text)
+        raise AssertionError(f"Expecting ParseError not raised. Got: '{result}'")
+    except parsing.ParseError as e:
+        assert "You tried to report error in other proposals" in str(e)

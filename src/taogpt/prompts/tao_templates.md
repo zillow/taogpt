@@ -2,24 +2,12 @@
 
 Given problem solving session so far, choose one of the following strategies:
 
-## Strategy: Give up on errors
+## Strategy: Report errors
 
-If you see any errors or inconsistencies, response with the list of **specific** issues in valid JSON like this:
+{snippet_report_errors}
 
- `````markdown
- # BACKTRACK_ON_ERROR
-
-```json
-[
-  "<issue 1 with details>",
-  "<issue 2 with details>",
-  // ...
-]
-```
-`````
-
-Do NOT try to fix the errors since Orchestrator wouldn't understand. Instead it will let you try other alternatives 
-later.
+Error report is only for previous executed steps. Do NOT errors in other proposals. If you found issues in other 
+proposals, you should come up with a new proposal avoiding those issues.
 
 ## Strategy: Ask Questions
 
@@ -32,8 +20,8 @@ questions to the user.
 # I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED
 <optional introductory and analysis>
 
-1. <question> [<explanation>]
-2. <question> [<explanation>]
+1. <question>
+2. <question>
 ...
 ```
 
@@ -56,6 +44,7 @@ Follow this markdown template:
 
 `````markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
+<brief explanation of your plan>
 
 ```json
 {{
@@ -72,7 +61,9 @@ Follow this markdown template:
 ```
 `````
 
-{direct_answer_template}
+{snippet_direct_answer}
+
+{snippet_notes_for_files}
 
 ## Strategy: Ask the Python Genie
 
@@ -82,6 +73,7 @@ solve problems. It's stateful and previously defined globals can be used without
 Follow the good example below to ask Genie:
 `````markdown
 # LET_ME_ASK_THE_PYTHON_GENIE
+<brief explanation of what the code snippet is for>
 
 ```python
 def fib(n):
@@ -106,5 +98,3 @@ Issues with this example:
 
 Important notes:
 * Respect the original task problem! Do NOT alter inadvertently.
-
-{examples}

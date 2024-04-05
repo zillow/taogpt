@@ -1,17 +1,28 @@
-Is the solution correct? Please come up with as many applicable things to verify as you can, extract relevant 
-content, if any, for  each item, carefully verify each item. Respond using the following JSON template:
+Is the solution correct? Please come up with as many applicable items to verify as you can, carefully verify each 
+item, determine severity of issues, and identify steps responsible for errors and warnings. Do NOT report 
+intermittent errors that have been fixed in the solution chain; correctness of the final answer is what the user wants. 
+Respond using the following JSON template:
 
 ```json
 {
-  "<verify step 1>": {
-    "content": "<extract relevant content>", "error": "<something factually incorrect>"
+  "<what to verify>": {
+    "error": "<something incorrect, subsequent steps not impacted or fixable>", 
+    "content": "<content snippet related to the issue",
+    "blame": ["<step#>: <step description>", ...]
   },
-  "<verify step 2>": {
-    "content": "<extract relevant content>", "warning": "<something can be improved>",
+  "<what to verify>": {
+    "fatal": "<something incorrect, subsequent steps impacted and not fixable>", 
+    "content": "<content snippet related to the issue",
+    "blame": ["<step#>: <step description>", ...]
   },
-  "<verify step 2>": {"ok": "<all good>"},
+  "<what to verify>": {
+    "warning": "<something can be improved>",
+    "content": "<content snippet related to the issue",
+    "blame": ["<step#>: <step description>", ...]
+  },
+  "<what to verify>": {"ok": "<this looks good>"},
   // ...
 }
 ```
 
-Do not hallucinate or give wrong verdict!
+where `"<step#>: <step description>"` can be found in the bracket "[at step#<num>: <step_description>]" of the steps.

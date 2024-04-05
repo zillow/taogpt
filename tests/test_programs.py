@@ -1,3 +1,4 @@
+import typing as _t
 from taogpt.program import *
 from mocks import logger
 
@@ -18,12 +19,10 @@ def test_consolidate_multiple_questions():
                                 f"{choices[4].description}"
     indices = [3, 2, 4, 1]
     ask_step: AskQuestionStep = choices[2]
-    assert not ask_step.need_consolidate
     ExpandableStep.consolidate_questions(choices, indices)
     assert choices == original_choices # no changes to choices
     assert indices == [3, 2]
     assert ask_step.description == expected_merged_questions
-    assert ask_step.need_consolidate
 
 
 def test_consolidate_do_nothing_if_one_question():
@@ -36,12 +35,10 @@ def test_consolidate_do_nothing_if_one_question():
     expected_merged_questions = choices[1].description
     indices = [2, 1, 0]
     ask_step: AskQuestionStep = choices[1]
-    assert not ask_step.need_consolidate
     ExpandableStep.consolidate_questions(choices, indices)
     assert choices == original_choices # no changes to choices
     assert indices == [2, 1, 0]
     assert ask_step.description == expected_merged_questions
-    assert not ask_step.need_consolidate
 
 
 def test_consolidate_do_nothing_if_no_questions():
@@ -69,12 +66,46 @@ def test_final_direct_answer_with_nonstandard_heading():
 # return constant
 1234
 ```"""
-    text = f"""# {WILL_ANSWER_DIRECTLY}
+    text = f"""# {MY_THOUGHT}
 {content}
 
 # {NEXT_I_WANT_TO_WORK_AT}
 None. I'm done.
 """
-    step: DirectAnswerStep = parse_to_step(None, text, config=Config())
+    step = _t.cast(DirectAnswerStep, parse_to_step(None, text, config=Config()))
     assert step.is_final_step
     assert step.description == '22'
+
+
+def test_parse_error_report_with_blame_list(logger):
+    step = GiveUpStep(previous=None, description="""
+{
+  "errors": {
+      "Incorrect placement of numbers": ["at step#4: response to Fill in the missing numbers in the first row",
+                                         "at step#7: response to Fill in the missing numbers in the second row",
+                                         "at step#10: response to Fill in the missing numbers in the third row"]
+  },
+  "warnings": {}
+}""", role='tao')
+
+    assert step.description.strip() == """
+Incorrect placement of numbers:
+* fatal at [step#4: response to Fill in the missing numbers in the first row]
+* fatal at [step#7: response to Fill in the missing numbers in the second row]
+* fatal at [step#10: response to Fill in the missing numbers in the third row]
+""".strip()
+
+
+def test_parse_error_report_with_blame_string(logger):
+    step = GiveUpStep(previous=None, description="""
+{
+  "errors": {
+      "Incorrect placement of numbers": "at step#4: response to Fill in the missing numbers in the first row"
+  },
+  "warnings": {}
+}""", role='tao')
+
+    assert step.description.strip() == """
+Incorrect placement of numbers:
+* fatal at [step#4: response to Fill in the missing numbers in the first row]
+""".strip()

@@ -1,68 +1,67 @@
 from __future__ import annotations
-import dataclasses as _dc
 import pathlib as _path
 
 _template_dir = _path.Path(__file__).parent
 
 
-@_dc.dataclass
+def _read(path) -> str:
+    with open(path, 'r') as f:
+        return f.read()
+
+
 class PromptDb:
-    tao_intro: str
-    tao_templates: str
-    tao_template_direct_step_answer: str
-    tao_template_notes_for_files: str
-    tao_template_intuitive_answer: str
-    orchestrator_ask_init_analysis: str
-    orchestrator_rank_choices: str
-    orchestrator_at_step: str
-    orchestrator_next_step: str
-    orchestrator_proceed: str
-    orchestrator_proceed_intuitively: str
-    orchestrator_proceed_to_step: str
-    orchestrator_expand_parse_error: str
-    orchestrator_parse_error: str
-    orchestrator_prior_approaches: str
-    orchestrator_criticisms: str
-    orchestrator_error_noted: str
-    orchestrator_summarize: str
-    orchestrator_summarize_questions: str
-    sage_intro: str
-    sage_final_check: str
-    sage_blame: str
-    sage_fix_issues: str
+    def __init__(self, path=_template_dir):
+        self.tao_intro=_read(path / 'tao.md')
+        self.tao_templates=_read(path / 'tao_templates.md')
+        self.snippet_direct_step_answer=_read(path / 'snippet_direct_step_answer.md')
+        self.snippet_notes_for_files=_read(path / 'snippet_notes_for_files.md')
+        self.snippet_intuitive_answer=_read(path / 'snippet_intuitive_answer.md')
+        self.tao_ask_init_analysis=_read(path / 'tao_ask_init_analysis.md')
+        self.sage_rank_choices=_read(path / 'sage_rank_choices.md')
+        self.sage_rank_instructions=_read(path / 'sage_rank_instructions.md')
+        self.orchestrator_at_step=_read(path / 'orchestrator_at_step.md')
+        self.tao_next_step=_read(path / 'tao_next_step.md')
+        self.tao_proceed=_read(path / 'tao_proceed.md')
+        self.tao_proceed_intuitively=_read(path / 'tao_proceed_intuitively.md')
+        self.tao_proceed_to_step=_read(path / 'tao_proceed_to_step.md')
+        self.orchestrator_parse_error=_read(path / 'orchestrator_parse_error.md')
+        self.tao_prior_approaches=_read(path / 'tao_prior_approaches.md')
+        self.tao_summarize=_read(path / 'tao_summarize.md')
+        self.tao_summarize_questions=_read(path / 'tao_summarize_questions.md')
+        self.sage_intro=_read(path / 'sage.md')
+        self.sage_final_check=_read(path / 'sage_final_check.md')
+        self.tao_fix_issues=_read(path / 'tao_fix_issues.md')
+        self.snippet_report_errors=_read(path / 'snippet_report_errors.md')
+        self.sage_merge_criticisms=_read(path / 'sage_merge_criticisms.md')
+
+        # substituted
+        self._tao_expand_first_step = self.tao_templates.format(
+            snippet_report_errors=self.snippet_report_errors,
+            snippet_direct_answer=self.snippet_intuitive_answer,
+            snippet_notes_for_files=self.snippet_notes_for_files)
+        self._tao_expand_any_step = self.tao_templates.format(
+            snippet_report_errors=self.snippet_report_errors,
+            snippet_direct_answer=self.snippet_direct_step_answer,
+            snippet_notes_for_files=self.snippet_notes_for_files)
+        self.tao_next_step = self.tao_next_step.format(snippet_report_errors=self.snippet_report_errors)
+
+    def reload(self, path: _path.Path=_template_dir) -> PromptDb:
+        self.__init__(path)
+        return self
+
+    @property
+    def tao_expand_first_step(self) -> str:
+        assert self._tao_expand_first_step is not None
+        return self._tao_expand_first_step
+
+    @property
+    def tao_expand_any_step(self) -> str:
+        assert self._tao_expand_any_step is not None
+        return self._tao_expand_any_step
+
+    def to_dict(self) -> dict[str, str]:
+        return vars(self)
 
     @staticmethod
     def load_defaults():
-        return PromptDb(**PromptDb._reload())
-
-    @staticmethod
-    def _reload():
-        def _read(path) -> str:
-            with open(path, 'r') as f:
-                return f.read()
-
-        return dict(
-            tao_intro=_read(_template_dir / 'tao.md'),
-            tao_templates=_read(_template_dir / 'tao_templates.md'),
-            tao_template_direct_step_answer=_read(_template_dir / 'tao_template_direct_step_answer.md'),
-            tao_template_notes_for_files=_read(_template_dir / 'tao_template_notes_for_files.md'),
-            tao_template_intuitive_answer=_read(_template_dir / 'tao_template_intuitive_answer.md'),
-            orchestrator_ask_init_analysis=_read(_template_dir / 'orchestrator_ask_init_analysis.md'),
-            orchestrator_rank_choices=_read(_template_dir / 'orchestrator_rank_choices.md'),
-            orchestrator_at_step=_read(_template_dir / 'orchestrator_at_step.md'),
-            orchestrator_next_step=_read(_template_dir / 'orchestrator_next_step.md'),
-            orchestrator_proceed=_read(_template_dir / 'orchestrator_proceed.md'),
-            orchestrator_proceed_intuitively=_read(_template_dir / 'orchestrator_proceed_intuitively.md'),
-            orchestrator_proceed_to_step=_read(_template_dir / 'orchestrator_proceed_to_step.md'),
-            orchestrator_expand_parse_error=_read(_template_dir / 'orchestrator_expand_parse_error.md'),
-            orchestrator_parse_error=_read(_template_dir / 'orchestrator_parse_error.md'),
-            orchestrator_prior_approaches=_read(_template_dir / 'orchestrator_prior_approaches.md'),
-            orchestrator_criticisms=_read(_template_dir / 'orchestrator_criticisms.md'),
-            orchestrator_error_noted=_read(_template_dir / 'orchestrator_error_noted.md'),
-            orchestrator_summarize=_read(_template_dir / 'orchestrator_summarize.md'),
-            orchestrator_summarize_questions=_read(_template_dir / 'orchestrator_summarize_questions.md'),
-            sage_intro=_read(_template_dir / 'sage.md'),
-            sage_final_check=_read(_template_dir / 'sage_final_check.md'),
-            sage_blame=_read(_template_dir / 'sage_blame.md'),
-            sage_fix_issues=_read(_template_dir / 'sage_fix_issues.md'),
-        )
+        return PromptDb()

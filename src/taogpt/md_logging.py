@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import re as _re
 from pathlib import Path as _Path
 from io import TextIOBase as _TextIOBase
@@ -8,6 +7,8 @@ from io import TextIOBase as _TextIOBase
 from taogpt.constants import role_color_map, ROLE_ORCHESTRATOR
 from taogpt.parsing import extract_fenced_blocks, restore_fenced_block
 from taogpt import utils as _utils
+
+_fix_fenced_block_backticks_re = _re.compile(r"(`{3,})(\d+)")
 
 
 class MarkdownLogger:
@@ -49,6 +50,7 @@ class MarkdownLogger:
             for msg in msgs:
                 if demote_h1:
                     msg = MarkdownLogger.demote_h1(msg)
+                msg = _fix_fenced_block_backticks_re.sub(r"\1", msg)
                 self._log.write(msg)
                 if self._console_out is not None:
                     print(_utils.safe_subn(msg, n=200, escape_new_line=False)
@@ -69,7 +71,7 @@ class MarkdownLogger:
         lines = message.split(('\n'))
         for i in range(len(lines)):
             line = lines[i]
-            matches: re.Match = MarkdownLogger.H1_RE.match(line)
+            matches: _re.Match = MarkdownLogger.H1_RE.match(line)
             lines[i] = f"***{matches.group(1)}***\n\n" if matches is not None else line
         result = '\n'.join(lines)
         return restore_fenced_block(result, fenced_blocks)
