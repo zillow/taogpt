@@ -14,13 +14,12 @@ Respond according to the following format:
     "error": "<something incorrect, subsequent steps not impacted or fixable>", 
     "content": "<content snippet related to the issue",
     "blame": ["<step#>: <step description>", ...],
-    "fixed": <true or false>
+    "affecting": ["<step#>: <step description>", ...]
   },
   "<what to verify>": {
     "fatal": "<something incorrect, subsequent steps impacted and not fixable>", 
     "content": "<content snippet related to the issue",
-    "blame": ["<step#>: <step description>", ...],
-    "fixed": <true or false>
+    "blame": ["<step#>: <step description>", ...]
   },
   // ...
 }

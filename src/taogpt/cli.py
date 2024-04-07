@@ -54,8 +54,8 @@ parser.add_argument('-E', '--ask-user-before-execute-codes', type=bool, default=
                     action=argparse.BooleanOptionalAction, help='Ask user before execute codes')
 parser.add_argument('-P', '--pause-after-initial-solving-expansion', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Pause after initial solving expansion')
-parser.add_argument('-R', '--pause-after-final-answer-rejected', type=bool, default=True,
-                    action=argparse.BooleanOptionalAction, help='Pause after any final answer rejected by Sage')
+parser.add_argument('-R', '--pause-on-backtrack', type=bool, default=False,
+                    action=argparse.BooleanOptionalAction, help='Pause when a backtrack is requested')
 
 # separate settings
 parser.add_argument('-p', '--path', type=str, required=True, help='Directory path for outputs')

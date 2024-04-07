@@ -2,19 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Chinese Zodiac Sign</title>
+    <title>Chinese Zodiac Sign Calculator</title>
 </head>
 <body>
-    <h1>Enter Your Date of Birth</h1>
-    <!-- The form below collects the user's date of birth -->
-    <form method="post">
-        <label for="dob">Date of Birth:</label>
-        <input type="date" id="dob" name="dob" required>
-        <input type="submit" value="Submit">
+    <h1>Enter your birthdate to find out your Chinese Zodiac sign</h1>
+    <form action="/get-zodiac" method="post">
+        <label for="date">Birthdate:</label>
+        <input type="date" id="date" name="date" required>
+        <button type="submit">Submit</button>
     </form>
-    <!-- Display the zodiac sign if it has been calculated -->
-    {% if zodiac_sign %}
-        <h2>Your Chinese Zodiac Sign is: {{ zodiac_sign }}</h2>
-    {% endif %}
 </body>
 </html>

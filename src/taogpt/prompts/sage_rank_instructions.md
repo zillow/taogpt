@@ -10,7 +10,8 @@ current step, higher is better. Note: choices not directly providing the answer 
 * `I_FOUND_ERRORS` choices report errors found in preceding problem solving trajectory and should be scored by
   severity and accuracy of the reports.
 * `I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED` choices seek clarifications from the user and should be scored
-  according to the usefulness of the questions to the solving the problem.
+  according to the usefulness of the questions to the solving the problem. This strategy is the only way to ask 
+  questions.
 * `LET_ME_ASK_THE_PYTHON_GENIE` choices try to execute a Python code snippet to provide the answer and should be
   scored according to the usefulness, correctness, and efficiency of the code snippet. Coding style here is not an
   issue.

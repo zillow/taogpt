@@ -7,8 +7,8 @@ responsible in the following format:
 ```json
 {
   "errors" {
-      "<issue 1>": ["<step#>: <step description>", ...],
-      "<issue 2>": ["<step#>: <step description>", ...],
+      "<issue 1>": "<step#>: <step description>",
+      "<issue 2>": "<step#>: <step description>"
   },
   "warnings": {
       // ...
@@ -17,8 +17,10 @@ responsible in the following format:
 ```
 `````
 
-where `"<step#>: <step description>"` can be found in the bracket "[at step#<num>: <step_description>]" of the steps 
-(and not elsewhere.)
+where `"<step#>: <step description>"` should (only) be found in the bracket "[at step#<num>: <step_description>]" of 
+the steps (without the brackets.)
+
+If a blamed step wrote/updated a file, also blame subsequent steps updating that file.
 
 Do NOT report intermittent errors that have already been fixed.
 

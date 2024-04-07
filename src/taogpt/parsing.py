@@ -31,7 +31,7 @@ _true_false_answer_re = re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
                                    flags=re.MULTILINE|re.DOTALL|re.IGNORECASE)
 _whitespace_re = re.compile(r"\s+", flags=re.DOTALL)
 _ordered_list_re = re.compile(r'\n\s*(\d+)\.\s+(.*?)(?=\n\s*(\d+)|\n\n|\Z)', flags=re.DOTALL)
-_fix_fenced_block_backticks_re = re.compile(r"(`{3,})(\d+)")
+_fix_fenced_block_backticks_re = re.compile(r"^(\s*)(```+)(\d*)")
 
 strip_quotes_re = re.compile(r"^\s+|[\s\"\'.,]+$|[\"\']", flags=re.DOTALL)
 step_name_re = re.compile(r"^\s*(((\d|\.)+)\s+)?(.+)")
@@ -40,7 +40,7 @@ step_name_re = re.compile(r"^\s*(((\d|\.)+)\s+)?(.+)")
 def fix_fenced_block_backticks(original: str|None) -> str|None:
     if original is None:
         return None
-    return _fix_fenced_block_backticks_re.sub(r"\1", original)
+    return '\n'.join([_fix_fenced_block_backticks_re.sub(r"\2", line) for line in original.split('\n')])
 
 
 def parse_step_name(text: str|None) -> tuple[str|None, str|None]:
@@ -158,10 +158,18 @@ def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tu
             if isinstance(blame, str):
                 blame = [blame]
             blame_steps = [parse_step_id_and_name(b) for b in blame if len(_utils.str_or_blank(b)) > 0]
+        affecting = judgement.get('affecting', None)
         if has_warning:
             concerns[judgement['warning']] = ('warning', blame_steps)
         if has_error:
-            concerns[judgement['error']] = ('error', blame_steps)
+            issue = judgement['error']
+            concerns[issue] = ('error', blame_steps)
+            if affecting is not None:
+                affected_by = ', '.join(f"step#{b[0]}" for b in blame_steps)
+                affected_by = f"prior {affected_by} has been changed due to {issue}"
+                affecting_steps: list[tuple[int, str]]|None
+                affecting_steps = [parse_step_id_and_name(b) for b in affecting if len(_utils.str_or_blank(b)) > 0]
+                concerns[affected_by] = ('affected', affecting_steps)
         if has_fatal:
             concerns[judgement['fatal']] = ('fatal', blame_steps)
     return concerns, judgements
@@ -239,23 +247,29 @@ def parse_ranking_response(text: str, expected_number: int) -> tuple[dict[int, f
     rankings = parse_json_hash(text, nested_hashes=True)
     results: {int: float} = dict()
     dupes: {int: int} = dict()
+    removing = set()
     for i, item in rankings.items():
         if not re.match(r"^\d+$", i):
             raise ParseError(f"JSON hash key '{i}' is not an integer")
         i = int(i)
         if i < 1 or i > expected_number:
+            removing.add(str(i))
             print(f"WARNING: Key {i} is not in range [1,{expected_number}]")
             continue
         if i in results:
-            raise ParseError(f"Approach {i} has multiple scores.")
+            raise ParseError(f"Proposal#{i} has multiple scores.")
         if 'score' not in item:
             raise ParseError(f"No 'score' for item {i}")
         score = item['score']
         if not _utils.safe_is_instance(score, (int, float)):
             raise ParseError(f"Score value '{score}' is not a number.")
         results[i] = float(score)
-    if len(rankings) != expected_number:
+    for not_found in removing:
+        del rankings[not_found]
+    if len(rankings) < expected_number:
         raise ParseError(f"Expecting {expected_number} score rankings but found {len(rankings)}.")
+    if len(rankings) != expected_number:
+        print(f"WARNING: Expecting {expected_number} score rankings but found {len(rankings)}.")
     for i, item in rankings.items():
         i = int(i)
         if 'duplicate_of' in item:
