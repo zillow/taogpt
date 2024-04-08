@@ -445,7 +445,9 @@ class SummarizeStep(TaoReplyStep, FixableStep):
         if self._evaluated:
             return None
         system_prompt = executor.prompts.tao_intro
-        prompts = executor.show_conversation_thread(with_extras=True, except_step=self, stop_at=self)
+        prompts = executor.show_conversation_thread(with_extras=True,
+                                                    except_step=self if len(self.description) > 0 else None,
+                                                    stop_at=self)
         prompts.append((ROLE_ORCHESTRATOR, executor.prompts.tao_summarize))
         if len(self.criticisms) > 0:
             critic_text = self.format_critic_text()
