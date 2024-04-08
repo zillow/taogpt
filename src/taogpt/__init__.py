@@ -76,7 +76,7 @@ class Config:
     ask_user_questions_in_one_prompt: bool = False
     ask_user_before_execute_codes: bool = True
     pause_after_initial_solving_expansion: bool = True
-    pause_after_final_answer_rejected: bool = False
+    pause_on_backtrack: bool = False
     file_generation_support: bool = False
     # logging
     collapse_long_prompts: bool = True
@@ -140,7 +140,9 @@ class Executor(_abc.ABC):
 
     @_abc.abstractmethod
     def show_conversation_thread(self, with_header=True, with_extras=False,
-                                 selector: _t.Callable[[int, StepABC], bool] | None=None, except_step:StepABC=None) \
+                                 selector: _t.Callable[[int, StepABC], bool] | None=None,
+                                 except_step: StepABC=None,
+                                 stop_at: StepABC=None) \
             -> list[tuple[str, str]]:
         pass
 
@@ -241,9 +243,11 @@ class GeneratedFile:
     description: str
 
     @staticmethod
-    def collect_files(chain: list[StepABC]) -> dict[str, GeneratedFile]:
+    def collect_files(chain: list[StepABC], stop_at_step: StepABC=None) -> dict[str, GeneratedFile]:
         files = dict()
         for step in chain:
+            if stop_at_step is step:
+                break
             for path, file in step.collected_files.items():
                 files[path] = file # override previous ones
         return files

@@ -33,6 +33,8 @@ class PromptDb:
         self.tao_fix_issues=_read(path / 'tao_fix_issues.md')
         self.snippet_report_errors=_read(path / 'snippet_report_errors.md')
         self.sage_merge_criticisms=_read(path / 'sage_merge_criticisms.md')
+        self.tao_ensure_updated_file_integrity=_read(path / 'tao_ensure_updated_file_integrity.md')
+        self.tao_ensure_file_completeness=_read(path / 'tao_ensure_file_completeness.md')
 
         # substituted
         self._tao_expand_first_step = self.tao_templates.format(

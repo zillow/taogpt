@@ -29,6 +29,7 @@ class Orchestrator(Executor):
 
         self._chain: list[Step] = []
         self._reverted_steps: list[Step]|None = None
+        self._pending_backtrack: Backtrack|None = None
         self._create_python_scope()
         if self._config.collapse_long_prompts:
             self._llm.merge_collapsed_contents(self._prompts.to_dict())
@@ -125,18 +126,29 @@ class Orchestrator(Executor):
         self._execute_with_backtracking()
 
     def _execute_with_backtracking(self):
+
+        def perform_backtracking(backtrack: Backtrack):
+            while True:
+                try:
+                    self.backtrack(backtrack)
+                    break
+                except Backtrack as b2:
+                    backtrack = b2
+
         try:
             while len(self._chain) > 0:
                 try:
+                    if self._pending_backtrack is not None:
+                        backtrack = self._pending_backtrack
+                        self._pending_backtrack = None
+                        perform_backtracking(backtrack)
                     self._loop()
                     break
                 except Backtrack as backtrack:
-                    while True:
-                        try:
-                            self.backtrack(backtrack)
-                            break
-                        except Backtrack as b2:
-                            backtrack = b2
+                    if self.config.pause_on_backtrack:
+                        self._pending_backtrack = backtrack
+                        raise Pause(f"Backtracking is requested for {backtrack}", backtrack.blame)
+                    perform_backtracking(backtrack)
         except UnsolvableError as e:
             prev: Step|None = self._chain[-1] if len(self._chain) > 0 else None
             self._chain.append(SummarizeStep(previous=prev, description=str(e), role=ROLE_TAO))
@@ -213,16 +225,22 @@ class Orchestrator(Executor):
                 return i
 
     def show_conversation_thread(self, with_header=True, with_extras=False,
-                                 selector: _t.Callable[[int, StepABC], bool] | None=None, except_step:StepABC=None) \
+                                 selector: _t.Callable[[int, StepABC], bool] | None=None,
+                                 except_step: StepABC=None,
+                                 stop_at: StepABC=None) \
             -> list[tuple[str, str]]:
         conversation: list[tuple[str, str]] = []
         for i, step in enumerate(self._chain):
             if not step.visible_in_chain and i < len(self._chain) - 1:
                 continue # skip the expandable step except the last one
             if step is except_step:
+                if step is stop_at:
+                    break
                 continue
             if selector is None or selector(i, step):
                 conversation.extend(step.show_in_thread(i, with_header=with_header, with_extras=with_extras))
+            if step is stop_at:
+                break
         return conversation
 
     def next_step(self):
@@ -261,6 +279,7 @@ class Orchestrator(Executor):
                 elif _utils.safe_is_instance(self._chain[i], (DirectAnswerStep, AskPythonGenieStep, StepByStepPlan)):
                     break
             if is_direct_answer_only: # replace
+                last_step.set_visible_in_chain(False)
                 final_answer_step = SummarizeStep(previous=self._chain[-1],
                                                   description=last_step.description,
                                                   role=ROLE_TAO)

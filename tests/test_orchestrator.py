@@ -17,12 +17,17 @@ _logger = logger
 
 def test_check_final_solution_success(logger):
     text = """{
-    "rule conformance": {"ok": "All right!"},
-    "calculation": {"warning": "Can simplify", "blame": ["step#13: bad step", "step#22: contradicting step"]}
+"rule conformance": {"ok": "All right!"},
+"calculation": {
+        "warning": "Can simplify", 
+        "blame": ["step#13: complex step", "step#22: goofy step"],
+        "affecting": ["step#88: affected step"]
     }
+}
     """
     concerns, _ = parse_verification_response(text)
     assert len(concerns) == 1
+    assert concerns == {"Can simplify": ("warning", [(13, "complex step"), (22, "goofy step")])}
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         if reason in ('check_final_answer', 'merge_criticisms'):
@@ -42,12 +47,15 @@ def test_check_final_solution_success(logger):
 
 def test_check_final_solution_failed(logger):
     text = """{
-    "calculation": {"error": "1 + 1 != 3", "blame": "step#13: calculate total"},
+    "calculation": {"error": "1 + 1 != 3", "blame": "step#1: calculate total", "affecting": ["step#2: goofy step"]},
     "etc": {"ok": "Good"}
-    }
+}
     """
     concerns, full_json = parse_verification_response(text)
-    assert concerns == {"1 + 1 != 3": ("error", [(13, "calculate total")])}
+    assert concerns == {
+        "1 + 1 != 3": ("error", [(1, "calculate total")]),
+        "prior step#1 has been changed due to 1 + 1 != 3": ("affected", [(2, "goofy step")])
+    }
     assert json.loads(text).keys() == full_json.keys()
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:

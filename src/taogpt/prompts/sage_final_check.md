@@ -8,21 +8,25 @@ Respond using the following JSON template:
   "<what to verify>": {
     "error": "<something incorrect, subsequent steps not impacted or fixable>", 
     "content": "<content snippet related to the issue",
-    "blame": ["<step#>: <step description>", ...]
+    "blame": "<step#>: <step description>",
+    "affecting": ["<step#>: <step description>", "<step#>: <step description>", ...]
   },
   "<what to verify>": {
-    "fatal": "<something incorrect, subsequent steps impacted and not fixable>", 
+    "fatal": "<something catastrophically wrong from here on>", 
     "content": "<content snippet related to the issue",
-    "blame": ["<step#>: <step description>", ...]
+    "blame": "<step#>: <step description>",
   },
   "<what to verify>": {
     "warning": "<something can be improved>",
     "content": "<content snippet related to the issue",
-    "blame": ["<step#>: <step description>", ...]
+    "blame": "<step#>: <step description>"
   },
   "<what to verify>": {"ok": "<this looks good>"},
   // ...
 }
 ```
 
-where `"<step#>: <step description>"` can be found in the bracket "[at step#<num>: <step_description>]" of the steps.
+where `"<step#>: <step description>"` can be found in the bracket "[at step#<num>: <step_description>]" of the steps 
+(without the brackets.)
+
+If a blamed step wrote/updated a file, also blame subsequent steps updating that file.

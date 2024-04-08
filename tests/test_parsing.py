@@ -32,13 +32,23 @@ def test_fix_fenced_block_backticks():
 sometimes
 ````text
 digits are inserted after the backticks
-```
+```1
 like this
   ```
-  ````0
+  ````00
 other times OK
 """
-    expected = re.sub(r"\d+", "", original)
+
+    expected = """
+sometimes
+````text
+digits are inserted after the backticks
+```
+like this
+```
+````
+other times OK
+"""
     assert parsing.fix_fenced_block_backticks(original) == expected
 
 
