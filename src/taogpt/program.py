@@ -557,7 +557,6 @@ class SummarizeStep(TaoReplyStep, FixableStep):
             prompts.append((ROLE_ORCHESTRATOR, critic_text))
             prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_merge_criticisms))
             prompts_to_be_sent = prompts.copy()
-            found_issue_in_task_present_step = False
             n_retries = 0
             response: str = ''
             while n_retries < config.max_retries:
@@ -569,19 +568,27 @@ class SummarizeStep(TaoReplyStep, FixableStep):
                         step_id=f"{executor.step_id(self)}#{n_retries}",
                         temperature=config.first_try_temperature)
                     all_issues, _ = parse_verification_response(response)
+                    removing_issues = set()
                     for issue, (level, steps) in all_issues.items():
                         if level in ('error', 'fatal'):
                             if steps is None or len(steps) == 0:
                                 raise ParseError(f'Error "{issue}" has missing culprit. '
                                                  f'Please add the "blame" attribute to assign the culprit step.')
-                            for step_num, step_desc in steps:
+                            removing_si = set()
+                            for si, (step_num, step_desc) in enumerate(steps):
                                 if step_num < 0 or step_num >= len(executor.chain):
                                     raise ParseError(f"Unknown step number: step#{step_num}")
-                                if _utils.safe_is_instance(executor.chain[step_num], PresentTaskStep) \
-                                    and not found_issue_in_task_present_step:
-                                    found_issue_in_task_present_step = True
-                                    raise ParseError(f"step#{step_num} is the user's task problem presentation. "
-                                                     f"Are you sure you want to attribute error to it?")
+                                if _utils.safe_is_instance(executor.chain[step_num], PresentTaskStep):
+                                    executor.logger.log(f"step#{step_num} is the user's task problem presentation. "
+                                                        f"removing report {level}: {issue} @ {step_num}")
+                                    removing_si.add(si)
+                            for si in removing_si:
+                                steps.pop(si)
+                        if len(steps) == 0:
+                            removing_issues.add(issue)
+                    for issue in removing_issues:
+                        executor.logger.log(f"removing report {issue} due to no more culprit.")
+                        del all_issues[issue]
                     break
                 except Exception as e:
                     n_retries += 1
