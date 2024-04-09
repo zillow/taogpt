@@ -6,7 +6,7 @@ current step, higher is better. Note: choices not directly providing the answer 
   step later.
 * `MY_THOUGHT` choices provides intuitive thought to the problem step and should be scored according to correctness
   and clarity of the thought. Remember: you are asked to **rank** the choices, even if direct answers are provided,
-  they don't exclude other answers or choices.
+  they don't exclude other answers or choices. Incorrect but fixable answers should get some points rather than 0.
 * `I_FOUND_ERRORS` choices report errors found in preceding problem solving trajectory and should be scored by
   severity and accuracy of the reports.
 * `I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED` choices seek clarifications from the user and should be scored
