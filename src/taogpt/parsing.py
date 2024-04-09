@@ -112,7 +112,7 @@ _json_response_re = re.compile(r"^.*(```(json)?\n+)(.+)(```).*$|^\s*(\{.+})\s*$"
 _final_solution_check_re = re.compile(r"^\s*(yes|no)[.,]?\s+(.+)$", flags=re.DOTALL|re.IGNORECASE)
 
 at_step_re = re.compile(r"\[ *at +step(.*?)]", flags=re.IGNORECASE)
-_step_re = re.compile(r"^( *\[? *(at )?step#?(\d+): *)?(.*?)[\s\]]*$", flags=re.IGNORECASE)
+_step_re = re.compile(r"^( *\[? *(at )?(step#)?(\d+): *)?(.*?)[\s\]]*$", flags=re.IGNORECASE)
 _next_step_re = re.compile(r"^( *\[? *(at )?step#?\d*:? *)?(response to +)?(.*?)[\s\]]*$", flags=re.IGNORECASE)
 _proposal_re = re.compile(f"^\s*\[?{PRIOR_PROPOSAL}", flags=re.IGNORECASE)
 
@@ -125,8 +125,8 @@ def parse_step_id_and_name(text: str) -> tuple[int, str]:
     if match is None:
         raise ParseError("Step number and description must be in the format of 'step#<num>: <string description>'.")
     try:
-        step_num = int(match.group(3))
-        return (step_num, match.group(4))
+        step_num = int(match.group(4))
+        return (step_num, match.group(5))
     except TypeError:
         raise ParseError("Step number and description must be in the format of 'step#<num>: <string description>'.")
 

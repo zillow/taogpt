@@ -331,21 +331,28 @@ class GiveUpStep(TaoReplyStep):
         return GiveUpStep.TYPE_SPEC
 
     def __init__(self, *, previous: StepABC|None, description: str, role: str):
-        parsed_issues = parse_give_up_response(description)
-        desc = ''
-        for key, (issue, blamed_steps) in parsed_issues.items():
-            issue_text = '\n'.join([f"* {issue} at [step#{step_num}: {step_desc}]"
-                                    for step_num, step_desc in blamed_steps])
-            desc += f"{key}:\n{issue_text}\n\n"
-        super().__init__(previous=previous, description=desc, role=role)
-        self.issues = parsed_issues
+        # issue: (level, [step desc])
+        issues, _ = parse_issue_report(description, None)
+        report_lines = []
+        for issue, (level, steps) in issues.items():
+            if steps is None or _utils.str_or_blank(level) == '':
+                continue
+            report_lines.extend([f"* {level}: {issue} at [step#{step_num}: {step_desc}]"
+                                    for step_num, step_desc in steps])
+        super().__init__(previous=previous, description='\n'.join(report_lines), role=role)
+        self.issues = issues
 
     def eval_only(self, executor):
         if len(self.issues) > 0:
             culprits = identify_culprits(executor, self.issues)
             if len(culprits) > 0:
-                first_culprit, errors = next(iter(culprits.items()))
-                raise Backtrack(errors[0], first_culprit)
+                repair_or_backtrack(executor, culprits)
+                # No Backtrack raised, we have fixed all errors, pop itself
+                assert _utils.safe_is_instance(self.previous, ExpandableStep)
+                assert executor.chain[-1] is self
+                executor.chain.pop(-1)
+                _t.cast(ExpandableStep, self.previous).choices.remove(self)
+                return self.previous
         raise Backtrack(f"Problem or step is unsolvable. I gave up.", self)
 
 
@@ -446,7 +453,7 @@ class SummarizeStep(TaoReplyStep, FixableStep):
             return None
         system_prompt = executor.prompts.tao_intro
         prompts = executor.show_conversation_thread(with_extras=True,
-                                                    except_step=self if len(self.description) > 0 else None,
+                                                    except_step=self if len(self.description) == 0 else None,
                                                     stop_at=self)
         prompts.append((ROLE_ORCHESTRATOR, executor.prompts.tao_summarize))
         if len(self.criticisms) > 0:
@@ -482,27 +489,7 @@ class SummarizeStep(TaoReplyStep, FixableStep):
             self._n_tries -= 1
             self._pending_culprits[self].append('')
         try:
-            total_errors = 0
-            for blamed_step in list(self._pending_culprits.keys()):
-                blames = self._pending_culprits.get(blamed_step)
-                if len(blames) == 0: # shouldn't happen
-                    continue
-                n_fatals = sum(b.startswith('fatal') for b in blames)
-                n_errors = sum(b.startswith('error') or b.startswith('affected') for b in blames)
-                total_errors += n_fatals + n_errors
-                if n_fatals == 0 and _utils.safe_is_instance(blamed_step, FixableStep):
-                    if blamed_step.retryable(executor.config):
-                        _t.cast(FixableStep, blamed_step).repair(executor)
-                        if self._pending_culprits is not None:
-                            del self._pending_culprits[blamed_step]
-                    elif n_errors > 0:
-                        if self._pending_culprits is not None:
-                            del self._pending_culprits[blamed_step]
-                        raise Backtrack(blames[0], blame=blamed_step)
-                elif n_fatals > 0 or n_errors > 0:
-                    if self._pending_culprits is not None:
-                        del self._pending_culprits[blamed_step]
-                    raise Backtrack(blames[0], blame=blamed_step)
+            total_errors = repair_or_backtrack(executor, self._pending_culprits)
             return self if total_errors > 0 else None
         finally:
             if self._pending_culprits is not None and len(self._pending_culprits) == 0:
@@ -516,9 +503,6 @@ class SummarizeStep(TaoReplyStep, FixableStep):
         config = executor.config
         votes = (votes or config.votes) + 1
         system_prompt = executor.prompts.sage_intro
-
-        def select_summary_steps(i, step):
-            return _utils.safe_is_instance(step, (PresentTaskStep, AskQuestionStep, SummarizeStep))
 
         # issue: (level, [step desc])
         all_issues: dict[str, _t.Tuple[str, list[tuple[int, str]]|None]] = dict()
@@ -567,26 +551,8 @@ class SummarizeStep(TaoReplyStep, FixableStep):
                         reason='merge_criticisms',
                         step_id=f"{executor.step_id(self)}#{n_retries}",
                         temperature=config.first_try_temperature)
-                    all_issues, _ = parse_verification_response(response)
-                    removing_issues = set()
-                    for issue, (level, steps) in all_issues.items():
-                        if level in ('error', 'fatal'):
-                            if steps is None or len(steps) == 0:
-                                raise ParseError(f'Error "{issue}" has missing culprit. '
-                                                 f'Please add the "blame" attribute to assign the culprit step.')
-                            removing_si = set()
-                            for si, (step_num, step_desc) in enumerate(steps):
-                                if step_num < 0 or step_num >= len(executor.chain):
-                                    raise ParseError(f"Unknown step number: step#{step_num}")
-                                if _utils.safe_is_instance(executor.chain[step_num], PresentTaskStep):
-                                    executor.logger.log(f"step#{step_num} is the user's task problem presentation. "
-                                                        f"removing report {level}: {issue} @ {step_num}")
-                                    removing_si.add(si)
-                            for si in removing_si:
-                                steps.pop(si)
-                        if len(steps) == 0:
-                            removing_issues.add(issue)
-                    for issue in removing_issues:
+                    all_issues, no_culprit_issues = parse_issue_report(response, len(executor.chain))
+                    for issue in no_culprit_issues:
                         executor.logger.log(f"removing report {issue} due to no more culprit.")
                         del all_issues[issue]
                     break
@@ -595,6 +561,23 @@ class SummarizeStep(TaoReplyStep, FixableStep):
                     executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
                                                 executor.prompts.orchestrator_parse_error)
         return all_issues
+
+
+def parse_issue_report(response, step_number_cutoff: int=None) \
+        -> tuple[dict[str, _t.Tuple[str, list[tuple[int, str]]|None]], set[str]]:
+    all_issues, _ = parse_verification_response(response)
+    no_culprit_issues = set()
+    for issue, (level, steps) in all_issues.items():
+        if level in ('error', 'fatal'):
+            if steps is None or len(steps) == 0:
+                raise ParseError(f'Error "{issue}" has missing culprit. '
+                                 f'Please add the "blame" attribute to assign the culprit step.')
+            for si, (step_num, step_desc) in enumerate(steps):
+                if step_num < 0 or step_number_cutoff is not None and step_num >= step_number_cutoff:
+                    raise ParseError(f"Unknown step number: step#{step_num}")
+        if len(steps) == 0:
+            no_culprit_issues.add(issue)
+    return all_issues, no_culprit_issues
 
 
 def identify_culprits(
@@ -616,11 +599,37 @@ def identify_culprits(
                 if _utils.safe_is_instance(step, (FixableStep, TaoReplyStep)):
                     step.record_criticisms(issues_of_step)
                 if _utils.safe_is_instance(step, PresentTaskStep):
-                    # todo: maybe attribute to the Analysis step instead?
-                    print(f"WARNING: complaint for user's task presentation: {issues_of_step}. Ignore")
+                    executor.logger.log(f"WARNING: complaint for user's task presentation: {issues_of_step}. Ignore")
                 else:
+                    if _utils.safe_is_instance(step, SummarizeStep):
+                        n_fatals = sum(issue.startswith("fatal:") for issue in issues_of_step)
+                        if n_fatals > 0:
+                            issues_of_step = [issue.replace("fatal:", "error:") for issue in issues_of_step]
+                            executor.logger.log(f"WARNING: change {n_fatals} fatal issues for summary step to errors")
                     culprits[step].extend(issues_of_step)
     return culprits
+
+
+def repair_or_backtrack(executor, remedies):
+    total_errors = 0
+    for blamed_step in list(remedies.keys()):
+        blames = remedies.get(blamed_step)
+        if len(blames) == 0:  # shouldn't happen
+            continue
+        n_fatals = sum(b.startswith('fatal') for b in blames)
+        n_errors = sum(b.startswith('error') or b.startswith('affected') for b in blames)
+        total_errors += n_fatals + n_errors
+        if n_fatals == 0 and _utils.safe_is_instance(blamed_step, FixableStep):
+            if blamed_step.retryable(executor.config):
+                _t.cast(FixableStep, blamed_step).repair(executor)
+                del remedies[blamed_step]
+            elif n_errors > 0:
+                del remedies[blamed_step]
+                raise Backtrack(blames[0], blame=blamed_step)
+        elif n_fatals > 0 or n_errors > 0:
+            del remedies[blamed_step]
+            raise Backtrack(blames[0], blame=blamed_step)
+    return total_errors
 
 
 class AskPythonGenieStep(TaoReplyStep, FixableStep):
@@ -1053,8 +1062,6 @@ None. This is the final step.
         first_expand = executor.is_first_solving_expansion()
         if self.should_try_intuition(executor):
             intuition = self.ask_for_intuition(executor)
-            self.max_expansion += 1
-            self.first_expansion += 1
             self.choices.append(intuition)
         logger = executor.logger
         if self._ptr >= (len(self.choices) - 1) and old_length < self.max_expansion:

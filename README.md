@@ -9,32 +9,25 @@
 <div style="text-align: center">
 
 
-*The Tao gives birth to One. One gives birth to Two. Two gives birth to Three.
-Three gives birth to all things. -- Tao Te Ching. (Quote [selected by TaoGPT](examples/gpt-4/taogpt-quote.log.md))*
+*In the essence of the Tao, where simplicity reigns and complexity falls away, there lies a path for the solver of 
+problems. He who grasps the Tao seeks not to add but to subtract, to reduce each challenge to its core. With each 
+step taken, the path unfolds; with each error found, wisdom grows. The master problem solver, like water, adapts, flowing around obstacles, finding the way with ease. In the art of the Tao, the solution is not forced but emerges naturally, as if it was always there, waiting to be uncovered by those who understand that to solve is to follow the Tao, effortlessly.*
 
-"Knowing others is wisdom, knowing yourself is Enlightenment." In the dance of problem-solving, be like water—flexible yet persistent, yielding yet powerful. Embrace the Tao of adaptability, yielding to the natural flow of each unique challenge. Respect the intrinsic nature, do not force, do not impose. For the enlightened problem solver, errors are but stepping stones on the path to truth, each misstep an opportunity to backtrack, to learn, to grow. So, like the eternal Tao, the way of problem-solving is not set in stone, but ebbs and flows with the rhythm of wisdom and enlightenment.
-
--- [Self-pitch by TaoGPT](/examples/gpt-4/taogpt-self-pitch.final.md)
+-- [Self-pitch by TaoGPT](/examples/gpt-4-turbo/taogpt_self_pitch-steps.log.md)
 
 </div>
 
 ## Introduction
 
-(*This section [is written by TaoGPT](examples/gpt-4/taogpt-self-describe.log.md) with illustration by the authors.*)
+(*This section [is written by TaoGPT](examples/gpt-4-turbo/taogpt_self_description-direct.log.md) with illustration by the authors.*)
 
 ![TaoGPT High-level design](assets/high_level_design.png)
 
-The problem-solving system is a collaborative platform designed to tackle complex problems in a structured and systematic manner. It leverages the unique strengths of three key components: Tao, Orchestrator, and Sage.
+Tao is an integral component of a sophisticated problem-solving system, designed to tackle issues in a structured and methodical manner. As a diligent problem solver, Tao is implemented by a large language model, which can either operate independently or in conjunction with another model. Tao's primary responsibility is to dissect problems recursively, working from the top down to ensure that each aspect of the issue is addressed thoroughly. This approach allows for a comprehensive understanding of the problem, enabling Tao to develop well-rounded and effective solutions.
 
-Tao is the diligent problem solver in this system. His primary role is to solve problems in a recursive, top-down fashion. He takes one step at a time, ensuring that each step is thoroughly analyzed and solved before moving on to the next. Tao's responsibilities include understanding the problem at hand, breaking it down into manageable steps, and working through each step methodically. He is also responsible for communicating his progress and findings to the Orchestrator and Sage, and for incorporating their feedback into his problem-solving process.
+The Orchestrator is the backbone of the system, a mechanical program that directs the workflow and ensures that each component operates within its designated role. It does not engage in problem-solving itself but is essential for maintaining the structure of the process. The Orchestrator initiates the problem-solving sequence by invoking Tao and subsequently calls upon Sage when a solution needs to be evaluated. This ensures that the process is not only systematic but also adheres to a high standard of quality control.
 
-The Orchestrator is the guiding force in this problem-solving system. Its primary role is to provide workflow guidance, ensuring that the problem-solving process is structured and systematic. The Orchestrator's responsibilities include invoking Sage at appropriate times to analyze Tao's problem-solving strategies and solutions. It also manages the interaction between Tao and Sage, ensuring that their collaboration is effective and productive.
-
-Sage is the critic in this problem-solving system. Its primary role is to carefully analyze the problem-solving strategies and solutions proposed by Tao. Sage provides criticism and opinions, helping to refine and improve the problem-solving process. Sage's responsibilities include scrutinizing Tao's problem-solving steps, identifying potential errors or inefficiencies, and providing constructive feedback.
-
-The interaction between Tao, Orchestrator, and Sage is a crucial aspect of this problem-solving system. The Orchestrator manages the interaction between Tao and Sage, invoking Sage at appropriate times to analyze Tao's problem-solving strategies and solutions. Sage scrutinizes Tao's problem-solving steps and provides constructive feedback, which is communicated back to Tao through the Orchestrator, helping Tao to refine his problem-solving process.
-
-This system is designed to facilitate effective problem-solving by breaking down complex problems into manageable steps, encouraging critical analysis, and promoting collaboration.
+Sage serves as the system's analytical critic, providing a layer of scrutiny to the solutions proposed by Tao. Sage's role is to meticulously examine the strategies and solutions, offering constructive criticism and expert opinions. This critical analysis is vital for refining the problem-solving process, as it helps to identify any potential flaws or areas for improvement. Sage's feedback is then integrated into Tao's problem-solving approach, allowing for iterative enhancements. This collaborative dynamic between Tao and Sage, facilitated by the Orchestrator, ensures that the solutions are not only creative but also robust and reliable. The types of problems Tao might solve can range from technical issues to complex analytical tasks, and Sage's feedback is crucial in ensuring that the solutions are practical and applicable to real-world scenarios.
 
 ## Philosophy
 
@@ -276,7 +269,7 @@ Please ensure that you have all the necessary documentation, including passports
 
 ---
 
-In [the detailed long log](examples/gpt-4-turbo/travel_advice-ask_questions.log.md), we can see that TaoGPT found 
+In [the detailed long log](examples/gpt-4-turbo/travel_advice-questions_direct.log), we can see that TaoGPT found 
 multiple issues in the passes and fixed the issues (without backtracking since they are non-fatal for this task.)
 
 <div style="color: white; background-color: gray">
@@ -481,7 +474,7 @@ The Responsible Artificial Intelligence Source Code License, Version 11
 
 # Acknowledgements
 
-This work is supported by the Data Science and Machine Learning Group at [Zillow Rental](https://www.zillow.com/homes/for_rent/).
+This work is supported by the Data Science and Machine Learning Group at [Zillow Rentals](https://www.zillow.com/homes/for_rent/).
 
 # Citation
 
