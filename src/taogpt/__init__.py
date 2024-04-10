@@ -61,6 +61,7 @@ class Config:
     try_intuition: bool = True
     try_intuition_initial_expansion: bool = True
     votes: int = 1
+    verification_votes: int = 3
 
     # behavioral
     analyze_first: bool = True
@@ -76,8 +77,7 @@ class Config:
     ask_user_questions_in_one_prompt: bool = False
     ask_user_before_execute_codes: bool = True
     pause_after_initial_solving_expansion: bool = True
-    pause_on_backtrack: bool = False
-    file_generation_support: bool = False
+    pause_on_backtrack: bool = True
     # logging
     collapse_long_prompts: bool = True
 

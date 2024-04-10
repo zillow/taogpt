@@ -361,8 +361,7 @@ class StepByStepPlan(TaoReplyStep):
 
     @classmethod
     def create(cls, prev_step: StepABC, step_def: str, role: str, config: Config) -> _t.Self:
-        return cls(previous=prev_step, description=step_def, role=role,
-                   add_file_update_step=config.file_generation_support)
+        return cls(previous=prev_step, description=step_def, role=role)
 
     @property
     def step_title(self) -> str:
@@ -372,10 +371,8 @@ class StepByStepPlan(TaoReplyStep):
         desc = ';'.join([_utils.safe_subn(step.description, 10) for step in self._steps.values()])
         return f"[{desc}]"
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str,
-                 add_file_update_step=False):
+    def __init__(self, *, previous: StepABC|None, description: str, role: str):
         super().__init__(previous=previous, description=description, role=role)
-        self.add_file_update_step = add_file_update_step
         self._steps = parse_step_by_step_plan(self.description)
         self._update_file_step: StepDescriptor|None = None
         self.first_step = f"{self._steps[1].description}" # 1-base
@@ -501,7 +498,7 @@ class SummarizeStep(TaoReplyStep, FixableStep):
                            reason='check_final_answer') \
             -> dict[str, tuple[str, list[tuple[int, str]]|None]]:
         config = executor.config
-        votes = (votes or config.votes) + 1
+        votes = (votes or config.verification_votes)
         system_prompt = executor.prompts.sage_intro
 
         # issue: (level, [step desc])
@@ -598,15 +595,22 @@ def identify_culprits(
             if step_num == i or _utils.normalized_levenstein_distance(step.step_name, step_desc) < 0.05:
                 if _utils.safe_is_instance(step, (FixableStep, TaoReplyStep)):
                     step.record_criticisms(issues_of_step)
-                if _utils.safe_is_instance(step, PresentTaskStep):
-                    executor.logger.log(f"WARNING: complaint for user's task presentation: {issues_of_step}. Ignore")
-                else:
-                    if _utils.safe_is_instance(step, SummarizeStep):
-                        n_fatals = sum(issue.startswith("fatal:") for issue in issues_of_step)
-                        if n_fatals > 0:
-                            issues_of_step = [issue.replace("fatal:", "error:") for issue in issues_of_step]
-                            executor.logger.log(f"WARNING: change {n_fatals} fatal issues for summary step to errors")
-                    culprits[step].extend(issues_of_step)
+                if _utils.safe_is_instance(step, SummarizeStep):
+                    n_fatals = sum(issue.startswith("fatal:") for issue in issues_of_step)
+                    if n_fatals > 0:
+                        # no point of backtracking the summary step as it is the final step
+                        issues_of_step = [issue.replace("fatal:", "error:") for issue in issues_of_step]
+                        cls = step.__class__.__name__
+                        executor.logger.log(f"WARNING: change {n_fatals} fatal issues for {cls} step to errors")
+                elif _utils.safe_is_instance(step, (PresentTaskStep, AskQuestionStep, AnalysisStep)):
+                    n_errors = sum(issue.startswith("error:") for issue in issues_of_step)
+                    if n_errors > 0:
+                        # these are not fixable currently but should backtrack only if fatal for these types
+                        issues_of_step = [issue.replace("error:", "warning:") for issue in issues_of_step]
+                        cls = step.__class__.__name__
+                        executor.logger.log(f"WARNING: change {n_errors} errors for {cls} step to warnings")
+                culprits[step].extend(issues_of_step)
+                continue
     return culprits
 
 
