@@ -12,6 +12,7 @@ from taogpt.runner import solve_problem, load_and_resume_problem
 from taogpt.utils import set_openai_credentials
 
 # The skeleton is created by the GPT-4
+# todo: replace the Config class with ArgParser
 parser = argparse.ArgumentParser(
     prog='taogpt',
     description='command-line tool to ask Tao to solve a task',
@@ -19,7 +20,7 @@ parser = argparse.ArgumentParser(
 )
 
 # hyperparameters
-parser.add_argument('-i', '--initial-expansion', type=int, default=2, help='Initial expansion factor')
+parser.add_argument('-i', '--initial-expansion', type=int, default=3, help='Initial expansion factor')
 parser.add_argument('-I0', '--try-intuition-initial-expansion', type=bool, default=True,
                     help='Always try intuition at the initial expansion)')
 parser.add_argument('-I1', '--try-intuition', type=bool, default=True,
@@ -29,6 +30,7 @@ parser.add_argument('-T0', '--first-try-temperature', type=float, default=0.0, h
 parser.add_argument('-T1', '--alternative-temperature', type=float, default=0.7, help='Alternative temperature')
 parser.add_argument('-m', '--max-search-expansion', type=int, default=4, help='Maximum search expansion')
 parser.add_argument('-v', '--votes', type=int, default=1, help='Number of votes')
+parser.add_argument('-V', '--verification-votes', type=int, default=3, help='Number of votes')
 
 # behavioral
 parser.add_argument('-a', '--analyze-first', type=bool, default=True,
@@ -44,21 +46,19 @@ parser.add_argument('-s', '--use-sage-llm-for-initial-expansion', type=bool, def
                     action=argparse.BooleanOptionalAction, help='Use sage LLM for initial expansion')
 
 # user interactions
-parser.add_argument('-F', '--file-generation-support', type=bool, default=False,
-                    action=argparse.BooleanOptionalAction, help='Additional support for file generation')
 parser.add_argument('-S', '--silence', type=int, default=0,
                     help='Level of console printouts: 0: print conversation; 1: do not print conversation.')
 parser.add_argument('-Q', '--ask-user-questions-in-one-prompt', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Ask user questions in one prompt')
 parser.add_argument('-E', '--ask-user-before-execute-codes', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Ask user before execute codes')
-parser.add_argument('-P', '--pause-after-initial-solving-expansion', type=bool, default=False,
+parser.add_argument('-P', '--pause-after-initial-solving-expansion', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Pause after initial solving expansion')
-parser.add_argument('-R', '--pause-on-backtrack', type=bool, default=False,
+parser.add_argument('-R', '--pause-on-backtrack', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Pause when a backtrack is requested')
 
 # separate settings
-parser.add_argument('-p', '--path', type=str, required=True, help='Directory path for outputs')
+parser.add_argument('-p', '--path', type=str, required=True, help='Directory path for log and outputs')
 parser.add_argument('-llm', '--llm', type=str, default='gpt-4-turbo',
                     help='Default LLM model name')
 parser.add_argument('--sage-llm', type=str, default=None,

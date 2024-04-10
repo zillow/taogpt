@@ -31,40 +31,51 @@ Sage serves as the system's analytical critic, providing a layer of scrutiny to 
 
 ## Philosophy
 
-AI agent can be categorized into three main types of reasoning systems: System 1 reasoner, System 2 reasoner, and the 
-Hybrid reasoner. The System 1 reasoner relies on memorized knowledge, common sense, and intuition, often described 
-as the "black arts". Notable examples of this system include neural networks and large language models in particular.
+In his seminal work, Nobel laureate Daniel Kahneman 
+delineates [two distinct modes of thought](https://en.wikipedia.org/wiki/Thinking,_Fast_and_Slow): System 1 and System 2 
+thinking. System 1 is characterized by fast, automatic, and subconscious processes, such as intuition and common 
+sense. It is akin to the intuitive grasp of a situation or the effortless recall of memorized knowledge. In the 
+realm of artificial intelligence, neural networks and large language models exemplify this type of thinking, as they 
+draw upon learned patterns and data to make inferences, mimicking aspects of human intuition.
 
-On the other end of the spectrum, we have the System 2 reasoner that employs complex reasoning process. Classic 
-cases include the medical diagnosis system MYCIN, logic programming language Prolog, and IBM’s DeepBlue chess-playing 
-program.
+Conversely, System 2 thinking involves slow, deliberate, and conscious effort, often requiring logical and 
+methodical reasoning. This mode of thought is exemplified by AI systems such as the medical diagnosis system MYCIN, 
+the logic programming language Prolog, and IBM’s DeepBlue chess-playing program, all of which utilize complex 
+algorithms to solve problems.
 
-Hybrid reasoning, as the name suggests, is the marriage between the System 1 and System 2 reasoners. In other words, 
-it uses search and backtracking guided by intuition. One of the well-known instances of hybrid reasoner is AlphaGo, 
-the first AI to beat a human world champion Go player. AlphaGo employs systematic search techniques under the 
-guidance of its intuition (developed through learning) to make the best move decisions and judge board situation.
+The integration of these two modes can lead to a powerful hybrid reasoning system. AlphaGo, the AI that famously 
+defeated a human world champion in the game of Go, is a prime example of such a system. 
+It [combines](https://en.wikipedia.org/wiki/AlphaGo#Algorithm) Monte Carlo Tree Search (MCTS) for systematic 
+exploration and a neural network (the value network) trained to evaluate positions and predict outcomes, effectively 
+blending intuitive pattern recognition with strategic planning.
 
-Dynamic duality is a key characteristic of intelligent reasoning in a hybrid system:
+Another instance of a hybrid system is [SOFAI](https://bdtechtalks.com/2022/01/24/ai-thinking-fast-and-slow/), which 
+also leverages the strengths of both intuitive and analytical reasoning to tackle complex tasks.
 
-* Intuition can produce answers with some (shallow) reasoning steps;
-* Intuition generates search branches and ranks them for problems without mechanical branching such as non-board 
-  games and most real-world problems;
-* Deep search of the System 2 reasoning process extends capability unreachable by intuition;
-* Knowledge revealed by searching can be internalized to become intuition through (continuous) learning and memoization;
-* Better intuition reduces search cost but never replace searching
-* Intuition can decide the halting of a search for problems without mechanical verification such as non-board
-  games and most real-world problems.
+This interplay between the two systems can be described as a "dynamic duality," where:
 
-This philosophy can be depicted in the illustration below. The knowledge that the Earth orbits the Sun is an obvious 
-example of transitions between System 1 and 2. Human beings, relying solely on daily intuition, had believed the Sun 
-orbited the Earth until Nicolas Copernicus discovered the opposite arrangement, through elaborated reasoning using his 
-knowledge and insights of math and astronomy, and confirmed by scientists after him. Today, most human beings have 
-the intuitive knowledge that the Earth orbits the Sun, even though few of them can actually perform the same 
-elaborated reasoning the pioneering scientists did.
+- Intuition can swiftly generate potential solutions with a limited number of reasoning steps.
+- Intuition guides the prioritization of search branches, particularly in scenarios that lack clear-cut options, 
+  such as many real-world problems.
+- System 2's deep reasoning expands the realm of what can be achieved beyond the reach of intuition alone.
+- Insights gained from systematic exploration can be assimilated, enriching intuition through continuous 
+  learning/fine-tuning and memoization.
+- While refined intuition can streamline the search process and (greatly) reduce cost of searching, it does not 
+  eliminate the need for systematic exploration.
+- Intuition can also decide when to cease searching, especially in situations where there is no straightforward 
+  method to verify a solution.
+
+The transition between System 1 and System 2 thinking can be illustrated through historical scientific understanding.
+Initially, humans intuitively believed that the Sun orbited the Earth, a view that persisted until the 16th century. 
+It was then that Nicolaus Copernicus (along with astronomers after him,) through meticulous reasoning and the 
+application of mathematical and astronomical knowledge/insights, proposed the heliocentric model. Today, the 
+knowledge that the Earth orbits the Sun is intuitively understood by most people, even though few can replicate the 
+complex reasoning of the early astronomers.
 
 ![Duality of System 1 and System 2 reasoners](assets/taogpt-philosophy.png)
 
-TaoGPT strikes to be a hybrid system that embraces and implements the duality of System 1 and System 2 reasoners.
+TaoGPT is a hybrid system built on top of large language models and thus are more general than specialized 
+hybrid systems such as AlphaGo.
 
 ## Key Features and Methodology
 
@@ -155,17 +166,14 @@ This a final problem solving chain showing TaoGPT tackling a travel planning tas
 3. Propose step-by-step plans;
 4. Rank step-by-step plans;
 5. Work on the best ranked step-by-step plan to come up with a feasible answer;
-6. Optimize the answer;
-7. Summary into the final answer;
-8. Check the final answer.
+6. Summary into the final answer;
+7. Check the final answer.
 
 Comparing the TaoGPT, GPT-4 with the default system prompt produced
 a [generic and vague response](/examples/gpt-4/travel-planning.default.md). The details of execution
 log can be found [here](/examples/gpt-4/travel-planning.log.md).
 
 More examples are in the [examples folder](/examples).
-
-<div style="background-color: beige; text-align: center; padding: 5px">
 
 
 # Final path history
@@ -175,61 +183,47 @@ More examples are in the [examples folder](/examples).
 <div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
 <div>[0] <b>user</b>: </div>
 
-I want to travel to Moscow. I just need a detailed route plan.
-(I don't need the actual schedule. And you don't have access to the internet.)
-
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[1] <b>user</b>: </div>
-
-> What is your starting location for the journey to Moscow?
-
-Urumuqi
-
-> Which mode(s) of transportation do you prefer for this trip?
-
-I'm afraid of flying.
-
-> Are you looking to travel directly to Moscow, or are you planning to make any stops along the way?
-
-I would like to visit Lahsa.
-
-> Do you have any specific travel preferences or constraints, such as budget or time limitations?
-
-I like fewer hassle. I like comfort.
-
+I want to travel to Moscow. I just need a route plan and I will do the booking later.
 
 
 </div>
 
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>Tao</b>: </div>
+<div>[1] <b>Tao</b>: </div>
 
-I apologize for the oversight. Without access to the internet and specific train schedules, I can provide a more generalized route plan with the understanding that you will need to obtain the exact train numbers, departure times, and transfer details locally at the train stations or through a travel agency. Here is a revised, simplified route plan:
+The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. The task is to create a route plan for a trip to Moscow, which is a feasible and straightforward request.
 
-***Urumqi to Lhasa***
+The successful completion of this task would be evaluated based on the following criteria:
+
+1. The route plan should start from the requester's current location.
+2. The route plan should end in Moscow.
+3. The route plan should include all necessary transit points (airports, train stations, etc.).
+4. The route plan should consider the most efficient and practical routes.
+5. The route plan should provide alternatives, if possible, to accommodate any changes or preferences.
+6. The route plan should not include the booking details as per the requester's preference.
 
 
-1. **Train from Urumqi to Xining**: Board a train from Urumqi to Xining. This leg of the journey will take about a day. Look for a train that offers soft sleeper compartments for comfort.
+</div>
 
-2. **Train from Xining to Lhasa**: From Xining, take the train to Lhasa on the Qinghai-Tibet Railway. This journey will take roughly a day and offers breathtaking views of the Tibetan Plateau. Again, choose a soft sleeper for the best comfort.
+<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
+<div>[2] <b>user</b>: </div>
 
-***Lhasa to Moscow***
+> Where is your current location?
 
+Urumuqi.
 
-The journey from Lhasa to Moscow will involve multiple train changes and countries:
+> What is your preferred mode of transportation (air, rail, road)?
 
-1. **Train from Lhasa to Beijing**: Take a train from Lhasa back to Beijing. This trip will take approximately two days. A soft sleeper compartment is recommended.
+'m afraid of flying.
 
-2. **Train from Beijing to Ulaanbaatar**: From Beijing, board the train to Ulaanbaatar, Mongolia. This journey will take about a day and a half.
+> Do you have any specific transit points or stops you would like to make along the way?
 
-3. **Train from Ulaanbaatar to Irkutsk**: After arriving in Ulaanbaatar, find a train to Irkutsk, Russia. This leg will take about a day.
+I like to visit Lahsa.
 
-4. **Train from Irkutsk to Moscow**: Finally, from Irkutsk, you will embark on the Trans-Siberian Railway to Moscow. This is the longest leg, taking approximately three to four days. A first-class cabin is suggested for maximum comfort.
+> Do you have any preferences for the route (scenic, fastest, cheapest, etc.)?
 
-Please ensure to check for the most recent train schedules and availability at local train stations or through a travel agency. You will also need to arrange visas for China, Mongolia, and Russia in advance, and consider accommodations for overnight stops or layovers. It's important to book your train tickets as early as possible, especially if you are looking for sleeper compartments, to ensure a comfortable journey.
+I like comfort and prefer fewer stopovers.
+
 
 
 </div>
@@ -237,123 +231,101 @@ Please ensure to check for the most recent train schedules and availability at l
 <div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
 <div>[3] <b>Tao</b>: </div>
 
-Based on your starting location in Urumqi and your preference to avoid flying, as well as your desire to visit Lhasa and preference for comfort and minimal hassle, here is a detailed route plan for your journey to Moscow:
 
-**Urumqi to Lhasa:**
-1. **Urumqi to Xining**: Begin your journey by taking a train from Urumqi to Xining. This leg of the journey will take approximately one day. Since you prefer comfort, it is recommended to book a soft sleeper compartment for this trip. You will need to check the local train station or contact a travel agency for the exact train options and schedules.
+1. Identify the major transportation hubs (train stations, bus stations) in Urumuqi, Lahsa, and Moscow
+2. Find the most direct and comfortable routes from Urumuqi to Lahsa
+3. Find the most direct and comfortable routes from Lahsa to Moscow
+4. Combine the best routes from Urumuqi to Lahsa and Lahsa to Moscow to create a complete route plan
 
-2. **Xining to Lhasa**: From Xining, you will transfer to the train bound for Lhasa on the Qinghai-Tibet Railway. This journey will also take roughly one day. The soft sleeper compartment is advisable for this leg as well, providing both comfort and an opportunity to enjoy the scenic views of the Tibetan Plateau.
 
-**Lhasa to Moscow:**
-1. **Lhasa to Beijing**: After your visit to Lhasa, you will need to take a train back to Beijing. This trip will take approximately two days. A soft sleeper compartment is recommended for a comfortable journey. Please note that you may need to transfer in Xining again.
+</div>
 
-2. **Beijing to Ulaanbaatar**: From Beijing, you will take a train to Ulaanbaatar in Mongolia. This journey will take about one and a half days. Booking a soft sleeper will ensure a comfortable trip.
+<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
+<div>[4] <b>Tao</b>: </div>
 
-3. **Ulaanbaatar to Irkutsk**: Upon arrival in Ulaanbaatar, you will find a train to Irkutsk, Russia. This leg will take about one day. As with previous legs, a soft sleeper is suggested for comfort.
+The major transportation hubs in Urumuqi, Lahsa, and Moscow are as follows:
 
-4. **Irkutsk to Moscow**: The final leg of your journey will be aboard the Trans-Siberian Railway from Irkutsk to Moscow. This is the longest part of the trip, taking approximately three to four days. Opting for a first-class cabin will provide the highest level of comfort for this extended journey.
+Urumuqi:
+- Urumqi South Railway Station
+- Urumqi Railway Station
 
-**Additional Considerations:**
-- **Visas**: You will need to secure visas for China, Mongolia, and Russia well in advance of your trip. This process can be complex and time-consuming, so it's important to start early. Contact the respective embassies or consulates for guidance on the application process.
+Lahsa:
+- Lhasa Railway Station
 
-- **Train Tickets**: Without internet access, you will need to purchase your train tickets directly at the train stations or through a travel agency. It's crucial to book these as early as possible, especially if you are looking for sleeper compartments, which are in high demand.
+Moscow:
+- Moscow Kazansky Railway Station
+- Moscow Yaroslavsky Railway Station
+- Moscow Kursky Railway Station
 
-- **Accommodations**: For overnight stops or layovers, you may want to book hotels near the train stations for convenience. Since you do not have internet access, you can arrange your accommodations through a travel agency or by contacting hotels directly via phone.
+These stations have connections to major cities and regions, and they offer various types of trains, from high-speed to regular, to suit different travel preferences.
 
-- **Travel Advisories and Entry Requirements**: Check for any travel advisories and entry requirements for each country you will be visiting. This information can be obtained from embassies, consulates, or travel agencies.
 
-- **Local Assistance**: Since you do not have internet access, it is advisable to seek assistance from local travel agencies or train station information desks throughout your journey. They can provide up-to-date schedules, ticket availability, and help with accommodations.
+</div>
 
-Please ensure that you have all the necessary documentation, including passports and visas, and that you are aware of the local COVID-19 regulations and travel restrictions that may be in place during your journey. Safe travels!
+<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
+<div>[5] <b>Tao</b>: </div>
+
+The most direct and comfortable route from Urumuqi to Lahsa is by train. The train journey from Urumuqi to Lahsa takes approximately 24 hours. The train departs from Urumqi South Railway Station and arrives at Lhasa Railway Station. The train offers soft sleeper class, which is the most comfortable option. It includes four berths in each compartment with a door, providing a quiet and private space. The train also has a dining car where you can buy meals and drinks.
+
+Please note that the travel time for each leg of the journey is an approximation and may vary depending on the specific train schedules. It is advised to check the actual train schedules when planning the trip.
+
+
+</div>
+
+<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
+<div>[6] <b>Tao</b>: </div>
+
+Based on the information gathered, here is your complete route plan:
+
+1. Start from Urumuqi. Take a train from Urumuqi South Railway Station to Lhasa Railway Station. The journey takes approximately 24 hours. The train offers soft sleeper class for a comfortable journey.
+
+2. From Lahsa, take a train to Beijing. The journey takes approximately 40 hours. The train offers soft sleeper class for a comfortable journey.
+
+3. From Beijing, take a train to Moscow. The journey takes approximately 6 days. The train offers first-class sleeper for a comfortable journey.
+
+Please note that the travel time for each leg of the journey is an approximation and may vary depending on the specific train schedules. It is advised to check the actual train schedules when planning the trip.
+
+
+</div>
+
+<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
+<div>[7] <b>Tao</b>: </div>
+
+Here is your complete route plan:
+
+1. Start from Urumuqi South Railway Station and take a train to Lahsa. The journey will take approximately 24 hours. You will be travelling in a soft sleeper class for a comfortable journey.
+
+2. After exploring Lahsa, head to Lhasa Railway Station and take a train to Beijing. This journey will take approximately 40 hours. Again, you will be travelling in a soft sleeper class for a comfortable journey.
+
+3. From Beijing, take a train to Moscow. This journey will take approximately 6 days. You will be travelling in a first-class sleeper for a comfortable journey.
+
+Please note that the actual travel time may vary depending on the specific train schedules.
+
+As for the visa requirements, you will need to apply for a Chinese visa for your stops in Lahsa and Beijing. For your final destination, Moscow, you will need a Russian visa. Please check the specific requirements and application process for each visa at the respective embassies or consulates in your country. Safe travels!
+
+
+</div>
+
+<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
+<div>[8] <b>Tao</b>: </div>
+
+Based on your preferences, I have created a route plan for your trip from Urumuqi to Moscow with a stopover in Lahsa. Here is the complete plan:
+
+1. **Urumuqi to Lahsa**: Start from Urumuqi South Railway Station and take a train to Lahsa. The journey will take approximately 24 hours. You will be travelling in a soft sleeper class for a comfortable journey. The train offers four berths in each compartment with a door, providing a quiet and private space. The train also has a dining car where you can buy meals and drinks.
+
+2. **Lahsa to Beijing**: After exploring Lahsa, head to Lhasa Railway Station and take a train to Beijing. This journey will take approximately 40 hours. Again, you will be travelling in a soft sleeper class for a comfortable journey.
+
+3. **Beijing to Moscow**: From Beijing, take a train to Moscow. This journey will take approximately 6 days. You will be travelling in a first-class sleeper for a comfortable journey. The train offers two berths in each compartment with a door, providing a quiet and private space. The train also has a dining car where you can buy meals and drinks.
+
+Please note that the actual travel time may vary depending on the specific train schedules. Also, remember to check the visa requirements for each country you will be passing through. Safe travels!
+
+
 </div>
 
 ---
 
-In [the detailed long log](examples/gpt-4-turbo/travel_advice-questions_direct.log), we can see that TaoGPT found 
+In [the detailed long log](examples/gpt-4/travel_advice-questions_steps.log.md), we can see that TaoGPT found 
 multiple issues in the passes and fixed the issues (without backtracking since they are non-fatal for this task.)
-
-<div style="color: white; background-color: gray">
-
-**REPAIRING response to start working on the problem/3#1 for:**
-
-* error: The route details provided are generic and lack specific information such as train numbers, departure times, and where to change trains, which are essential for planning a trip without internet access.
-
-
-</div>
-
-<div style="background-color:lightgrey; padding: 5px; border-bottom: 1px dotted grey">
-<div>[-1] <b>system</b>: (tokens: 43)</div>
-
-[..tao_intro:44..]
-
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[0] <b>user</b>: (tokens: 43)</div>
-
-[at step#0: step 0]
-
-I want to travel to Moscow. I just need a detailed route plan.
-(I don't need the actual schedule. And you don't have access to the internet.)
-
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[1] <b>user</b>: (tokens: 117)</div>
-
-***Tao asked and user replied:***
-
-
-[at step#1: ask questions before response to start working on the problem]
-
-[... text omitted ...]
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>Tao</b>: (tokens: 505)</div>
-
-***MY_THOUGHT***
-
-
-[at step#3: response to start working on the problem]
-
-[... text omitted ...]
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>Tao</b>: (tokens: 497)</div>
-
-[at step#4: Summarize final answer]
-
-[... text omitted ...]
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[4] <b>orchestrator</b>: (tokens: 67)</div>
-
-[..snippet_notes_for_files:67..]
-
-
-</div>
-
-<div style="background-color:lightcyan; padding: 5px; border-bottom: 1px dotted grey">
-<div>[5] <b>orchestrator</b>: (tokens: 54)</div>
-
-These are prior issues found:
-
-* error: The route details provided are generic and lack specific information such as train numbers, departure times, and where to change trains, which are essential for planning a trip without internet access.
-
----
-Please fix the issues and rewrite the answer.
-
-</div>
-
-[... reply text omitted, see the log file ...]
 
 ### Comparing to GPT-4-turbo answer using system default prompt
 
@@ -478,15 +450,15 @@ This work is supported by the Data Science and Machine Learning Group at [Zillow
 
 # Citation
 
-Please consider citing our work if you reference to our work or use the data or code in this repo.
+Please cite our work if you reference to our work or use the data or code in this repo.
 
 ```
 @software{taogpt,
   title = {TaoGPT},
   author = {Quock, Winston},
-  url = {https://github.com/TBD/TaoGPT},
-  version = {pre-release},
-  year = {2023},
-  month = {10},
+  url = {https://github.com/zillow/taogpt},
+  version = {0.1.0},
+  year = {2024},
+  month = {04},
 }
 ```
