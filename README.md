@@ -404,7 +404,11 @@ Example command-line invocation with a simple arithmetic problem:
 $ export OPENAI_API_KEY="...your OpenAI key..."
 $ export OPENAI_API_BASE="https://api.openai.com/v1" # or you OPENAI_API_BASE URL
 $ mkdir /tmp/taogpt_outputs # directory where output files go to.
+
+# can use command-line to pass in short task problem.
 $ taogpt -p /tmp/taogpt_outputs "What's the 51st fibonacci number?"
+
+# open the log file /tmp/taogpt_outputs/taogpt_log.md in your Markdown viewer
 ```
 
 The command-line tool will print out (abbreviated) log in the console. A file logging the problem solving
@@ -413,13 +417,18 @@ by any Markdown viewer. Users are recommended to view the Markdown log files for
 contain any Tao-generated files organized by directory paths.
 
 ```shell
+# assuming you store your OpenAI credential in ~/my_openai.ini file like this:
 $ cat ~/my_openai.ini
 [DEFAULT]
 OPENAI_API_KEY=...your OpenAI key...
 OPENAI_API_BASE=https://api.openai.com/v1
 
+# create a Markdown file for the (long) task problem:
+$ echo "I plan to relocate to San Francisco Bay Area next month. Where should I settle?" > /tmp/example.md
+
 $ mkdir /tmp/taogpt_outputs # directory where output files go to.
-$ taogpt -C ~/my_openai.ini -p /tmp/taogpt_outputs "I plan to relocate to San Francisco Bay Area next month. Where should I settle?"
+$ taogpt -C ~/my_openai.ini -p /tmp/taogpt_outputs @/tmp/example.md
+# open the log file /tmp/taogpt_outputs/taogpt_log.md in your Markdown viewer
 ```
 
 ## Web UI interface
@@ -454,10 +463,9 @@ Please cite our work if you reference to our work or use the data or code in thi
 
 ```
 @software{taogpt,
-  title = {TaoGPT},
+  title = {TaoGPT: Template-guided Autoregressive Orchestrator for General Problem Tackling},
   author = {Quock, Winston},
   url = {https://github.com/zillow/taogpt},
-  version = {0.1.0},
   year = {2024},
   month = {04},
 }
