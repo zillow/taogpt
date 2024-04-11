@@ -175,10 +175,7 @@ log can be found [here](/examples/gpt-4/travel-planning.log.md).
 
 More examples are in the [examples folder](/examples).
 
-
-# Final path history
-
-</div>
+### TaoGPT final trajectory
 
 <div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
 <div>[0] <b>user</b>: </div>
