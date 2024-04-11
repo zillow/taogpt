@@ -77,35 +77,15 @@ None. I'm done.
     assert step.description == '22'
 
 
-def test_parse_error_report_with_blame_list(logger):
-    step = GiveUpStep(previous=None, description="""
-{
-  "errors": {
-      "Incorrect placement of numbers": ["at step#4: response to Fill in the missing numbers in the first row",
-                                         "at step#7: response to Fill in the missing numbers in the second row",
-                                         "at step#10: response to Fill in the missing numbers in the third row"]
-  },
-  "warnings": {}
-}""", role='tao')
-
-    assert step.description.strip() == """
-Incorrect placement of numbers:
-* fatal at [step#4: response to Fill in the missing numbers in the first row]
-* fatal at [step#7: response to Fill in the missing numbers in the second row]
-* fatal at [step#10: response to Fill in the missing numbers in the third row]
-""".strip()
-
-
 def test_parse_error_report_with_blame_string(logger):
     step = GiveUpStep(previous=None, description="""
 {
-  "errors": {
-      "Incorrect placement of numbers": "at step#4: response to Fill in the missing numbers in the first row"
-  },
-  "warnings": {}
+    "Placement of numbers": {
+      "error": "Incorrect placement of numbers",
+      "blame": "step#4: response to Fill in the missing numbers in the first row"
+    }
 }""", role='tao')
 
     assert step.description.strip() == """
-Incorrect placement of numbers:
-* fatal at [step#4: response to Fill in the missing numbers in the first row]
+* error: Incorrect placement of numbers at [step#4: response to Fill in the missing numbers in the first row]
 """.strip()

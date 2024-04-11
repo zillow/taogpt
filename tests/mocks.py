@@ -69,9 +69,11 @@ def logger():
 
 
 def create_orchestrator(llm: MockLLM, logger: MarkdownLogger, check_final=True):
-    return Orchestrator(
+    orchestrator = Orchestrator(
         config=Config(check_final=check_final),
         llm=llm,
         markdown_logger=logger,
         prompts=PromptDb.load_defaults()
     )
+    orchestrator.config.pause_on_backtrack = False
+    return orchestrator

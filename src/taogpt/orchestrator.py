@@ -70,7 +70,7 @@ class Orchestrator(Executor):
         return self._markdown_logger
 
     @property
-    def chain(self) -> _t.List[Step]:
+    def chain(self) -> list[Step]:
         return self._chain
 
     @property

@@ -36,6 +36,7 @@ def test_check_final_solution_success(logger):
             return "Here is your answer"
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
+    orchestrator.config.verification_votes = 2
     step.eval(orchestrator)
     assert len(llm.conversation_sequence) == 5
     assert llm.conversation_sequence[0][0] == 'summarize'
