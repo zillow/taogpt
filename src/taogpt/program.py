@@ -890,7 +890,7 @@ class ExpandableStep(Step):
 
     def ask_for_intuition(self, executor: Executor) -> Step|None:
         prompts: list[tuple[str, str]] = executor.show_conversation_thread(
-            with_header=False, with_extras=True)
+            with_header=False, with_extras=True, except_step=self)
         prompt_db = executor.prompts
         prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_proceed_intuitively.format(step=self.step_name)))
         prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_notes_for_files))
@@ -907,12 +907,6 @@ class ExpandableStep(Step):
                 if len(intuition) == 0:
                     return None
 
-                if executor.is_first_solving_expansion():
-                    intuition = f"""{intuition}
-
-### {NEXT_I_WANT_TO_WORK_AT}:
-None. This is the final step.
-"""
                 match: re.Match = step_type_re.search(intuition)
                 response_step_name = f"response to {self.step_name}"
                 if match is not None:
