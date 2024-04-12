@@ -570,10 +570,11 @@ def identify_culprits(
     # step: [issue desc with level]
     culprits: dict[Step, list[str]] = _defaultdict(list)
     for i, step in enumerate(executor.chain):
+        step = _t.cast(Step, step)
         for (step_num, step_desc), issues_of_step in blames.items():
             if step_num == i or _utils.normalized_levenstein_distance(step.step_name, step_desc) < 0.05:
                 if _utils.safe_is_instance(step, (FixableStep, TaoReplyStep)):
-                    step.record_criticisms(issues_of_step)
+                    _t.cast(FixableStep, step).record_criticisms(issues_of_step)
                 if _utils.safe_is_instance(step, SummarizeStep):
                     n_fatals = sum(issue.startswith("fatal:") for issue in issues_of_step)
                     if n_fatals > 0:
