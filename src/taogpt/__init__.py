@@ -129,6 +129,10 @@ class Executor(_abc.ABC):
     def chain(self) -> list[StepABC]:
         pass
 
+    def previous_step(self, step: StepABC) -> StepABC|None:
+        i = self.chain.index(step)
+        return self.chain[i-1] if i > 0 and i < len(self.chain) else None
+
     @property
     @_abc.abstractmethod
     def logger(self) -> MarkdownLogger:
@@ -179,8 +183,7 @@ class Executor(_abc.ABC):
 
 class StepABC(_abc.ABC):
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str):
-        self.previous = previous
+    def __init__(self, *, description: str, role: str):
         self.description = _parsing.at_step_re.sub('', description).strip()
         self.role = role
         self._step_name = None

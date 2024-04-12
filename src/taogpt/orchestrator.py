@@ -85,7 +85,7 @@ class Orchestrator(Executor):
     def start(self, task: str | Step):
         self.log_configs()
         if _utils.safe_is_instance(task, str):
-            root_step = PresentTaskStep(previous=None, description=task, role=ROLE_USER)
+            root_step = PresentTaskStep(description=task, role=ROLE_USER)
         elif _utils.safe_is_instance(task, PresentTaskStep):
             root_step = task
         else:
@@ -94,7 +94,7 @@ class Orchestrator(Executor):
         self.reset()
         self._chain.append(root_step)
         if self.config.analyze_first:
-            init_analysis_step = AnalysisStep(previous=root_step, description='', role=ROLE_ORCHESTRATOR)
+            init_analysis_step = AnalysisStep(description='', role=ROLE_ORCHESTRATOR)
             self._chain.append(init_analysis_step)
         self._execute_with_backtracking()
 
@@ -151,7 +151,7 @@ class Orchestrator(Executor):
                     perform_backtracking(backtrack)
         except UnsolvableError as e:
             prev: Step|None = self._chain[-1] if len(self._chain) > 0 else None
-            self._chain.append(SummarizeStep(previous=prev, description=str(e), role=ROLE_TAO))
+            self._chain.append(SummarizeStep(description=str(e), role=ROLE_TAO))
 
     def backtrack_to(self, step_number: int):
         if step_number < 0 or step_number >= len(self._chain):
@@ -160,15 +160,19 @@ class Orchestrator(Executor):
         self._execute_with_backtracking()
 
     def backtrack(self, backtrack: Backtrack):
-        last_step: Step|None = None
+        backtrack_from = -1
         for i in range(len(self.chain)):
-            last_step = self.chain[i]
-            if last_step is backtrack.blame: # found the culprit
+            if self.chain[i] is backtrack.blame: # found the culprit
+                backtrack_from = i
                 break
 
-        while last_step is not None and not (
-                _utils.safe_is_instance(last_step, ExpandableStep) and last_step.retryable(self.config)):
-            last_step = last_step.previous
+        last_step: Step|None = None
+        while 0 <= backtrack_from < len(self.chain):
+            step = self.chain[backtrack_from]
+            if _utils.safe_is_instance(step, ExpandableStep) and step.retryable(self.config):
+                last_step = step
+                break
+            backtrack_from -= 1
 
         if last_step is None:
             self.logger.log_debug(f"Cannot find culprit step: {backtrack.blame}")
@@ -249,13 +253,13 @@ class Orchestrator(Executor):
         if start_solving:
             work_prompt = self.prompts.tao_proceed
             first_expansion = self.config.initial_expansion if start_solving else self.config.first_expansion
-            work_next_step = ProceedStep(previous=step, description=work_prompt, role=ROLE_ORCHESTRATOR,
+            work_next_step = ProceedStep(description=work_prompt, role=ROLE_ORCHESTRATOR,
                                          first_expansion=first_expansion,
                                          max_expansion=self.config.max_search_expansion)
             work_next_step.set_step_name("start working on the problem")
             self._chain.append(work_next_step)
         else:
-            ask_next_step = NextStep(previous=step, description='', role=ROLE_ORCHESTRATOR)
+            ask_next_step = NextStep(description='', role=ROLE_ORCHESTRATOR)
             self._chain.append(ask_next_step)
 
     def is_first_solving_expansion(self):
@@ -280,13 +284,12 @@ class Orchestrator(Executor):
                     break
             if is_direct_answer_only: # replace
                 last_step.set_visible_in_chain(False)
-                final_answer_step = SummarizeStep(previous=self._chain[-1],
-                                                  description=last_step.description,
+                final_answer_step = SummarizeStep(description=last_step.description,
                                                   role=ROLE_TAO)
                 self._chain.append(final_answer_step)
                 return
 
-        summarize_step = SummarizeStep(previous=self.chain[-1], description='', role=ROLE_TAO)
+        summarize_step = SummarizeStep(description='', role=ROLE_TAO)
         self._chain.append(summarize_step)
 
     def ask_questions(self, questions: list[str]) -> dict[str, str]:

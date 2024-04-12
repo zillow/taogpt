@@ -27,13 +27,8 @@ def add_files_to_prompts(executor, prompts, role=ROLE_ORCHESTRATOR) -> dict[str,
 
 class Step(StepABC):
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str, **_):
-        super().__init__(previous=previous, description=description, role=role)
-
-    @classmethod
-    def create(cls, prev_step: StepABC, step_def: str, role: str, config: Config) -> _t.Self:
-        _ = Config
-        return cls(previous=prev_step, description=step_def, role=role)
+    def __init__(self, *, description: str, role: str, **_):
+        super().__init__(description=description, role=role)
 
     @property
     def step_title(self) -> str:
@@ -117,8 +112,8 @@ class FixableStep(Step):
 
 class AnalysisStep(Step):
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str):
-        super().__init__(previous=previous, description=description, role=role)
+    def __init__(self, *, description: str, role: str):
+        super().__init__(description=description, role=role)
         self._analyzed = False
 
     @property
@@ -147,8 +142,8 @@ class AnalysisStep(Step):
 
 class TaoReplyStep(Step):
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str, **_):
-        super().__init__(previous=previous, description=description, role=role)
+    def __init__(self, *, description: str, role: str, **_):
+        super().__init__(description=description, role=role)
         self._criticisms: list[str] = list()
         sections = parse_sections(self.description)
         self.description = sections[FREE_TEXT]
@@ -168,9 +163,9 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
     def step_title(self) -> str:
         return DirectAnswerStep.TYPE_SPEC
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str, is_final_step=False):
+    def __init__(self, *, description: str, role: str, is_final_step=False):
         description = at_step_re.sub('', description).strip()
-        super().__init__(previous=previous, description=description, role=role)
+        super().__init__(description=description, role=role)
         self.is_final_step = is_final_step
         self._n_tries = 1 # already evaluated once since the description is the result
         self._previous_contents: list[tuple[str, dict]] = []
@@ -225,8 +220,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                 response = _utils.str_or_blank(response)
                 if not response.startswith(f"# {self.TYPE_SPEC}"):
                     response = f"# {self.TYPE_SPEC}\n\n" + response
-                dummy = parse_to_step(_t.cast(Step, self.previous), response, executor.config, working_on=self.step_name,
-                                      limit_to={self.__class__})
+                dummy = parse_to_step(response, executor.config, working_on=self.step_name, limit_to={self.__class__})
                 self.build(f"{dummy.description}\n\n{dummy.extras}", next_step=self.next_step)
                 self._fixed_file_contents = False
                 self.fix_overridden_files(executor)
@@ -244,7 +238,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         if not _utils.is_blank(self.next_step) and not self.is_final_step:
             prompt_db: PromptDb  = executor.prompts
             work_prompt = prompt_db.tao_proceed_to_step.format(step=self.next_step)
-            next_step = ProceedStep(previous=self, description=work_prompt, role=ROLE_ORCHESTRATOR)
+            next_step = ProceedStep(description=work_prompt, role=ROLE_ORCHESTRATOR)
             next_step.set_step_name(self.next_step)
             return next_step
         return None
@@ -330,7 +324,7 @@ class GiveUpStep(TaoReplyStep):
     def step_title(self) -> str:
         return GiveUpStep.TYPE_SPEC
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str):
+    def __init__(self, *, description: str, role: str):
         # issue: (level, [step desc])
         issues, _ = parse_issue_report(description, None)
         report_lines = []
@@ -339,7 +333,7 @@ class GiveUpStep(TaoReplyStep):
                 continue
             report_lines.extend([f"* {level}: {issue} at [step#{step_num}: {step_desc}]"
                                     for step_num, step_desc in steps])
-        super().__init__(previous=previous, description='\n'.join(report_lines), role=role)
+        super().__init__(description='\n'.join(report_lines), role=role)
         self.issues = issues
 
     def eval_only(self, executor):
@@ -348,20 +342,17 @@ class GiveUpStep(TaoReplyStep):
             if len(culprits) > 0:
                 repair_or_backtrack(executor, culprits)
                 # No Backtrack raised, we have fixed all errors, pop itself
-                assert _utils.safe_is_instance(self.previous, ExpandableStep)
+                previous = executor.previous_step(self)
+                assert previous is not None and _utils.safe_is_instance(previous, ExpandableStep)
                 assert executor.chain[-1] is self
                 executor.chain.pop(-1)
-                _t.cast(ExpandableStep, self.previous).choices.remove(self)
-                return self.previous
+                _t.cast(ExpandableStep, previous).choices.remove(self)
+                return previous
         raise Backtrack(f"Problem or step is unsolvable. I gave up.", self)
 
 
 class StepByStepPlan(TaoReplyStep):
     TYPE_SPEC = HERE_IS_MY_STEP_BY_STEP_PLAN
-
-    @classmethod
-    def create(cls, prev_step: StepABC, step_def: str, role: str, config: Config) -> _t.Self:
-        return cls(previous=prev_step, description=step_def, role=role)
 
     @property
     def step_title(self) -> str:
@@ -371,8 +362,8 @@ class StepByStepPlan(TaoReplyStep):
         desc = ';'.join([_utils.safe_subn(step.description, 10) for step in self._steps.values()])
         return f"[{desc}]"
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str):
-        super().__init__(previous=previous, description=description, role=role)
+    def __init__(self, *, description: str, role: str):
+        super().__init__(description=description, role=role)
         self._steps = parse_step_by_step_plan(self.description)
         self._update_file_step: StepDescriptor|None = None
         self.first_step = f"{self._steps[1].description}" # 1-base
@@ -382,18 +373,6 @@ class StepByStepPlan(TaoReplyStep):
                               for i, step in steps.items()])
         step_desc = stringyfy(self._steps).strip()
         self.description = f"""\n{step_desc}\n"""
-        previous_plan: StepByStepPlan|None = None
-        while previous is not None:
-            if isinstance(previous, StepByStepPlan):
-                previous_plan = previous
-                break
-            previous = previous.previous
-        if previous_plan is not None:
-            previous_plan_steps = stringyfy(previous_plan._steps).strip().lower()
-            distance = _utils.normalized_levenstein_distance(previous_plan_steps, step_desc.lower())
-            if distance < 0.2:
-                raise ParseError(f"This step-by-step plan looks like repetition of the plan "
-                                 f"for step {previous.step_name}. Come up with a real plan for this step.")
 
     @property
     def steps(self) -> dict[int, StepDescriptor]:
@@ -411,7 +390,7 @@ class StepByStepPlan(TaoReplyStep):
         prompt_db: PromptDb  = executor.prompts
         work_prompt = prompt_db.tao_proceed_to_step.format(step=self.first_step)
         # note: we insert the update file step at the end, this cannot be update file step.
-        next = ProceedStep(previous=self, description=work_prompt, role=ROLE_ORCHESTRATOR)
+        next = ProceedStep(description=work_prompt, role=ROLE_ORCHESTRATOR)
         next.set_step_name(self.first_step)
         return next
 
@@ -419,8 +398,8 @@ class StepByStepPlan(TaoReplyStep):
 class SummarizeStep(TaoReplyStep, FixableStep):
     TYPE_SPEC = SUMMARIZE_FINAL_ANSWER
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str=ROLE_TAO):
-        super().__init__(previous=previous, description=description, role=role)
+    def __init__(self, *, description: str, role: str = ROLE_TAO):
+        super().__init__(description=description, role=role)
         self._n_tries = 0
         self._evaluated = _utils.str_or_blank(self.description) != ''
         self._pending_culprits: dict[Step, list[str]]|None = None
@@ -644,8 +623,8 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
     def step_title(self) -> str:
         return AskPythonGenieStep.TYPE_SPEC
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str):
-        super().__init__(previous=previous, description=description, role=role)
+    def __init__(self, *, description: str, role: str):
+        super().__init__(description=description, role=role)
         self._n_tries = 0
         self._build(self.description)
 
@@ -740,8 +719,8 @@ class AskQuestionStep(TaoReplyStep):
     def step_title(self) -> str:
         return AskQuestionStep.TYPE_SPEC if self._answers is None else 'Tao asked and user replied:'
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str):
-        super().__init__(previous=previous, description=description, role=role)
+    def __init__(self, *, description: str, role: str):
+        super().__init__(description=description, role=role)
         self._answers: list[str]|None = None
         self._need_consolidate = True # always consolidate once
 
@@ -768,16 +747,13 @@ class AskQuestionStep(TaoReplyStep):
                 self._answers = answers
             else:
                 self._answers = dict()
-            previous = self.previous
+            previous = executor.previous_step(self)
             if _utils.safe_is_instance(previous, ExpandableStep):
                 previous = _t.cast(ExpandableStep, previous)
                 assert executor.chain[-1] is self
                 executor.chain.pop(-1)
                 if len(questions) > 0:
                     executor.chain.insert(len(executor.chain)-1, self)
-                    grandparent = previous.previous
-                    self.previous = grandparent
-                    previous.previous = self
                     previous.reset_choices()
                     if _utils.str_or_blank(self.step_name) != '' and not self.step_name.startswith("ask question"):
                         self.set_step_name(f"ask questions before {self.step_name}", forced=True)
@@ -796,8 +772,7 @@ class AskQuestionStep(TaoReplyStep):
         return reply
 
 
-def parse_to_step(prev_step: Step|None, response: str, config: Config,
-                  working_on: str = None, limit_to: set=None) -> Step:
+def parse_to_step(response: str, config: Config, working_on: str = None, limit_to: set = None) -> Step:
     step_type, step_def = parse_step_type_spec(response)
     if step_type is None:
         raise ParseError(f"Invalid Tao response. Missing header.")
@@ -817,7 +792,7 @@ def parse_to_step(prev_step: Step|None, response: str, config: Config,
     if limit_to is not None and step_class not in limit_to:
         allowed_specs = ', '.join([f"`# {cls.TYPE_SPEC}`" for cls in limit_to])
         raise ParseError(f"Unexpected strategy `{step_type.TYPE_SPEC}`, only {allowed_specs} are allowed")
-    step = step_class.create(prev_step, step_def, role=ROLE_TAO, config=config)
+    step = step_class(description=step_def, role=ROLE_TAO)
     if working_on is not None:
         step.set_step_name(working_on)
     return step
@@ -825,20 +800,15 @@ def parse_to_step(prev_step: Step|None, response: str, config: Config,
 
 class ExpandableStep(Step):
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str,
-                 choices: list[Step]=None,
-                 first_expansion: int=1,
-                 incremental_expansion: int=1,
-                 max_expansion: int=4):
-        super().__init__(previous=previous, description=description, role=role)
+    def __init__(self, *, description: str, role: str, choices: list[Step] = None, first_expansion: int = 1,
+                 incremental_expansion: int = 1, max_expansion: int = 4):
+        super().__init__(description=description, role=role)
         self.choices = choices if choices is not None else []
         self.first_expansion = first_expansion
         self.incremental_expansion = incremental_expansion
         self.max_expansion = max_expansion
         self.set_visible_in_chain(False)
         self._ptr = 0
-        for next_step in self.choices:
-            next_step.previous = self
 
     def reset_choices(self):
         self.choices.clear()
@@ -905,7 +875,7 @@ class ExpandableStep(Step):
         return ''
 
     def parse_reply(self, plan, executor: Executor) -> Step:
-        choice = parse_to_step(self, plan, config=executor.config, working_on=f"response to {self.step_name}")
+        choice = parse_to_step(plan, config=executor.config, working_on=f"response to {self.step_name}")
         return choice
 
     def build_prompts(self, executor: Executor) \
@@ -946,9 +916,9 @@ None. This is the final step.
                 match: re.Match = step_type_re.search(intuition)
                 response_step_name = f"response to {self.step_name}"
                 if match is not None:
-                    step = parse_to_step(self, intuition, executor.config, working_on=response_step_name)
+                    step = parse_to_step(intuition, executor.config, working_on=response_step_name)
                 else:
-                    step = DirectAnswerStep.create(self, intuition, role=ROLE_TAO, config=executor.config)
+                    step = DirectAnswerStep(description=intuition, role=ROLE_TAO)
                     step.set_step_name(response_step_name)
                 return step
             except Exception as e:
@@ -1014,7 +984,7 @@ None. This is the final step.
         indices = self.sort_rankings(rankings_one_based, n_existing_choices)
         executor.logger.log_debug(f"\n**Sorted indices**: {indices} **scores**:\n{final_score_repr}\n\n")
         if len(indices) == 0:
-            raise Backtrack(f"No valid plan found for this step.", self.previous)
+            raise Backtrack(f"No valid plan found for this step.", executor.previous_step(self))
         if n_existing_choices is not None and n_existing_choices > 0:
             indices = list(range(n_existing_choices)) + indices
         self.choices = [self.choices[i] for i in indices]
@@ -1058,7 +1028,7 @@ None. This is the final step.
         if self._ptr < self.max_expansion:
             return
         # should not happen due to the retryable(), this is just defensive programming
-        raise Backtrack("No more alternative", blame=self.previous)
+        raise Backtrack("No more alternative", blame=executor.previous_step(self))
 
     def eval_only(self, executor: Executor) -> Step | None:
         old_length = len(self.choices)
@@ -1080,8 +1050,7 @@ None. This is the final step.
         if first_expand and config.pause_after_initial_solving_expansion:
             raise Pause("Pause after initial solving expansion", self)
         if len(self.choices) == 0 or self._ptr >= len(self.choices):
-            logger.log_debug(f"{executor.step_id(self)}/'{self.step_name}' no more options: {self._ptr}/{len(self.choices)}")
-            raise Backtrack('No viable options.', blame=self.previous)
+            raise Backtrack('No viable options.', blame=executor.previous_step(self))
         return self.choices[self._ptr]
 
     def should_try_intuition(self, executor: Executor):
@@ -1142,11 +1111,10 @@ class NextStep(Step):
         if decision == NEXT_I_WANT_TO_WORK_AT:
             step_id, step_name = parse_step_name(answer)
             if _utils.is_blank(step_name) or step_name.lower().startswith('none'):
-                return SummarizeStep(previous=self, description='', role=ROLE_TAO)
+                return SummarizeStep(description='', role=ROLE_TAO)
             work_prompt = prompt_db.tao_proceed_to_step.format(step=step_name)
-            choices = [parse_to_step(self, plan, config=config, working_on=step_name)] if plan is not None else []
+            choices = [parse_to_step(plan, config=config, working_on=step_name)] if plan is not None else []
             proceed = ProceedStep(
-                previous=self,
                 description=work_prompt,
                 role=ROLE_ORCHESTRATOR,
                 first_expansion=config.first_expansion,
@@ -1156,7 +1124,7 @@ class NextStep(Step):
             proceed.set_step_name(step_name)
             return proceed
         else:
-            return parse_to_step(self, answer, config=config, working_on=f"response to {self.step_name}")
+            return parse_to_step(answer, config=config, working_on=f"response to {self.step_name}")
 
 
 class PresentTaskStep(Step):
@@ -1165,8 +1133,8 @@ class PresentTaskStep(Step):
     def step_title(self) -> str:
         return ""
 
-    def __init__(self, *, previous: StepABC|None, description: str, role: str):
-        super().__init__(previous=previous, description=description, role=role)
+    def __init__(self, *, description: str, role: str):
+        super().__init__(description=description, role=role)
         sections: dict[str, str] = parse_sections(self.description)
         extracted_contents = gather_file_contents(sections, pop_file_sections=True)
         self._files: dict[str, taogpt.GeneratedFile] = {
