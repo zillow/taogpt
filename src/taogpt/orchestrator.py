@@ -28,6 +28,7 @@ class Orchestrator(Executor):
         self._sage_llm = sage_llm
 
         self._chain: list[Step] = []
+        self._waiting: list[Step] = []
         self._reverted_steps: list[Step]|None = None
         self._pending_backtrack: Backtrack|None = None
         self._create_python_scope()
@@ -46,7 +47,7 @@ class Orchestrator(Executor):
     def __repr__(self) -> str:
         llm_repr = repr(self.llm)
         sage_llm_repr = repr(self.sage_llm)
-        n = len(self._chain)
+        n = len(self.chain)
         return f"{self.__class__.__name__}(LLMs={llm_repr}/{sage_llm_repr},chain={n})"
 
     @property
@@ -85,17 +86,17 @@ class Orchestrator(Executor):
     def start(self, task: str | Step):
         self.log_configs()
         if _utils.safe_is_instance(task, str):
-            root_step = PresentTaskStep(previous=None, description=task, role=ROLE_USER)
+            root_step = PresentTaskStep(description=task, role=ROLE_USER)
         elif _utils.safe_is_instance(task, PresentTaskStep):
             root_step = task
         else:
             raise ValueError(f"Expecting string description of task "
                              f"or a PresentTaskStep object, got {type(task)}")
         self.reset()
-        self._chain.append(root_step)
+        self.chain.append(root_step)
         if self.config.analyze_first:
-            init_analysis_step = AnalysisStep(previous=root_step, description='', role=ROLE_ORCHESTRATOR)
-            self._chain.append(init_analysis_step)
+            init_analysis_step = AnalysisStep(description='', role=ROLE_ORCHESTRATOR)
+            self.chain.append(init_analysis_step)
         self._execute_with_backtracking()
 
     def log_configs(self, logger: MarkdownLogger=None):
@@ -136,7 +137,7 @@ class Orchestrator(Executor):
                     backtrack = b2
 
         try:
-            while len(self._chain) > 0:
+            while len(self.chain) > 0:
                 try:
                     if self._pending_backtrack is not None:
                         backtrack = self._pending_backtrack
@@ -150,25 +151,28 @@ class Orchestrator(Executor):
                         raise Pause(f"Backtracking is requested for {backtrack}", backtrack.blame)
                     perform_backtracking(backtrack)
         except UnsolvableError as e:
-            prev: Step|None = self._chain[-1] if len(self._chain) > 0 else None
-            self._chain.append(SummarizeStep(previous=prev, description=str(e), role=ROLE_TAO))
+            self.chain.append(SummarizeStep(description=str(e), role=ROLE_TAO))
 
     def backtrack_to(self, step_number: int):
-        if step_number < 0 or step_number >= len(self._chain):
-            raise ValueError(f"step number must be in [0, {len(self._chain)-1}]")
-        self.backtrack(Backtrack("Manual backtrack", self._chain[step_number]))
+        if step_number < 0 or step_number >= len(self.chain):
+            raise ValueError(f"step number must be in [0, {len(self.chain)-1}]")
+        self.backtrack(Backtrack("Manual backtrack", self.chain[step_number]))
         self._execute_with_backtracking()
 
     def backtrack(self, backtrack: Backtrack):
-        last_step: Step|None = None
+        backtrack_from = -1
         for i in range(len(self.chain)):
-            last_step = self.chain[i]
-            if last_step is backtrack.blame: # found the culprit
+            if self.chain[i] is backtrack.blame: # found the culprit
+                backtrack_from = i
                 break
 
-        while last_step is not None and not (
-                _utils.safe_is_instance(last_step, ExpandableStep) and last_step.retryable(self.config)):
-            last_step = last_step.previous
+        last_step: Step|None = None
+        while 0 <= backtrack_from < len(self.chain):
+            step = self.chain[backtrack_from]
+            if _utils.safe_is_instance(step, ExpandableStep) and step.retryable(self.config):
+                last_step = step
+                break
+            backtrack_from -= 1
 
         if last_step is None:
             self.logger.log_debug(f"Cannot find culprit step: {backtrack.blame}")
@@ -176,7 +180,8 @@ class Orchestrator(Executor):
 
         reverted_steps = []
         while len(self.chain) > 0 and self.chain[-1] is not last_step:
-            reverted_steps.append(self._chain.pop(-1))
+            reverted_steps.append(self.chain.pop(-1))
+        self._waiting.clear() # as we backtrack, cancel all waiting steps
         if len(self.chain) == 0:
             raise UnsolvableError('Fail to solve! No more viable options')
         self._reverted_steps = reversed(reverted_steps)
@@ -196,19 +201,25 @@ class Orchestrator(Executor):
                 self.request_pause(None)
                 raise Pause(reason, self.chain[-1])
             self.check_token_usages()
-            last_step = self._chain[-1]
+            last_step = self.chain[-1]
             if (_utils.safe_is_instance(last_step, DirectAnswerStep)
                     and _t.cast(DirectAnswerStep, last_step).is_final_step):
                 self.summarize_final_answer()
+                self._dequeue_waiting_step()
                 continue
             new_step = last_step.eval(self)
             if _utils.safe_is_instance(last_step, SummarizeStep) and new_step is None: # and successfully eval/checked
                 return
             if new_step is not None:
                 if new_step is not self.chain[-1]:
-                    self._chain.append(new_step)
-            else:
+                    self._waiting.append(new_step)
+            elif len(self._waiting) == 0:
                 self.next_step()
+            self._dequeue_waiting_step()
+
+    def _dequeue_waiting_step(self):
+        if len(self._waiting) > 0:
+            self.chain.append(self._waiting.pop(0)) # dequeue first waiting
 
     def check_token_usages(self):
         if 0 < self.config.max_tokens <= self.llm.total_tokens:
@@ -220,7 +231,7 @@ class Orchestrator(Executor):
 
     def step_id(self, step):
         assert step is not None
-        for i, elem in enumerate(self._chain):
+        for i, elem in enumerate(self.chain):
             if elem is step:
                 return i
 
@@ -230,8 +241,8 @@ class Orchestrator(Executor):
                                  stop_at: StepABC=None) \
             -> list[tuple[str, str]]:
         conversation: list[tuple[str, str]] = []
-        for i, step in enumerate(self._chain):
-            if not step.visible_in_chain and i < len(self._chain) - 1:
+        for i, step in enumerate(self.chain):
+            if not step.visible_in_chain and i < len(self.chain) - 1:
                 continue # skip the expandable step except the last one
             if step is except_step:
                 if step is stop_at:
@@ -245,18 +256,17 @@ class Orchestrator(Executor):
 
     def next_step(self):
         start_solving = self.is_first_solving_expansion()
-        step = self._chain[-1]
         if start_solving:
             work_prompt = self.prompts.tao_proceed
             first_expansion = self.config.initial_expansion if start_solving else self.config.first_expansion
-            work_next_step = ProceedStep(previous=step, description=work_prompt, role=ROLE_ORCHESTRATOR,
+            work_next_step = ProceedStep(description=work_prompt, role=ROLE_ORCHESTRATOR,
                                          first_expansion=first_expansion,
                                          max_expansion=self.config.max_search_expansion)
             work_next_step.set_step_name("start working on the problem")
-            self._chain.append(work_next_step)
+            self._waiting.append(work_next_step)
         else:
-            ask_next_step = NextStep(previous=step, description='', role=ROLE_ORCHESTRATOR)
-            self._chain.append(ask_next_step)
+            ask_next_step = NextStep(description='', role=ROLE_ORCHESTRATOR)
+            self._waiting.append(ask_next_step)
 
     def is_first_solving_expansion(self):
         for i, step in enumerate(self.chain):
@@ -267,27 +277,29 @@ class Orchestrator(Executor):
 
     def summarize_final_answer(self):
         last_step = self.chain[-1]
-        if _utils.safe_is_instance(last_step, SummarizeStep):
-            return
+        if _utils.safe_is_instance(last_step, SummarizeStep): # already has the summarize step as the last step
+            return None
 
         is_direct_answer_only = False
         if _utils.safe_is_instance(last_step, DirectAnswerStep):
-            for i in range(len(self._chain) - 2, -1, -1):
-                if _utils.safe_is_instance(self._chain[i], PresentTaskStep):
+            for i in range(len(self.chain) - 2, -1, -1):
+                if _utils.safe_is_instance(self.chain[i], PresentTaskStep):
                     is_direct_answer_only = True
                     break
-                elif _utils.safe_is_instance(self._chain[i], (DirectAnswerStep, AskPythonGenieStep, StepByStepPlan)):
+                elif _utils.safe_is_instance(self.chain[i], (DirectAnswerStep, AskPythonGenieStep, StepByStepPlan)):
                     break
             if is_direct_answer_only: # replace
-                last_step.set_visible_in_chain(False)
-                final_answer_step = SummarizeStep(previous=self._chain[-1],
-                                                  description=last_step.description,
-                                                  role=ROLE_TAO)
-                self._chain.append(final_answer_step)
-                return
+                final_answer_step = SummarizeStep(description='', role=ROLE_TAO)
+                self._waiting.append(final_answer_step)
+                return final_answer_step
 
-        summarize_step = SummarizeStep(previous=self.chain[-1], description='', role=ROLE_TAO)
-        self._chain.append(summarize_step)
+        files = GeneratedFile.collect_files(self.chain)
+        for file in files.keys():
+            finalize_file_step = FinalizeFileStep(description='', role=ROLE_TAO, file_name=file)
+            self._waiting.append(finalize_file_step)
+        summarize_step = SummarizeStep(description='', role=ROLE_TAO)
+        self._waiting.append(summarize_step)
+        return None
 
     def ask_questions(self, questions: list[str]) -> dict[str, str]:
         # for now just use the console input

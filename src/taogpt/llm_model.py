@@ -18,7 +18,7 @@ import taogpt.md_logging
 from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_TAO, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
 import taogpt.utils as _utils
 from . import LLM
-from taogpt.parsing import fix_fenced_block_backticks
+from taogpt.parsing import check_and_fix_fenced_blocks, ParseError
 
 _last_conversation: _t.List|None = None
 
@@ -188,12 +188,11 @@ class LangChainLLM(LLM):
             self._total_tokens += token_count
             return reply_content
         except Exception as e:
-            print(e)
             _time.sleep(3)
             raise e
 
     def invoke_llm(self, llm: _ChatOpenAI, messages: list[BaseMessage],
-                   max_tokens: int|None=None, return_context_token_usages=False):
+                   max_tokens: int|None=None, return_context_token_usages=False, fenced_block_fixes=0):
         context_tokens = 0
         for msg in messages:
             role = LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[ROLE_SYSTEM] # just in case we can't tell the role
@@ -209,7 +208,6 @@ class LangChainLLM(LLM):
                     max_tokens = None # let it reach the remaining allowance
                 assert max_tokens is None or max_tokens > 0, f"No more output tokens allowed: {max_tokens}"
 
-            total_context_tokens = 0
             to_be_sent = messages.copy()
             reply_content = ''
             while True:
@@ -234,18 +232,31 @@ class LangChainLLM(LLM):
         else:
             reply = llm.invoke(messages, max_tokens=max_tokens)
             reply_content = reply.content
-            if _fix_fenced_block_backticks_re.search(reply_content) is not None:
-                print(f"%%%%%%%%% LLM one call %%%%%%%%")
-                print(reply_content)
-                print("%%%%%%%%%%%%%%%%%")
-        reply_content = fix_fenced_block_backticks(reply_content)
+        try:
+            reply_content, _ = check_and_fix_fenced_blocks(reply_content)
+        except ParseError as e:
+            reply_tokens = self.count_tokens(reply_content)
+            self._logger.log(f"Corrupted Markdown fenced block detected: {e}. Reply tokens: {reply_tokens}")
+            if fenced_block_fixes >= 3:
+                # we don't re-raise ParseError here because we already retry a few times
+                raise ValueError(str(e))
+            sent = messages.copy()
+            if fenced_block_fixes > 0:
+                assert sent[-1].content.strip().startswith(CORRUPTED_RESPONSE_MARKER)
+                sent.pop(-1)
+                sent.pop(-1)
+            sent.append(ChatMessage(role=LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[ROLE_TAO],
+                                    content=reply_content))
+            sent.append(
+                ChatMessage(role=LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[ROLE_ORCHESTRATOR],
+                            content=f"{CORRUPTED_RESPONSE_MARKER}\n\n{e}\n\n"
+                                    f"Repeat the full response verbatim with the fenced blocks fixed."))
+            result = self.invoke_llm(
+                llm, sent, max_tokens=max_tokens,
+                return_context_token_usages=return_context_token_usages,
+                fenced_block_fixes=fenced_block_fixes + 1)
+            return (result[0], total_context_tokens + result[1]) if return_context_token_usages else result[0]
         _old = reply_content
-        if _fix_fenced_block_backticks_re.search(reply_content) is not None:
-            print(f"%%%%%%%%% fenced block fixed %%%%%%%%")
-            print(_old)
-            print("%%%%%%%%%%%%%%%%%")
-            print(reply_content)
-            print("%%%%%%%%%%%%%%%%%")
         reply_content = _utils.str_or_blank(reply_content)
         return (reply_content, total_context_tokens) if return_context_token_usages else reply_content
 
@@ -296,3 +307,6 @@ CONTINUATION_PROMPT = ("You reached output token limit in the last reply. "
                        "Do not prepend any preambles in your new reply. "
                        "My code will concatenate your previous outputs with your new outputs in one string 'as is'. "
                        "If the last output is indeed completed, then respond empty message only to inform my program")
+
+CORRUPTED_RESPONSE_MARKER = "Corrupted fenced block is found in your response above:"
+

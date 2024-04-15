@@ -67,7 +67,7 @@ def test_check_final_solution_failed(logger):
         assert False, f"Unexpected reason: {reason}"
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
-    _t.cast(DirectAnswerStep, step.previous)._n_tries = orchestrator.config.max_retries
+    _t.cast(DirectAnswerStep, orchestrator.previous_step(step))._n_tries = orchestrator.config.max_retries
     try:
         step.eval(orchestrator)
         assert False, "expecting Backtrack not raised"
@@ -102,12 +102,12 @@ def test_check_final_solution_parse_error(logger):
 def create_final_check_chain(reply, logger):
     llm = MockLLM(logger, reply_fn=reply)
     orchestrator = create_orchestrator(llm, logger, check_final=True)
-    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
+    step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = DirectAnswerStep(previous=step, description="This is an answer", role=ROLE_TAO)
+    step = DirectAnswerStep(description="This is an answer", role=ROLE_TAO)
     step.set_step_name('calculate total')
     orchestrator.chain.append(step)
-    step = SummarizeStep(previous=step, description="", role=ROLE_TAO)
+    step = SummarizeStep(description="", role=ROLE_TAO)
     orchestrator.chain.append(step)
     return step, llm, orchestrator
 
@@ -115,9 +115,9 @@ def create_final_check_chain(reply, logger):
 def test_need_full_expansion_at_first_expandable_step(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
-    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
+    step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(step)
     assert orchestrator.is_first_solving_expansion()
 
@@ -125,13 +125,13 @@ def test_need_full_expansion_at_first_expandable_step(logger):
 def test_need_full_expansion_at_first_expandable_step_followed_by_ask_step(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
-    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
+    step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(step)
-    step = AskQuestionStep(previous=step, description="I have a question", role=ROLE_TAO)
+    step = AskQuestionStep(description="I have a question", role=ROLE_TAO)
     orchestrator.chain.append(step)
-    step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(step)
     assert orchestrator.is_first_solving_expansion()
 
@@ -139,15 +139,15 @@ def test_need_full_expansion_at_first_expandable_step_followed_by_ask_step(logge
 def test_no_full_expansion_at_subsequent_expandable_steps(logger):
     llm = MockLLM(logger)
     orchestrator = create_orchestrator(llm, logger)
-    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
+    step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(step)
-    step = StepByStepPlan(previous=step, description=EXAMPLE_STEP_BY_STEP_PLAN, role=ROLE_TAO)
+    step = StepByStepPlan(description=EXAMPLE_STEP_BY_STEP_PLAN, role=ROLE_TAO)
     orchestrator.chain.append(step)
-    step = AskQuestionStep(previous=step, description="I have a question", role=ROLE_TAO)
+    step = AskQuestionStep(description="I have a question", role=ROLE_TAO)
     orchestrator.chain.append(step)
-    step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(step)
     assert not orchestrator.is_first_solving_expansion()
 
@@ -158,16 +158,16 @@ def test_backtracking(logger):
     orchestrator.config.ask_user_before_execute_codes = False
     orchestrator.config.max_search_expansion = 2
     orchestrator.config.max_retries = 1
-    step = PresentTaskStep(previous=None, description="This is a problem", role=ROLE_USER)
+    step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    proceed_step = ProceedStep(previous=step, description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    proceed_step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
     orchestrator.chain.append(proceed_step)
 
     code = f"""```python
 no_such_var * 123
 ```
     """
-    step = AskPythonGenieStep(previous=proceed_step, description=code, role=ROLE_TAO)
+    step = AskPythonGenieStep(description=code, role=ROLE_TAO)
     orchestrator.chain.append(step)
     proceed_step.choices = [step]
     try:
@@ -193,7 +193,7 @@ So, the first row becomes: 4 3 2 1
 ### NEXT_I_WANT_TO_WORK_AT:
 Fill in the second row
 """
-    step = parse_to_step(None, text, config=Config())
+    step = parse_to_step(text, config=Config())
     assert isinstance(step, DirectAnswerStep), str(type(step))
     assert not step.is_final_step
     assert step.next_step == 'Fill in the second row'
@@ -214,7 +214,7 @@ def test_parse_step_by_step_no_whys():
 ```
 This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must contain all of the numbers from 1 to 4 exactly once. We will fill in the rows one by one, making sure that each number appears exactly once in each row and column, and in each 2x2 square. This is a recursive, top-down approach to solving the puzzle.
 """
-    step = parse_to_step(None, text, config=Config())
+    step = parse_to_step(text, config=Config())
     assert isinstance(step, StepByStepPlan)
     assert step.first_step == 'Fill in the first row'
 
@@ -236,7 +236,7 @@ def test_python_genie_execution_error(logger):
 no_such_var * 123
 ```
     """
-    step = AskPythonGenieStep(previous=None, description=code, role=ROLE_TAO)
+    step = AskPythonGenieStep(description=code, role=ROLE_TAO)
     step.eval(orchestrator)
     assert '314.15' in step.description
     assert step.n_tries == 2

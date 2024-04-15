@@ -366,40 +366,6 @@ Let's backtrack and correct this error.
     assert restored == text
 
 
-def test_extract_markdown_content_with_file_type():
-    actual_snippet = """```python
-x = 123
-z = x * y
-```"""
-    content_type, content, snippet = extract_fenced_content(f"""
-{actual_snippet}
-    """)
-    assert content_type == 'python'
-    assert content == "x = 123\nz = x * y"
-    assert snippet == actual_snippet
-
-
-def test_extract_markdown_content_without_file_type():
-    actual_snippet = """```
-z = x * y
-```"""
-    content_type, content, snippet = extract_fenced_content(f"""
-{actual_snippet}
-    """)
-    assert content_type == ''
-    assert content == "z = x * y"
-    assert snippet == actual_snippet
-
-
-def test_extract_no_markdown_content():
-    content_type, content, snippet = extract_fenced_content(f"""
-z = x * y
-    """)
-    assert content_type is None
-    assert content is None
-    assert snippet is None
-
-
 def test_parse_sections_with_colons():
     text = """[at step: a step]
 
@@ -444,3 +410,192 @@ def test_prior_proposal_in_step_id_name():
         raise AssertionError(f"Expecting ParseError not raised. Got: '{result}'")
     except parsing.ParseError as e:
         assert "You tried to report error in other proposals" in str(e)
+
+
+def test_gather_file_sections_missing_path():
+    text = """Here is your file.
+    
+### FILE: 
+`templates/index.html` - The HTML template for the main page with a form to input the date.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+</html>
+```"""
+    try:
+        sessions = parsing.parse_sections(text)
+        parsing.gather_file_contents(sessions)
+        assert False, "Expecting ParseError not raised"
+    except parsing.ParseError:
+        pass
+
+
+def test_gather_file_sections():
+    text = """Here is your file.
+    
+### FILE: `templates/index.html` 
+The HTML template for the main page.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+</html>
+```"""
+    sessions = parsing.parse_sections(text)
+    results = parsing.gather_file_contents(sessions)
+    assert 'templates/index.html' in results
+    content_type, content, snippet, markdown_full_content = results['templates/index.html']
+    assert content_type == 'html'
+    assert content == """<!DOCTYPE html>
+<html lang="en">
+</html>"""
+    assert markdown_full_content == "The HTML template for the main page.\n\n"
+
+
+def test_gather_multi_file_sections():
+    text = """Here is your file.
+    
+### FILE: `templates/index.html` 
+The HTML template for the main page.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+</html>
+```
+
+### FILE: doc.md
+
+````markdown
+  some markdown text
+```
+  nested block
+```
+````
+"""
+    sessions = parsing.parse_sections(text)
+    results = parsing.gather_file_contents(sessions)
+    assert 'templates/index.html' in results
+    content_type, content, snippet, markdown_full_content = results['templates/index.html']
+    assert content_type == 'html'
+    assert content == """<!DOCTYPE html>
+<html lang="en">
+</html>"""
+    assert markdown_full_content == "The HTML template for the main page.\n\n"
+    assert 'doc.md' in results
+    content_type, content, snippet, markdown_full_content = results['doc.md']
+    assert content_type == 'markdown'
+    # ensure preservation of spaces
+    assert content == """  some markdown text
+```
+  nested block
+```"""
+
+
+def test_check_and_fix_fenced_block_extraction():
+    fixed, blocks = parsing.check_and_fix_fenced_blocks("""
+````markdown
+ a + b
+````11
+
+```text
+text
+
+```0
+trailing text
+""")
+
+    for i, (digest, block) in enumerate(blocks.items()):
+        if i == 0:
+            assert block[0] == """````markdown
+ a + b
+````"""
+        elif i == 1:
+            assert block[0] == """```text
+text
+
+```"""
+        else:
+            assert i <= 1, "Unexpected blocks extracted"
+
+
+def test_check_and_fix_fenced_block_collapsed():
+    fixed, blocks = parsing.check_and_fix_fenced_blocks("""
+````markdown
+a + b
+````11
+
+```text
+text
+```0
+trailing text
+""", collapse_blocks=True)
+
+    for i, (digest, block) in enumerate(blocks.items()):
+        if i == 0:
+            assert block[0] == """````markdown
+a + b
+````"""
+            assert digest in fixed
+            assert "a + b" not in fixed
+        elif i == 1:
+            assert block[0] == """```text
+text
+```"""
+        else:
+            assert i <= 1, "Unexpected blocks extracted"
+            assert digest in fixed
+            assert "text" not in fixed
+
+
+def test_check_and_fix_fenced_block_extraction_nested():
+    fixed, blocks = parsing.check_and_fix_fenced_blocks("""
+````markdown
+a + b
+
+```text
+text
+```0
+````11
+""")
+
+    for i, (digest, block) in enumerate(blocks.items()):
+        if i == 0:
+            assert block[0] == """````markdown
+a + b
+
+```text
+text
+```
+````"""
+        else:
+            assert i <= 1, "Unexpected blocks extracted"
+
+
+def test_check_and_fix_fenced_block_collapsed_with_nested():
+    fixed, blocks = parsing.check_and_fix_fenced_blocks("""
+````markdown
+a + b
+
+```text
+text
+```0
+````11
+""", collapse_blocks=True)
+
+    for i, (digest, block) in enumerate(blocks.items()):
+        if i == 0:
+            assert block[0] == """````markdown
+a + b
+
+```text
+text
+```
+````"""
+            assert digest in fixed
+            assert "a + b" not in fixed
+            assert "text" not in fixed
+        else:
+            assert i <= 1, "Unexpected blocks extracted"
+

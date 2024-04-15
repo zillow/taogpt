@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random as _random
 import re
+import hashlib as _hashlib
 import json
 import typing as _t
 import dataclasses as _dc
@@ -38,6 +39,9 @@ step_name_re = re.compile(r"^\s*(((\d|\.)+)\s+)?(.+)")
 
 
 def fix_fenced_block_backticks(original: str|None) -> str|None:
+    """
+    Deprecated
+    """
     if original is None:
         return None
     return '\n'.join([_fix_fenced_block_backticks_re.sub(r"\2", line) for line in original.split('\n')])
@@ -78,7 +82,7 @@ def parse_sections(text: str, section_level: str='##') -> dict[str, str|None]:
         match: re.Match = re.match(rf"^{section_level}+\s+([^\n]+)", line)
         if match is not None:
             section = match.group(1).strip()
-            while section.endswith(':'):
+            while section != 'FILE:' and section.endswith(':'):
                 section = section[:-1]
             matched_sections[section] = ''
         else:
@@ -353,6 +357,9 @@ _markdown_fenced_block_re = re.compile(r"```+", flags=re.DOTALL | re.IGNORECASE)
 
 
 def extract_fenced_blocks(text) -> tuple[dict[str, str], str]:
+    """
+    Deprecated. Use `check_and_fix_fenced_blocks`
+    """
     fenced_blocks = dict()
     key_prefix = f"fenced_{_random.randint(1000, 10000000)}_"
     while True:
@@ -381,17 +388,7 @@ def restore_fenced_block(text: str, fenced_blocks: dict[str, str]):
     return text
 
 
-_markdown_fenced_block_content_re = re.compile(r'(?P<snippet>```(?P<type>[^\n]*?)\n(?P<content>.*?)```)',
-                                               flags=re.DOTALL)
-
-def extract_fenced_content(text) -> tuple[str|None, str|None, str|None]:
-    match = _markdown_fenced_block_content_re.search(text)
-    if match is not None:
-        return match.group('type'), match.group('content').strip(), match.group('snippet').strip()
-    return None, None, None
-
-
-file_section_re = re.compile(r"FILE[\s:]+[\s\"\'`]*([^\s\"\'`]+)[\s\"\'`]*")
+file_section_re = re.compile(r"FILE[\s:]+[\s\"\'`]*([^\s\"\'`]+)?[\s\"\'`]*")
 
 
 def gather_file_contents(sections: dict[str, str], pop_file_sections=False) \
@@ -402,15 +399,21 @@ def gather_file_contents(sections: dict[str, str], pop_file_sections=False) \
         match = re.match(file_section_re, section)
         if match is None:
             continue
-        file_sections.add(section)
         file_path = match.group(1)
-        if file_path == '':
+        if file_path is None or file_path.strip() == '':
             raise ParseError(f"No file path for file section '{section}'")
-        content_type, content, snippet = extract_fenced_content(markdown_full_content)
-        if content is None:
+        file_sections.add(section)
+        collapsed, blocks = check_and_fix_fenced_blocks(markdown_full_content, collapse_blocks=True)
+        if len(blocks) != 1:
+            raise ParseError(f"File section {section} must have exactly one markdown block.")
+        digest, (snippet, content_type, line_number) = next(iter(blocks.items()))
+        if snippet is None:
             raise ParseError(f"No content (in markdown fenced block) for section '{section}'")
-        markdown_full_content = markdown_full_content.replace(snippet, '')
-        results[file_path] = (content_type, content, snippet, markdown_full_content)
+        block_lines = snippet.split('\n')
+        content = '\n'.join(block_lines[1:-1])
+        desc = collapsed.replace(digest + '\n', '')
+        desc = desc.replace(digest, '') # to be safe
+        results[file_path] = (content_type, content, snippet, desc)
     if pop_file_sections:
         for section in file_sections:
             sections.pop(section)
@@ -422,3 +425,79 @@ def match_step_name(actual: str, expected_step_num: int, expected_step_name: str
     dist = min(Levenshtein.distance(actual, expected_step_name),
                Levenshtein.distance(actual, f"{expected_step_num}: {expected_step_name}"))
     return dist < (0.95 * len(actual))
+
+
+_fenced_block_quote_re = re.compile(r"^(\s*)(`{3,})(\S*)\s*$")
+
+
+def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
+        -> tuple[str, dict[str, tuple[str, str, int]]]:
+    stack = []
+    top_level_blocks: dict[int, list[str]] = dict()
+    blocks_by_hash: dict[str, tuple[str, str, int]] = dict()
+
+    lines = markdown_text.split('\n')
+    result = []
+
+    current_top_level_block_lines = None
+    for line_number, line in enumerate(lines, start=1):
+        m = _fenced_block_quote_re.match(line)
+        if m is not None:
+            indentation: str = m.group(1).replace("\t", "    ")
+            backticks: str = m.group(2)
+            content_type: str = m.group(3)
+            if re.match(r"^\d+$", content_type):
+                content_type = ''
+            normalized_backticks = f"{indentation}{backticks}{content_type}"
+
+            last_block = stack[-1] if len(stack) > 0 else None
+            if last_block is None or backticks != last_block[1][1]:
+                # It's an opening fence, push onto the stack
+                if last_block is not None:
+                    if len(last_block[1][1]) < len(backticks):
+                        raise ParseError(
+                            f"Outer block open fence at line {last_block[0]} has less backticks than inner block"
+                            f" at line {line_number}; likely the block at {last_block[0]} is not closed properly, "
+                            f"or the rule that outer block is fenced with more backticks than inner blocks is not "
+                            f"followed.")
+                    if last_block[1][2] != 'markdown':
+                        raise ParseError(
+                            f"Outer block at line {last_block[0]} is not of markdown type "
+                            f"but contains nested fenced block. This is not supported. ")
+                if current_top_level_block_lines is not None:
+                    current_top_level_block_lines.append(normalized_backticks)
+                else: # new block
+                    current_top_level_block_lines = [line]
+                    top_level_blocks[line_number] = current_top_level_block_lines
+                stack.append((line_number, (indentation, backticks, content_type)))
+            else:
+                # It's a closing fence, pop from the stack
+                open_line, open_fence = stack.pop()
+                if indentation != open_fence[0]:
+                    raise ParseError(f"Unbalanced indentation for fenced block at {open_line}:{line_number}.")
+                if len(content_type) > 0:
+                    raise ParseError(f"New fenced block detected at line {line_number} before the block at line"
+                                     f" {open_line} is closed properly.")
+                if current_top_level_block_lines is not None:
+                    current_top_level_block_lines.append(normalized_backticks)
+                if len(stack) == 0:
+                    block_content = '\n'.join(current_top_level_block_lines)
+                    digest = _hashlib.sha256(block_content.encode('UTF-8')).hexdigest()
+                    blocks_by_hash[digest] = (block_content, open_fence[2], open_line)
+                    if collapse_blocks:
+                        result.append(digest)
+                    current_top_level_block_lines = None
+            if not collapse_blocks:
+                result.append(normalized_backticks)
+        else:
+            if current_top_level_block_lines is not None:
+                current_top_level_block_lines.append(line)
+            if len(stack) == 0 or not collapse_blocks:
+                result.append(line)
+
+    if stack:
+        unmatched_lines = list(str(block[0]) for block in stack)
+        unmatched_lines = ('line ' if len(unmatched_lines) == 1 else 'lines ') + ', '.join(unmatched_lines)
+        raise ParseError(f"Unbalanced fenced block detected. No matching closing backticks for fenced block "
+                         f"stating at line {unmatched_lines}.")
+    return '\n'.join(result), blocks_by_hash

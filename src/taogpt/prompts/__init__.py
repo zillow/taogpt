@@ -15,7 +15,7 @@ class PromptDb:
         self.tao_templates=_read(path / 'tao_templates.md')
         self.snippet_direct_step_answer=_read(path / 'snippet_direct_step_answer.md')
         self.snippet_notes_for_files=_read(path / 'snippet_notes_for_files.md')
-        self.snippet_intuitive_answer=_read(path / 'snippet_intuitive_answer.md')
+        self.snippet_also_tell_next_step=_read(path / 'snippet_also_tell_next_step.md')
         self.tao_ask_init_analysis=_read(path / 'tao_ask_init_analysis.md')
         self.sage_rank_choices=_read(path / 'sage_rank_choices.md')
         self.sage_rank_instructions=_read(path / 'sage_rank_instructions.md')
@@ -39,7 +39,7 @@ class PromptDb:
         # substituted
         self._tao_expand_first_step = self.tao_templates.format(
             snippet_report_errors=self.snippet_report_errors,
-            snippet_direct_answer=self.snippet_intuitive_answer,
+            snippet_direct_answer=self.snippet_also_tell_next_step,
             snippet_notes_for_files=self.snippet_notes_for_files)
         self._tao_expand_any_step = self.tao_templates.format(
             snippet_report_errors=self.snippet_report_errors,
