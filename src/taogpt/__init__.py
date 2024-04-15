@@ -165,6 +165,10 @@ class Executor(_abc.ABC):
     def current_step_name(self) -> str:
         pass
 
+    @_abc.abstractmethod
+    def summarize_final_answer(self) -> StepABC|None:
+        pass
+
     def handle_parse_error(self,
                            e: Exception,
                            n_retries: int,

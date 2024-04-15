@@ -169,7 +169,8 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         self.is_final_step = is_final_step
         self._n_tries = 1 # already evaluated once since the description is the result
         self._previous_contents: list[tuple[str, dict]] = []
-        self._fixed_file_contents = False
+        self._files: dict[str, taogpt.GeneratedFile] = dict()
+        self.next_step: str|None = None
         self.build(description)
 
     def build(self, description: str, next_step: str=None):
@@ -177,7 +178,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                                   description, 1)
         sections: dict[str, str] = parse_sections(self.description)
         extracted_contents = gather_file_contents(sections, pop_file_sections=True)
-        self._files: dict[str, taogpt.GeneratedFile] = {
+        self._files = {
             file_path: taogpt.GeneratedFile(content_type, content, snippet, desc)
             for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
         }
@@ -222,8 +223,6 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                     response = f"# {self.TYPE_SPEC}\n\n" + response
                 dummy = parse_to_step(response, executor.config, working_on=self.step_name, limit_to={self.__class__})
                 self.build(f"{dummy.description}\n\n{dummy.extras}", next_step=self.next_step)
-                self._fixed_file_contents = False
-                self.fix_overridden_files(executor)
                 break
             except ParseError as ex:
                 n_retries += 1
@@ -234,7 +233,6 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         self._n_tries += 1
 
     def eval_only(self, executor) -> Step | None:
-        self.fix_overridden_files(executor)
         if not _utils.is_blank(self.next_step) and not self.is_final_step:
             prompt_db: PromptDb  = executor.prompts
             work_prompt = prompt_db.tao_proceed_to_step.format(step=self.next_step)
@@ -242,68 +240,6 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
             next_step.set_step_name(self.next_step)
             return next_step
         return None
-
-    def fix_overridden_files(self, executor) -> int:
-        if self._fixed_file_contents:
-            return 0
-        previous_files = GeneratedFile.collect_files(executor.chain, stop_at_step=self)
-        ok_files = set()
-        diff_files = dict()
-        for file_name, updated_file in self._files.items():
-            original = previous_files.get(file_name, None)
-            if (original is not None
-                    and _utils.normalized_levenstein_distance(original.content, updated_file.content) > 0.1):
-                diff_files[file_name] = original
-            else:
-                ok_files.add(file_name)
-        if len(diff_files) > 0:
-            self._previous_contents.append((self.description, self._files))
-
-            purposes = '\n'.join(f"* {purpose}" for purpose in ([self.step_name] + self.criticisms))
-            for file_name, updated_files in self._files.items():
-                if file_name in ok_files:
-                    continue
-                original_file = diff_files.get(file_name, None)
-                updated_file= self._files[file_name]
-                if original_file is not None:
-                    instr = executor.prompts.tao_ensure_updated_file_integrity.format(
-                        file_name=file_name, purposes=purposes,
-                        original_content=original_file.markdown_snippet, updated_content=updated_file.markdown_snippet)
-                else:
-                    instr = executor.prompts.tao_ensure_file_completeness.format(
-                        file_name=file_name, purposes=purposes, content=updated_file.markdown_snippet)
-                prompts = [(ROLE_ORCHESTRATOR, instr)]
-
-                to_be_sent = prompts.copy()
-                n_retries = 0
-                response: str | None = None
-                while n_retries < executor.config.max_retries:
-                    try:
-                        response = executor.llm.ask(
-                            executor.prompts.tao_intro,
-                            to_be_sent,
-                            temperature=0.0 if n_retries == 0.0 else executor.config.alternative_temperature,
-                            reason=f"ensure_full_content",
-                            step_id=f"{file_name}#{n_retries}")
-                        response = _utils.str_or_blank(response)
-                        content_type, content, snippet = extract_fenced_content(response)
-                        if content is None:
-                            raise ParseError("There seems to be no Markdown fenced block. Make sure file content in "
-                                             "fenced block.")
-                        if content_type != updated_file.content_type:
-                            raise ParseError(f"The Markdown content type is changed "
-                                             f"from `{original_file.content_type}` to `{content_type}`")
-                        updated_file.content = content
-                        # todo: support nested fenced markdown block
-                        updated_file.markdown_snippet = f"```{content_type}\n{content}\n```"
-                        break
-                    except ParseError as ex:
-                        n_retries += 1
-                        executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
-                                                    executor.prompts.orchestrator_parse_error)
-            self._fixed_file_contents = True
-
-        return len(diff_files)
 
     @property
     def collected_files(self) -> dict[str, GeneratedFile]:
@@ -315,6 +251,77 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         for path, file in self.collected_files.items():
             file_contents += f"\n### FILE: {path}\n\n{file.markdown_snippet}\n\n"
         return file_contents
+
+
+class FinalizeFileStep(DirectAnswerStep):
+    TYPE_SPEC = "FINALIZE_FILE"
+
+    def __init__(self, *, description: str, role: str, file_name: str, **_):
+        super().__init__(description=description, role=role, **_)
+        self.set_step_name(f"finalizing file {file_name}")
+        self._file_name = file_name
+        self._evaluated = False
+
+    @property
+    def step_title(self) -> str:
+        return FinalizeFileStep.TYPE_SPEC
+
+    def eval_only(self, executor) -> Step | None:
+        if self._evaluated:
+            return None
+        prompt_db = executor.prompts
+        system_prompt = prompt_db.tao_intro
+        except_me = self if len(self.criticisms) == 0 else None
+        prompts = executor.show_conversation_thread(with_header=True, with_extras=True,
+                                                    except_step=except_me, stop_at=self)
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_notes_for_files))
+        prompts.append((ROLE_ORCHESTRATOR, """You've written and updated file `{file_name}`. 
+
+Please merge and consolidate your edits, fix any errors/issues you may find, and present the final, complete content 
+of this file, following the file output instruction above, for the Orchestrator to collect and store.
+""".format(file_name=self._file_name)))
+        if len(self.criticisms) > 0:
+            critic_text = self.format_critic_text()
+            instr = prompt_db.tao_fix_issues.format(critic_text=critic_text)
+            prompts.append((ROLE_ORCHESTRATOR, instr))
+
+        last_version = GeneratedFile.collect_files(executor.chain, self)[self._file_name]
+        n_retries = 0
+        response: str|None = None
+        to_be_sent = prompts.copy()
+        while n_retries < executor.config.max_retries:
+            try:
+                response = executor.llm.ask(
+                    system_prompt, to_be_sent,
+                    reason=self.TYPE_SPEC,
+                    step_id=f"{executor.step_id(self)}#{n_retries}",
+                    temperature=0.0 if n_retries == 0 else executor.config.alternative_temperature,
+                    log_request=n_retries == 0)
+                self.build(response)
+                if len(self.collected_files) != 1 or self._file_name not in self.collected_files:
+                    raise ParseError(f"You should respond (only) with the complete content of file {self._file_name}")
+                if self.collected_files[self._file_name].content == last_version.content and \
+                    self.collected_files[self._file_name].content_type == last_version.content_type:
+                    self.collected_files.clear()
+                    self.description = f"The last version of file `{self._file_name}` looks good. No change."
+                else:
+                    self.description = f"The file `{self._file_name}` has been reconciled with prior edits."
+                self._evaluated = True
+                self.next_step = None # shouldn't happen
+                return None
+            except ParseError as ex:
+                n_retries += 1
+                executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
+                                            prompt_db.orchestrator_parse_error)
+        return None
+
+    def repair(self, executor: Executor):
+        self._previous_contents.append((self.description, self._files))
+        self.log_repair(executor)
+        self._evaluated = False
+        self.eval_only(executor)
+        self.criticisms.clear()
+        self._n_tries += 1
 
 
 class GiveUpStep(TaoReplyStep):
@@ -893,7 +900,9 @@ class ExpandableStep(Step):
         prompts: list[tuple[str, str]] = executor.show_conversation_thread(
             with_header=False, with_extras=True, except_step=self)
         prompt_db = executor.prompts
-        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_proceed_intuitively.format(step=self.step_name)))
+        next_step = prompt_db.snippet_also_tell_next_step if not executor.is_first_solving_expansion() else ''
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_proceed_intuitively.format(
+            step=self.step_name, next_step_instruction=next_step)))
         prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_notes_for_files))
         n_retries = 0
         prompts_to_be_sent = prompts.copy()
@@ -915,6 +924,10 @@ class ExpandableStep(Step):
                 else:
                     step = DirectAnswerStep(description=intuition, role=ROLE_TAO)
                     step.set_step_name(response_step_name)
+                if not _utils.safe_is_instance(step, DirectAnswerStep):
+                    raise ParseError("We want to get an intuitive answer, not step-by-step plan or something else.")
+                if executor.is_first_solving_expansion():
+                    step.is_final_step = True
                 return step
             except Exception as e:
                 n_retries += 1
@@ -1106,7 +1119,7 @@ class NextStep(Step):
         if decision == NEXT_I_WANT_TO_WORK_AT:
             step_id, step_name = parse_step_name(answer)
             if _utils.is_blank(step_name) or step_name.lower().startswith('none'):
-                return SummarizeStep(description='', role=ROLE_TAO)
+                return _t.cast(Step, executor.summarize_final_answer())
             work_prompt = prompt_db.tao_proceed_to_step.format(step=step_name)
             choices = [parse_to_step(plan, config=config, working_on=step_name)] if plan is not None else []
             proceed = ProceedStep(
