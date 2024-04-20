@@ -1,7 +1,9 @@
 Date: 2024/04/07
 
 **NOTE**: Encounter hallucination. It correctly identified the error in the first intuitive solution. However it made a 
-mistake on the second row and was unable to detected the error in the final check, accepting the solution wrongly.
+mistake on the second row and was unable to detected the error in the final check, accepting the solution wrongly. 
+TaoGPT and GPT in general may error on this task especially during verification due to the use of tokenization which 
+confuse the LLM's view of sequences.
 
 **Configurations for Orchestrator**
 

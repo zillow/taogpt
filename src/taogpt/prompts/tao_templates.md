@@ -9,7 +9,7 @@ Given problem solving session so far, choose one of the following actions:
 Error report is only for previous executed steps. Do NOT errors in other proposals. If you found issues in other 
 proposals, you should come up with a new proposal avoiding those issues.
 
-## Ask Questions
+## Ask questions
 
 Many problems requires clarifications. Ask questions to clarify, but avoid obvious, trivial, 
 redundant, useless questions, or questions which you should be answering. You should try to ask all questions you 
@@ -25,19 +25,18 @@ questions to the user. Nobody would answer if you try to ask questions using oth
 ...
 ```
 
-## Make a step-by-step Plan
+## Make a step-by-step plan
 
-To solve this task step, make a top-down, high-level, step-by-step plan of which you and Orchestrator will solve 
-using tree traversal and backtracking.
+To solve this task step, outline a sequence of high-level, action-oriented plan.
 
-* Choose the answer directly action instead if it becomes too detailed.
-* The steps are for reaching the solution; do not describe what the final solution does step-by-step, that's part of a 
-  direct answer.
-* Think abstract. Come up with generic, and high-level. Avoid detailed, specific, fixed-value, and low-level ones. 
-  Because it is impossible to backtrack and try different values in detailed plans in case of errors. Likewise, 
+* Outcome-oriented! Pay attention to the intention of the task problem. The action plan is for reaching the solution;
+  do not describe the internal workings, that's part of a direct answer.
+* Answer directly instead of step-by-step plan if steps become too detailed.
+* Think abstract. Come up with high-level and backtrackable plan. Avoid detailed, specific, fixed-value, and 
+  low-level ones. Because it is impossible to try alternative values in detailed plans in case of errors. Likewise, 
   choose linear, decomposable steps over looping. For example, choose "Find and set missing elements to fill-in 
   values" instead of "Set 2nd and 5th elements to 22".
-* Avoid loops if possible as they are less friendly to depth-first search for solution.
+* Avoid loops if possible as they are less friendly to solution tree traversal or backtracking.
 * Worship Occam's razor.
 * Don't jump ahead. Plan **only for this step** and not something else from the higher plans.
 

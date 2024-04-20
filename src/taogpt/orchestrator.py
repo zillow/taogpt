@@ -94,9 +94,6 @@ class Orchestrator(Executor):
                              f"or a PresentTaskStep object, got {type(task)}")
         self.reset()
         self.chain.append(root_step)
-        if self.config.analyze_first:
-            init_analysis_step = AnalysisStep(description='', role=ROLE_ORCHESTRATOR)
-            self.chain.append(init_analysis_step)
         self._execute_with_backtracking()
 
     def log_configs(self, logger: MarkdownLogger=None):

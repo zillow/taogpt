@@ -87,7 +87,6 @@ class RedoFinalCheck(RuntimeError):
 
 class FixableStep(Step):
 
-    @abstractmethod
     def retryable(self, config):
         return self.n_tries < config.max_retries
 
@@ -200,9 +199,6 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
         self.description = '\n\n'.join(reconstructed)
         self.description = re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=re.IGNORECASE)
-
-    def retryable(self, config: Config):
-        return self.n_tries < config.max_retries
 
     @property
     def n_tries(self) -> int:
@@ -439,9 +435,6 @@ class SummarizeStep(TaoReplyStep, FixableStep):
     def set_step_name(self, name: str | None, forced=False):
         super().set_step_name(SUMMARIZE_FINAL_ANSWER)
 
-    def retryable(self, config: Config):
-        return self._n_tries < config.max_retries
-
     @property
     def n_tries(self) -> int:
         return self._n_tries
@@ -495,6 +488,7 @@ class SummarizeStep(TaoReplyStep, FixableStep):
             if self not in self._pending_culprits: # we will always summarize again
                 self._n_tries -= 1
                 self._pending_culprits[self].append('')
+            executor.check_token_usages()
             try:
                 total_errors = repair_or_backtrack(executor, self._pending_culprits)
                 return self if total_errors > 0 else None
@@ -626,7 +620,7 @@ def identify_culprits(
                         issues_of_step = [issue.replace("fatal:", "error:") for issue in issues_of_step]
                         cls = step.__class__.__name__
                         executor.logger.log(f"WARNING: change {n_fatals} fatal issues for {cls} step to errors")
-                elif _utils.safe_is_instance(step, (AskQuestionStep, AnalysisStep)):
+                elif _utils.safe_is_instance(step, (AskQuestionStep,)):
                     n_errors = sum(issue.startswith("error:") for issue in issues_of_step)
                     if n_errors > 0:
                         # these are not fixable currently but should backtrack only if fatal for these types
@@ -754,9 +748,6 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
         self._criticisms.clear()
         self.set_step_name(self.step_name)
         return self.execute_python_snippet(executor)
-
-    def retryable(self, config):
-        return self.n_tries < config.max_retries
 
     @property
     def n_tries(self) -> int:

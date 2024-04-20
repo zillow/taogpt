@@ -33,8 +33,6 @@ parser.add_argument('-v', '--votes', type=int, default=1, help='Number of votes'
 parser.add_argument('-V', '--verification-votes', type=int, default=3, help='Number of votes')
 
 # behavioral
-parser.add_argument('-a', '--analyze-first', type=bool, default=True,
-                    action=argparse.BooleanOptionalAction, help='Analyze first')
 parser.add_argument('-c', '--check-final', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Check final')
 
