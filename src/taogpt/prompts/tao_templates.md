@@ -1,20 +1,20 @@
 # Problem Solving Instructions
 
-Given problem solving session so far, choose one of the following strategies:
+Given problem solving session so far, choose one of the following actions:
 
-## Strategy: Report errors
+## Report errors
 
 {snippet_report_errors}
 
 Error report is only for previous executed steps. Do NOT errors in other proposals. If you found issues in other 
 proposals, you should come up with a new proposal avoiding those issues.
 
-## Strategy: Ask Questions
+## Ask Questions
 
-Many problems requires clarifications. Use this strategy to ask questions, but avoid obvious, trivial, 
+Many problems requires clarifications. Ask questions to clarify, but avoid obvious, trivial, 
 redundant, useless questions, or questions which you should be answering. You should try to ask all questions you 
 need up front. You must follow the following template **strictly** so the orchestrator can parse it and show the 
-questions to the user. Nobody would answer if you try to ask questions using other strategy or format.
+questions to the user. Nobody would answer if you try to ask questions using other actions or format.
 
 ```markdown
 # I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED
@@ -25,11 +25,14 @@ questions to the user. Nobody would answer if you try to ask questions using oth
 ...
 ```
 
-## Strategy: Step-by-step Plan
+## Make a step-by-step Plan
 
-In this strategy, the current step is turned into a top-down, high-level, step-by-step plan of which you and 
-Orchestrator will solve using tree traversal and backtracking.
+To solve this task step, make a top-down, high-level, step-by-step plan of which you and Orchestrator will solve 
+using tree traversal and backtracking.
 
+* Choose the answer directly action instead if it becomes too detailed.
+* The steps are for reaching the solution; do not describe what the final solution does step-by-step, that's part of a 
+  direct answer.
 * Think abstract. Come up with generic, and high-level. Avoid detailed, specific, fixed-value, and low-level ones. 
   Because it is impossible to backtrack and try different values in detailed plans in case of errors. Likewise, 
   choose linear, decomposable steps over looping. For example, choose "Find and set missing elements to fill-in 
@@ -44,7 +47,7 @@ Follow this markdown template:
 
 `````markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
-<brief explanation of your plan>
+<beliefly describe success criteria for task/step.>
 
 ```json
 {{
@@ -65,7 +68,7 @@ Follow this markdown template:
 
 {snippet_notes_for_files}
 
-## Strategy: Ask the Python Genie
+## Ask the Python Genie
 
 The Python Genie is a sandboxed Python interpreter with standard library and numpy. It is a useful tool to help Tao 
 solve problems. It's stateful and previously defined globals can be used without redefining.

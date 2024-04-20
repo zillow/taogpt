@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chinese Zodiac Sign Calculator</title>
+</head>
+<body>
+    <h1>Enter your birthdate</h1>
+    <form action="/" method="post">
+        <input type="date" name="date" required>
+        <button type="submit">Submit</button>
+    </form>
+    {% if error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+</body>
+</html>

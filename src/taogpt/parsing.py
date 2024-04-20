@@ -124,7 +124,7 @@ def parse_step_id_and_name(text: str) -> tuple[int, str]:
     text = _utils.str_or_blank(text)
     if _proposal_re.search(text) is not None:
         raise ParseError("You tried to report error in other proposals. Error report is only for previous executed "
-                         "steps. Either report issues in previous steps or try different strategies.")
+                         "steps. Either report issues in previous steps or try different actions.")
     match = _step_re.match(text)
     if match is None:
         raise ParseError("Step number and description must be in the format of 'step#<num>: <string description>'.")
@@ -173,6 +173,8 @@ def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tu
                 affected_by = f"prior {affected_by} has been changed due to {issue}"
                 affecting_steps: list[tuple[int, str]]|None
                 affecting_steps = [parse_step_id_and_name(b) for b in affecting if len(_utils.str_or_blank(b)) > 0]
+                blamed_step_ids = set(s[0] for s in blame_steps)
+                affecting_steps = [s for s in affecting_steps if s[0] not in blamed_step_ids]
                 concerns[affected_by] = ('affected', affecting_steps)
         if has_fatal:
             concerns[judgement['fatal']] = ('fatal', blame_steps)
@@ -477,7 +479,7 @@ def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
                     raise ParseError(f"Unbalanced indentation for fenced block at {open_line}:{line_number}.")
                 if len(content_type) > 0:
                     raise ParseError(f"New fenced block detected at line {line_number} before the block at line"
-                                     f" {open_line} is closed properly.")
+                                     f" {open_line} is closed properly. Also check the nested block syntax.")
                 if current_top_level_block_lines is not None:
                     current_top_level_block_lines.append(normalized_backticks)
                 if len(stack) == 0:

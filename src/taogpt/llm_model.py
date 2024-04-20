@@ -287,12 +287,13 @@ def get_long_model(model_name: str):
 
 GPT_MODEL_ALIAS = {
     'gpt-3.5': 'gpt-3.5-turbo',
-    'gpt-4-turbo': 'gpt-4-1106-preview'
+    'gpt-4-turbo': 'gpt-4-turbo-2024-04-09'
 }
 GPT_LONG_CONTEXT_MODEL_MAP = {
     'gpt-3.5-turbo': 'gpt-3.5-turbo-16k',
     'gpt-4': 'gpt-4-32k',
     'gpt-4-1106-preview': 'gpt-4-1106-preview',
+    'gpt-4-turbo-2024-04-09': 'gpt-4-turbo-2024-04-09',
 }
 GPT_OUTPUT_TOKEN_LIMITS = {
     # negative number means the max token limit is `abs(limit) - n_context_tokens`
@@ -300,6 +301,7 @@ GPT_OUTPUT_TOKEN_LIMITS = {
     'gpt-4': -8192, # tested experimentally
     'gpt-4-32k': -32 * 1024,
     'gpt-4-1106-preview': 4096,
+    'gpt-4-turbo-2024-04-09': 4096,
 }
 
 CONTINUATION_PROMPT = ("You reached output token limit in the last reply. "

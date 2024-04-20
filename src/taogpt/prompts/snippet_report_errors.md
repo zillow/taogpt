@@ -12,11 +12,6 @@ responsible in the following format:
     "blame": "<step#>: <step description>",
     "affecting": ["<step#>: <step description>", "<step#>: <step description>", ...]
   },
-  "<what to verify>": {
-    "fatal": "<something catastrophically wrong from here on>", 
-    "content": "<content snippet related to the issue",
-    "blame": "<step#>: <step description>",
-  },
   // ...
 }
 ```
