@@ -94,9 +94,6 @@ class Orchestrator(Executor):
                              f"or a PresentTaskStep object, got {type(task)}")
         self.reset()
         self.chain.append(root_step)
-        if self.config.analyze_first:
-            init_analysis_step = AnalysisStep(description='', role=ROLE_ORCHESTRATOR)
-            self.chain.append(init_analysis_step)
         self._execute_with_backtracking()
 
     def log_configs(self, logger: MarkdownLogger=None):
@@ -209,6 +206,7 @@ class Orchestrator(Executor):
                 continue
             new_step = last_step.eval(self)
             if _utils.safe_is_instance(last_step, SummarizeStep) and new_step is None: # and successfully eval/checked
+                self.finalize_files()
                 return
             if new_step is not None:
                 if new_step is not self.chain[-1]:
@@ -293,13 +291,16 @@ class Orchestrator(Executor):
                 self._waiting.append(final_answer_step)
                 return final_answer_step
 
-        files = GeneratedFile.collect_files(self.chain)
-        for file in files.keys():
-            finalize_file_step = FinalizeFileStep(description='', role=ROLE_TAO, file_name=file)
-            self._waiting.append(finalize_file_step)
         summarize_step = SummarizeStep(description='', role=ROLE_TAO)
         self._waiting.append(summarize_step)
         return None
+
+    def finalize_files(self):
+        files = GeneratedFile.collect_files(self.chain)
+        for file in files.keys():
+            finalize_file_step = FinalizeFileStep(description='', role=ROLE_TAO, file_name=file)
+            self.chain.append(finalize_file_step)
+            finalize_file_step.eval(self)
 
     def ask_questions(self, questions: list[str]) -> dict[str, str]:
         # for now just use the console input

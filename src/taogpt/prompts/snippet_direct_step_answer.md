@@ -1,8 +1,7 @@
-## Strategy: Direct Answer
+## Answer directly
 
-Go with this strategy if you know the correct answer. Choose the `HERE_IS_MY_STEP_BY_STEP_PLAN` strategy instead if you 
-have a step-by-step answer. You should also tell the Orchestrator which step you want to work at next in 
-the `### NEXT_I_WANT_TO_WORK_AT` section.
+Just answer directly if the task step is simple. You should also tell the Orchestrator which step you want to work 
+at next in the `### NEXT_I_WANT_TO_WORK_AT` section.
 
 Important Note: if this is the **final** step, then put "None. This is the final step." in the
 `### NEXT_I_WANT_TO_WORK_AT` section.

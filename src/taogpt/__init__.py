@@ -53,18 +53,17 @@ class LLM:
 @_dc.dataclass
 class Config:
     # hyperparameters
-    initial_expansion: int = 3
+    initial_expansion: int = 2
     first_expansion: int = 1
     first_try_temperature: float = 0.0
     alternative_temperature: float = 0.7
     max_search_expansion: int = 4
-    try_intuition: bool = True
-    try_intuition_initial_expansion: bool = True
-    votes: int = 1
-    verification_votes: int = 3
+    try_intuition: bool = False
+    try_intuition_initial_expansion: bool = False
+    votes: int = 2
+    verification_votes: int = 2
 
     # behavioral
-    analyze_first: bool = True
     check_final: bool = True
 
     # token usage controls
@@ -136,6 +135,10 @@ class Executor(_abc.ABC):
     @property
     @_abc.abstractmethod
     def logger(self) -> MarkdownLogger:
+        pass
+
+    @_abc.abstractmethod
+    def check_token_usages(self):
         pass
 
     @_abc.abstractmethod

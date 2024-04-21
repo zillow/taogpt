@@ -86,7 +86,8 @@ def log_final_chain(executor, log_path,
     logger.log_conversation(executor.show_conversation_thread(with_header=False))
     logger.log(f"**total tokens**: {executor.llm.total_tokens}")
     for path, file in GeneratedFile.collect_files(executor.chain).items():
-        path = re.sub(r"[\"\'`]", "", path)
+        path = re.sub(r"[\"\'`]", "", path).strip()
+        path = re.sub(r"^/+", "", path)
         full_path = _p.Path(log_path) / path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         with open(full_path, 'w') as f:
