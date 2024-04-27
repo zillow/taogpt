@@ -67,7 +67,7 @@ def test_check_final_solution_failed(logger):
         assert False, f"Unexpected reason: {reason}"
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
-    _t.cast(DirectAnswerStep, orchestrator.previous_step(step))._n_tries = orchestrator.config.max_retries
+    _t.cast(DirectAnswerStep, orchestrator.previous_step(step))._n_tries = orchestrator.config.max_repairs
     try:
         step.eval(orchestrator)
         assert False, "expecting Backtrack not raised"
@@ -104,8 +104,7 @@ def create_final_check_chain(reply, logger):
     orchestrator = create_orchestrator(llm, logger, check_final=True)
     step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = DirectAnswerStep(description="This is an answer", role=ROLE_TAO)
-    step.set_step_name('calculate total')
+    step = DirectAnswerStep(description="This is an answer", role=ROLE_TAO, step_name='calculate total')
     orchestrator.chain.append(step)
     step = SummarizeStep(description="", role=ROLE_TAO)
     orchestrator.chain.append(step)
@@ -117,9 +116,9 @@ def test_need_full_expansion_at_first_expandable_step(logger):
     orchestrator = create_orchestrator(llm, logger)
     step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR, step_name='start')
     orchestrator.chain.append(step)
-    assert orchestrator.is_first_solving_expansion()
+    assert orchestrator.is_init_solving_expansion()
 
 
 def test_need_full_expansion_at_first_expandable_step_followed_by_ask_step(logger):
@@ -127,13 +126,13 @@ def test_need_full_expansion_at_first_expandable_step_followed_by_ask_step(logge
     orchestrator = create_orchestrator(llm, logger)
     step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR, step_name='start')
     orchestrator.chain.append(step)
-    step = AskQuestionStep(description="I have a question", role=ROLE_TAO)
+    step = AskQuestionStep(description="I have a question", role=ROLE_TAO, step_name='ask')
     orchestrator.chain.append(step)
-    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR, step_name='next step')
     orchestrator.chain.append(step)
-    assert orchestrator.is_first_solving_expansion()
+    assert orchestrator.is_init_solving_expansion()
 
 
 def test_no_full_expansion_at_subsequent_expandable_steps(logger):
@@ -141,15 +140,15 @@ def test_no_full_expansion_at_subsequent_expandable_steps(logger):
     orchestrator = create_orchestrator(llm, logger)
     step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR, step_name='start')
     orchestrator.chain.append(step)
-    step = StepByStepPlan(description=EXAMPLE_STEP_BY_STEP_PLAN, role=ROLE_TAO)
+    step = StepByStepPlan(description=EXAMPLE_STEP_BY_STEP_PLAN, role=ROLE_TAO, step_name='plan')
     orchestrator.chain.append(step)
-    step = AskQuestionStep(description="I have a question", role=ROLE_TAO)
+    step = AskQuestionStep(description="I have a question", role=ROLE_TAO, step_name='ask')
     orchestrator.chain.append(step)
-    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR, step_name='next')
     orchestrator.chain.append(step)
-    assert not orchestrator.is_first_solving_expansion()
+    assert not orchestrator.is_init_solving_expansion()
 
 
 def test_backtracking(logger):
@@ -160,14 +159,14 @@ def test_backtracking(logger):
     orchestrator.config.max_retries = 1
     step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    proceed_step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR)
+    proceed_step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR, step_name='start')
     orchestrator.chain.append(proceed_step)
 
     code = f"""```python
 no_such_var * 123
 ```
     """
-    step = AskPythonGenieStep(description=code, role=ROLE_TAO)
+    step = AskPythonGenieStep(description=code, role=ROLE_TAO, step_name='ask')
     orchestrator.chain.append(step)
     proceed_step.choices = [step]
     try:
@@ -191,12 +190,16 @@ Then, the third cell must be 2 because it's the only number left.
 So, the first row becomes: 4 3 2 1
 
 ### NEXT_I_WANT_TO_WORK_AT:
-Fill in the second row
+```json
+{
+    "next": "Fill in the second row"
+}
+```
 """
     step = parse_to_step(text, config=Config())
     assert isinstance(step, DirectAnswerStep), str(type(step))
     assert not step.is_final_step
-    assert step.next_step == 'Fill in the second row'
+    assert step.next_step.next_step_desc == 'Fill in the second row'
 
 
 def test_parse_step_by_step_no_whys():
@@ -236,7 +239,7 @@ def test_python_genie_execution_error(logger):
 no_such_var * 123
 ```
     """
-    step = AskPythonGenieStep(description=code, role=ROLE_TAO)
+    step = AskPythonGenieStep(description=code, role=ROLE_TAO, step_name='ask')
     step.eval(orchestrator)
     assert '314.15' in step.description
     assert step.n_tries == 2

@@ -138,7 +138,7 @@ class LangChainLLM(LLM):
             tokens = self.count_tokens(system_prompt)
             context_tokens += tokens
             self._logger.new_message_section(ROLE_SYSTEM, -1, tokens=tokens)
-            content_to_be_logged = LLM.deduplicate_for_logging(system_prompt, ROLE_SYSTEM)
+            content_to_be_logged = self.deduplicate_for_logging(system_prompt, ROLE_SYSTEM)
             self._logger.log(content_to_be_logged, demote_h1=True, role=ROLE_SYSTEM)
             self._logger.close_message_section()
             messages.append(SystemMessage(content=system_prompt))
@@ -150,7 +150,7 @@ class LangChainLLM(LLM):
             tokens = self.count_tokens(message)
             context_tokens += tokens
             self._logger.new_message_section(role, i, tokens=tokens)
-            deduped_msg = LLM.deduplicate_for_logging(message, role=role)
+            deduped_msg = self.deduplicate_for_logging(message, role=role)
             self._logger.log(deduped_msg, demote_h1=True, role=role)
             self._logger.close_message_section()
             chat_message = ChatMessage(role=effective_role, content=message)

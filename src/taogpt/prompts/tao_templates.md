@@ -46,7 +46,7 @@ Follow this markdown template:
 
 `````markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
-<beliefly describe success criteria for task/step.>
+<belief analysis for this task/step>
 
 ```json
 {{

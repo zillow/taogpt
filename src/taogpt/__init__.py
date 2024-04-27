@@ -13,6 +13,7 @@ from taogpt import utils as _utils
 
 class LLM:
     collapsed_contents: dict[str, str] = dict()
+    _encountered_collapsed_contents: dict[str, str] = dict()
 
     @property
     @_abc.abstractmethod
@@ -34,17 +35,35 @@ class LLM:
     def count_tokens(self, text: str) -> int:
         pass
 
-    @staticmethod
-    def deduplicate_for_logging(message, role: str):
+    def deduplicate_for_logging(self, message, role: str, always_log_first=False):
         content = _utils.str_or_blank(message)
-        return LLM.collapsed_contents.get(content.lower(), content)
+        tokens = self.count_tokens(content)
+        normalized = content.lower()
+        deduped = LLM.collapsed_contents.get(normalized, None)
+        if deduped is not None:
+            if always_log_first and normalized not in LLM._encountered_collapsed_contents:
+                LLM._encountered_collapsed_contents[normalized] = deduped
+                return content
+            return deduped
+        if tokens > 2048:
+            suffix = 0
+            while True:
+                msg_key = f"{role}_{tokens}_{suffix}"
+                if msg_key not in LLM.collapsed_contents:
+                    self.merge_collapsed_contents({msg_key: message})
+                    break
+                suffix += 1
+        return content
 
-    def merge_collapsed_contents(self, collapse_contents: _t.Dict[str, str]):
+    def merge_collapsed_contents(self, collapse_contents: _t.Dict[str, str], immediate=False):
         for key, content in collapse_contents.items():
             content = _utils.str_or_blank(content).lower()
             tokens = self.count_tokens(content)
-            if len(content) > 0 and tokens > 32:
-                LLM.collapsed_contents[content] = f"[..{key}:{tokens}..]"
+            if tokens > 32:
+                key = f"[..{key}..]"
+                LLM.collapsed_contents[content] = key
+                if immediate:
+                    LLM._encountered_collapsed_contents[content] = key
 
     def __repr__(self) -> str:
         return self.model_id
@@ -58,8 +77,7 @@ class Config:
     first_try_temperature: float = 0.0
     alternative_temperature: float = 0.7
     max_search_expansion: int = 4
-    try_intuition: bool = False
-    try_intuition_initial_expansion: bool = False
+    max_repairs: int = 10
     votes: int = 2
     verification_votes: int = 2
 
@@ -119,6 +137,13 @@ class Executor(_abc.ABC):
         return self.llm
 
     @property
+    def total_tokens(self) -> int:
+        tokens = self.llm.total_tokens
+        if self.sage_llm is not None:
+            tokens += self.sage_llm.total_tokens
+        return tokens
+
+    @property
     @_abc.abstractmethod
     def prompts(self) -> PromptDb:
         pass
@@ -154,7 +179,7 @@ class Executor(_abc.ABC):
         pass
 
     @_abc.abstractmethod
-    def is_first_solving_expansion(self) -> bool:
+    def is_init_solving_expansion(self) -> bool:
         pass
 
     def ask_questions(self, questions: list[str]) -> dict[str, str]:
@@ -190,24 +215,15 @@ class Executor(_abc.ABC):
 
 class StepABC(_abc.ABC):
 
-    def __init__(self, *, description: str, role: str):
+    def __init__(self, *, description: str, role: str, step_name: str|None):
         self.description = _parsing.at_step_re.sub('', description).strip()
         self.role = role
-        self._step_name = None
+        self._step_name = _utils.str_or_blank(step_name)
         self._visible = True
 
     @property
     def step_name(self) -> str|None:
         return self._step_name
-
-    def set_step_name(self, name: str|None, forced=False):
-        name = _utils.str_or_blank(name)
-        if name == '' or self._step_name == name:
-            return
-        if self._step_name is None or forced:
-            self._step_name = name
-        else:
-            raise RuntimeError(f"step name has already been set to {self._step_name}")
 
     @property
     def visible_in_chain(self) -> bool:

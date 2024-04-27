@@ -94,6 +94,12 @@ class Orchestrator(Executor):
                              f"or a PresentTaskStep object, got {type(task)}")
         self.reset()
         self.chain.append(root_step)
+        work_next_step = ProceedStep(description=self.prompts.tao_proceed,
+                                     role=ROLE_ORCHESTRATOR,
+                                     first_expansion=self.config.initial_expansion,
+                                     max_expansion=self.config.max_search_expansion,
+                                     step_name="top-level plan/answer")
+        self.chain.append(work_next_step)
         self._execute_with_backtracking()
 
     def log_configs(self, logger: MarkdownLogger=None):
@@ -253,20 +259,10 @@ class Orchestrator(Executor):
         return conversation
 
     def next_step(self):
-        start_solving = self.is_first_solving_expansion()
-        if start_solving:
-            work_prompt = self.prompts.tao_proceed
-            first_expansion = self.config.initial_expansion if start_solving else self.config.first_expansion
-            work_next_step = ProceedStep(description=work_prompt, role=ROLE_ORCHESTRATOR,
-                                         first_expansion=first_expansion,
-                                         max_expansion=self.config.max_search_expansion)
-            work_next_step.set_step_name("start working on the problem")
-            self._waiting.append(work_next_step)
-        else:
-            ask_next_step = NextStep(description='', role=ROLE_ORCHESTRATOR)
-            self._waiting.append(ask_next_step)
+        ask_next_step = NextStep(description='', role=ROLE_ORCHESTRATOR, step_name=None)
+        self._waiting.append(ask_next_step)
 
-    def is_first_solving_expansion(self):
+    def is_init_solving_expansion(self):
         for i, step in enumerate(self.chain):
             if _utils.safe_is_instance(step, ExpandableStep) \
                     and i < len(self.chain) - 1 and not _utils.safe_is_instance(self.chain[i + 1], AskQuestionStep):

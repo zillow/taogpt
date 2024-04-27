@@ -13,13 +13,12 @@ class PromptDb:
     def __init__(self, path=_template_dir):
         self.tao_intro=_read(path / 'tao.md')
         self.tao_templates=_read(path / 'tao_templates.md')
+        self.snippet_intuitive_answer =_read(path / 'snippet_intuitive_answer.md')
         self.snippet_direct_step_answer=_read(path / 'snippet_direct_step_answer.md')
+        self.snippet_next_step=_read(path / 'snippet_next_step.md')
         self.snippet_notes_for_files=_read(path / 'snippet_notes_for_files.md')
-        self.snippet_also_tell_next_step=_read(path / 'snippet_also_tell_next_step.md')
-        self.tao_ask_init_analysis=_read(path / 'tao_ask_init_analysis.md')
         self.sage_rank_choices=_read(path / 'sage_rank_choices.md')
         self.sage_rank_instructions=_read(path / 'sage_rank_instructions.md')
-        self.orchestrator_at_step=_read(path / 'orchestrator_at_step.md')
         self.tao_next_step=_read(path / 'tao_next_step.md')
         self.tao_proceed=_read(path / 'tao_proceed.md')
         self.tao_proceed_intuitively=_read(path / 'tao_proceed_intuitively.md')
@@ -34,27 +33,28 @@ class PromptDb:
         self.snippet_report_errors=_read(path / 'snippet_report_errors.md')
         self.sage_merge_criticisms=_read(path / 'sage_merge_criticisms.md')
         self.tao_ensure_updated_file_integrity=_read(path / 'tao_ensure_updated_file_integrity.md')
-        self.tao_ensure_file_completeness=_read(path / 'tao_ensure_file_completeness.md')
 
         # substituted
-        self._tao_expand_first_step = self.tao_templates.format(
+        self._tao_expand_init_step = self.tao_templates.format(
             snippet_report_errors=self.snippet_report_errors,
-            snippet_direct_answer=self.snippet_also_tell_next_step,
+            snippet_direct_answer=self.snippet_intuitive_answer,
             snippet_notes_for_files=self.snippet_notes_for_files)
         self._tao_expand_any_step = self.tao_templates.format(
             snippet_report_errors=self.snippet_report_errors,
-            snippet_direct_answer=self.snippet_direct_step_answer,
+            snippet_direct_answer=self.snippet_direct_step_answer.format(snippet_next_step=self.snippet_next_step),
             snippet_notes_for_files=self.snippet_notes_for_files)
-        self.tao_next_step = self.tao_next_step.format(snippet_report_errors=self.snippet_report_errors)
+        self.tao_next_step = self.tao_next_step.format(
+            snippet_next_step=self.snippet_next_step,
+            snippet_report_errors=self.snippet_report_errors)
 
     def reload(self, path: _path.Path=_template_dir) -> PromptDb:
         self.__init__(path)
         return self
 
     @property
-    def tao_expand_first_step(self) -> str:
-        assert self._tao_expand_first_step is not None
-        return self._tao_expand_first_step
+    def tao_expand_init_step(self) -> str:
+        assert self._tao_expand_init_step is not None
+        return self._tao_expand_init_step
 
     @property
     def tao_expand_any_step(self) -> str:

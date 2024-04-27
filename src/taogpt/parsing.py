@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import random as _random
 import re
 import hashlib as _hashlib
@@ -115,12 +116,12 @@ def parse_ordered_list(markdown_text, at_least_one_list=True) -> list[str]:
 _json_response_re = re.compile(r"^.*(```(json)?\n+)(.+)(```).*$|^\s*(\{.+})\s*$", flags=re.DOTALL | re.IGNORECASE)
 _final_solution_check_re = re.compile(r"^\s*(yes|no)[.,]?\s+(.+)$", flags=re.DOTALL|re.IGNORECASE)
 
-at_step_re = re.compile(r"\[ *at +step(.*?)]", flags=re.IGNORECASE)
+at_step_re = re.compile(r"\s*\[ *at +step(.*?)]", flags=re.IGNORECASE)
 _step_re = re.compile(r"^( *\[? *(at )?(step#)?(\d+): *)?(.*?)[\s\]]*$", flags=re.IGNORECASE)
 _next_step_re = re.compile(r"^( *\[? *(at )?step#?\d*:? *)?(response to +)?(.*?)[\s\]]*$", flags=re.IGNORECASE)
 _proposal_re = re.compile(f"^\s*\[?{PRIOR_PROPOSAL}", flags=re.IGNORECASE)
 
-def parse_step_id_and_name(text: str) -> tuple[int, str]:
+def parse_step_id_and_name(text: str, ok_without_step_id=False) -> tuple[int|None, str]:
     text = _utils.str_or_blank(text)
     if _proposal_re.search(text) is not None:
         raise ParseError("You tried to report error in other proposals. Error report is only for previous executed "
@@ -132,12 +133,33 @@ def parse_step_id_and_name(text: str) -> tuple[int, str]:
         step_num = int(match.group(4))
         return (step_num, match.group(5))
     except TypeError:
+        if ok_without_step_id:
+            return None, text
         raise ParseError("Step number and description must be in the format of 'step#<num>: <string description>'.")
 
 
-def parse_next_step_name(text: str) -> str:
-    match = _next_step_re.match(text)
-    return match.group(4) if match is not None else None
+@dataclasses.dataclass
+class NextStepDesc:
+    done_with_step_id: int|None
+    done_with_step_desc: str|None
+    next_step_desc: str|None
+
+    @property
+    def is_final_step(self):
+        next_step = _utils.str_or_blank(self.next_step_desc).lower()
+        return 'all done' in next_step
+
+
+def parse_next_step_spec(text: str) -> NextStepDesc:
+    next_step_response: dict[str, str] = parse_json_hash(text)
+    done_with_plan = next_step_response.get('done_with_plan', None)
+    done_with_step = parse_step_id_and_name(done_with_plan) if done_with_plan is not None else (None, None)
+    next_step = next_step_response.get('next', None)
+    if next_step:
+        next_step_id, next_step = parse_step_id_and_name(next_step, ok_without_step_id=True)
+        if next_step_id is not None and next_step_id == done_with_step[0]:
+            done_with_step = (None, None)
+    return NextStepDesc(done_with_step[0], done_with_step[1], next_step)
 
 
 def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tuple[int, str]]|None]], dict]:
@@ -326,26 +348,18 @@ def parse_json_list(text):
     return responses
 
 
-def parse_next_step_reply(text: str) -> tuple[str, tuple[str, str|None]]:
+def parse_next_step_reply(text: str) -> tuple[str, NextStepDesc|str]:
     sections: dict[str, str] = parse_sections(text, section_level='#')
     sections.pop(FREE_TEXT)
     for section in [REPORT_ERROR]:
         if section in sections:
             remaining = sections.pop(section)
-            return section, (f"# {section}\n{remaining}", None)
+            return section, f"# {section}\n{remaining}"
     if NEXT_I_WANT_TO_WORK_AT not in sections:
         raise ParseError(f"No section header `# {NEXT_I_WANT_TO_WORK_AT}`")
     next_step_desc = sections.pop(NEXT_I_WANT_TO_WORK_AT).strip()
-    next_step_desc = _utils.single_space(strip_quotes_re.sub('', next_step_desc))
-    if _utils.str_or_blank(next_step_desc) == '':
-        raise ParseError('Missing next step description')
-    next_step_desc = parse_next_step_name(next_step_desc)
-    return NEXT_I_WANT_TO_WORK_AT, (next_step_desc, None)
-
-
-def is_final_answer(next_step) -> bool:
-    next_step = _utils.str_or_blank(next_step).lower()
-    return next_step.startswith('none') or 'this is the final step' in next_step
+    next_step = parse_next_step_spec(next_step_desc)
+    return NEXT_I_WANT_TO_WORK_AT, next_step
 
 
 _python_response_re = re.compile(r"```python\n+(.+?)```", flags=re.DOTALL | re.IGNORECASE)
@@ -484,6 +498,9 @@ def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
                     current_top_level_block_lines.append(normalized_backticks)
                 if len(stack) == 0:
                     block_content = '\n'.join(current_top_level_block_lines)
+                    if "# NEXT_I_WANT_TO_WORK_AT" in block_content:
+                        raise ParseError("There is a heading line `NEXT_I_WANT_TO_WORK_AT` in the fenced block. "
+                                         "Looks like the block is not closed properly.")
                     digest = _hashlib.sha256(block_content.encode('UTF-8')).hexdigest()
                     blocks_by_hash[digest] = (block_content, open_fence[2], open_line)
                     if collapse_blocks:

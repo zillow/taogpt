@@ -52,7 +52,7 @@ class MockLLM(LLM):
         tokens = len(self.encoder.encode(message))
         self._logger.new_message_section(role, i)
         self._logger.log(f"**{role} >>> said**:\n")
-        deduped_msg = LLM.deduplicate_for_logging(message, role=role)
+        deduped_msg = self.deduplicate_for_logging(message, role=role)
         self._logger.log(deduped_msg, demote_h1=True)
         self._logger.close_message_section()
         return tokens

@@ -137,12 +137,9 @@ def test_parse_next_step_done2():
     final_answer = f"""## I_FOUND_ERRORS
 {answer_details}
 """
-    decision, (answer, decision_detail) = parsing.parse_next_step_reply(final_answer)
+    decision, answer = parsing.parse_next_step_reply(final_answer)
     assert decision == REPORT_ERROR
     assert answer == f"# {REPORT_ERROR}\n{answer_details}".strip()
-    step_type, step_def = parsing.parse_step_type_spec(answer)
-    assert step_type == REPORT_ERROR
-    assert step_def == answer_details
 
 
 def test_parse_next_step_next_missing_next_work_at():
@@ -159,28 +156,6 @@ def test_parse_next_step_next_missing_next_work_at():
         assert False, "Expecting ParseError not raised"
     except parsing.ParseError:
         pass
-
-
-def test_parse_next_step_reply_next_step_to_work_at():
-    json_plan = """```json
-{
-    "1": {"description": "step A"},
-    "2": {"description": "step B"}
-}
-```
-"""
-    next_plan = f"""# HERE_IS_MY_STEP_BY_STEP_PLAN
-{json_plan}
-"""
-    text = f"""# NEXT_I_WANT_TO_WORK_AT
-Do stuff
-
-{next_plan}
-    """
-    decision, (answer, decision_details) = parsing.parse_next_step_reply(text)
-    assert decision == NEXT_I_WANT_TO_WORK_AT
-    assert answer == 'Do stuff'
-    assert decision_details is None
 
 
 def test_parse_next_step_reply_example():
@@ -202,16 +177,24 @@ a + b
 The end"""
     text = f"""
 # NEXT_I_WANT_TO_WORK_AT
-Evaluate possible addition combinations.
+
+```json
+{{
+    "next": "Evaluate possible addition combinations",
+    "done_with_plan": "step#22: check arithmetics"
+}}
+```
 
 ## LET_ME_ASK_THE_PYTHON_GENIE
 
 {details}
 """
-    decision, (answer, decision_details) = parsing.parse_next_step_reply(text)
+    decision, answer = parsing.parse_next_step_reply(text)
     assert decision == NEXT_I_WANT_TO_WORK_AT
-    assert answer == 'Evaluate possible addition combinations'
-    assert decision_details is None
+    assert isinstance(answer, parsing.NextStepDesc)
+    assert answer.next_step_desc == 'Evaluate possible addition combinations'
+    assert answer.done_with_step_id == 22
+    assert answer.done_with_step_desc == "check arithmetics"
 
 
 def test_parse_python_code_snippets():
@@ -379,12 +362,30 @@ Implement the client-side logic for handling user inputs and actions"""
 
 
 def test_parse_next_step_name():
-    assert parsing.parse_next_step_name("some step") == "some step"
-    assert parsing.parse_next_step_name("[at step: some step]") == "some step"
-    assert parsing.parse_next_step_name("[at step: some step") == "some step"
-    assert parsing.parse_next_step_name("[at step#123: some step]") == "some step"
-    assert parsing.parse_next_step_name("[at step#123:some step]") == "some step"
-    assert parsing.parse_next_step_name("  [step#123: some step]") == "some step"
+    text = """
+    ```json
+    {
+        "done_with_plan": "1: top-level plan",
+        "next": "all done"
+    }
+    ```
+    """
+    next_step = parsing.parse_next_step_spec(text)
+    assert next_step.next_step_desc == "all done"
+    assert next_step.done_with_step_desc == "top-level plan"
+    assert next_step.done_with_step_id == 1
+
+
+def test_parse_next_step_invalid():
+    text = """
+    "done_with_plan": "1: top-level plan",
+    "next": "all done"
+    """
+    try:
+        parsing.parse_next_step_spec(text)
+        assert False, "Expecting ParseError not raised"
+    except parsing.ParseError as e:
+        pass
 
 
 def test_parse_step_id_and_name():

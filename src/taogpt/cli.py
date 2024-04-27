@@ -21,14 +21,11 @@ parser = argparse.ArgumentParser(
 
 # hyperparameters
 parser.add_argument('-i', '--initial-expansion', type=int, default=3, help='Initial expansion factor')
-parser.add_argument('-I0', '--try-intuition-initial-expansion', type=bool, default=True,
-                    help='Always try intuition at the initial expansion)')
-parser.add_argument('-I1', '--try-intuition', type=bool, default=True,
-                    help='Always try intuition in subsequent expansions')
 parser.add_argument('-f', '--first-expansion', type=int, default=1, help='First expansion factor')
 parser.add_argument('-T0', '--first-try-temperature', type=float, default=0.0, help='First try temperature')
 parser.add_argument('-T1', '--alternative-temperature', type=float, default=0.7, help='Alternative temperature')
 parser.add_argument('-m', '--max-search-expansion', type=int, default=4, help='Maximum search expansion')
+parser.add_argument('-R', '--max-repairs', type=int, default=4, help='Maximum repairs attempted')
 parser.add_argument('-v', '--votes', type=int, default=1, help='Number of votes')
 parser.add_argument('-V', '--verification-votes', type=int, default=3, help='Number of votes')
 
@@ -52,7 +49,7 @@ parser.add_argument('-E', '--ask-user-before-execute-codes', type=bool, default=
                     action=argparse.BooleanOptionalAction, help='Ask user before execute codes')
 parser.add_argument('-P', '--pause-after-initial-solving-expansion', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Pause after initial solving expansion')
-parser.add_argument('-R', '--pause-on-backtrack', type=bool, default=True,
+parser.add_argument('-B', '--pause-on-backtrack', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Pause when a backtrack is requested')
 
 # separate settings

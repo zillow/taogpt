@@ -1,7 +1,7 @@
 If you see any errors or inconsistencies in the step executed so far, response with **specific** errors and prior steps 
 responsible in the following format:
 
- `````markdown
+````markdown
  # I_FOUND_ERRORS
 
 ```json
@@ -15,7 +15,7 @@ responsible in the following format:
   // ...
 }
 ```
-`````
+````
 
 where `"<step#>: <step description>"` should (only) be found in the bracket "[at step#<num>: <step_description>]" of 
 the steps (without the brackets.)

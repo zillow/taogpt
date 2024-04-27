@@ -18,6 +18,8 @@ Problems:
 * Missing file name path.
 * Missing contents from previous version.
 
-Note: Orchestrator has no way to move or delete files. Orchestrator will always collect the **last written** content 
+Note: 
+* There is no need to create directories; if a file name has a parent directory, it will be created by the Orchestrator.
+* Orchestrator has no way to move or delete files. Orchestrator will always collect the **last written** content 
 of a file, therefore it is very important to copy the full content when updating a file, else we would lose some
 content.
