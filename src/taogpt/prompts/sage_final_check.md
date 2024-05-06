@@ -8,20 +8,20 @@ if they are inaccurate as assumptions are meant to simplify the problem. Respond
   "<what to verify>": {
     "error": "<something incorrect, subsequent steps not impacted or fixable>", 
     "content": "<content snippet related to the issue",
-    "blame": "<step#>: <step description>",
-    "affecting": ["<step#>: <step description>", "<step#>: <step description>", ...]
+    "blame": "step#<ID>: <step description>",
+    "affecting": ["step#<ID>: <step description>", "step#<ID>: <step description>", ...]
   },
   "<what to verify>": {
     "warning": "<something can be improved>",
     "content": "<content snippet related to the issue",
-    "blame": "<step#>: <step description>"
+    "blame": "step#<ID>: <step description>"
   },
   "<what to verify>": {"ok": "<this looks good>"},
   // ...
 }
 ```
 
-where `"<step#>: <step description>"` can be found in the bracket "[at step#<num>: <step_description>]" of the steps 
+where `"step#<ID>: <step description>"` can be found in the bracket "[at step#<ID>: <step_description>]" of the steps 
 (without the brackets.)
 
 If a blamed step wrote/updated a file, also blame subsequent steps updating that file.

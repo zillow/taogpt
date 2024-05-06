@@ -37,7 +37,7 @@ To solve this task step, outline a sequence of high-level, action-oriented plan.
   choose linear, decomposable steps over looping. For example, choose "Find and set missing elements to fill-in 
   values" instead of "Set 2nd and 5th elements to 22".
 * Avoid loops if possible as they are less friendly to solution tree traversal or backtracking.
-* Worship Occam's razor.
+* Worship Occam's razor. If the task asks for skipping something, try to obey it.
 * Don't jump ahead. Plan **only for this step** and not something else from the higher plans.
 
 Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.

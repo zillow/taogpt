@@ -179,13 +179,15 @@ class LangChainLLM(LLM):
                 pass
             reply_tokens = self.count_tokens(reply_content)
             token_count = context_tokens + reply_tokens
+            eff_tokens = f" (eff. tokens: {token_count * token_factor})" if token_factor != 1.0 else ''
+            self._total_tokens += token_count
+
+            self._logger.new_message_section(role='reply', step_index=None, tokens=reply_tokens)
             self._logger.log(f"{is_json}Reply: temperature={temperature}")
             self._logger.log(reply_content_logged, demote_h1=True)
-
-            eff_tokens = f" (eff. tokens: {token_count * token_factor})" if token_factor != 1.0 else ''
-            self._logger.log(f"{context_tokens} context tokens, {reply_tokens} reply tokens. "
-                             f" **Total tokens**: {token_count}{eff_tokens}\n", role='debug')
-            self._total_tokens += token_count
+            self._logger.log(f"context tokens: {context_tokens}, subtotal: {token_count}{eff_tokens}. "
+                             f"cumulative total: {self.total_tokens}\n")
+            self._logger.close_message_section()
             return reply_content
         except Exception as e:
             _time.sleep(3)

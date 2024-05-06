@@ -153,6 +153,14 @@ class Executor(_abc.ABC):
     def chain(self) -> list[StepABC]:
         pass
 
+    @_abc.abstractmethod
+    def enqueue(self, step: StepABC):
+        pass
+
+    @_abc.abstractmethod
+    def remove_steps(self, *, from_step: StepABC=None, to_step: StepABC=None, steps: list[StepABC]=None):
+        pass
+
     def previous_step(self, step: StepABC) -> StepABC|None:
         i = self.chain.index(step)
         return self.chain[i-1] if i > 0 and i < len(self.chain) else None
@@ -218,7 +226,7 @@ class StepABC(_abc.ABC):
     def __init__(self, *, description: str, role: str, step_name: str|None):
         self.description = _parsing.at_step_re.sub('', description).strip()
         self.role = role
-        self._step_name = _utils.str_or_blank(step_name)
+        self._step_name = _parsing.sanitize_step_name(_utils.str_or_blank(step_name))
         self._visible = True
 
     @property

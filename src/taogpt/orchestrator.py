@@ -74,6 +74,19 @@ class Orchestrator(Executor):
     def chain(self) -> list[Step]:
         return self._chain
 
+    def remove_steps(self, *, from_step: StepABC=None, to_step: StepABC=None, steps: list[StepABC]=None):
+        if from_step is not None:
+            from_index, to_index = self.step_id(from_step), None
+            new_chain = self._chain[:from_index]
+            if to_step is not None:
+                to_index = self.step_id(to_step)
+                new_chain += self._chain[to_index + 1:]
+            self._chain = new_chain
+        if steps is not None:
+            for step in steps:
+                if step in self._chain:
+                    self._chain.remove(_t.cast(Step, step))
+
     @property
     def current_step_name(self) -> str:
         step: Step
@@ -211,8 +224,12 @@ class Orchestrator(Executor):
                 self._dequeue_waiting_step()
                 continue
             new_step = last_step.eval(self)
-            if _utils.safe_is_instance(last_step, SummarizeStep) and new_step is None: # and successfully eval/checked
-                self.finalize_files()
+            if _utils.safe_is_instance(last_step, SummarizeStep) and new_step is None: # and successfully eval&checked
+                self.logger.log(f"Completed final summarization. Taking care of {len(self._waiting)} clean-up chores")
+                remaining = self._dequeue_waiting_step()
+                while remaining is not None:
+                    remaining.eval(self)
+                    remaining = self._dequeue_waiting_step()
                 return
             if new_step is not None:
                 if new_step is not self.chain[-1]:
@@ -221,9 +238,15 @@ class Orchestrator(Executor):
                 self.next_step()
             self._dequeue_waiting_step()
 
-    def _dequeue_waiting_step(self):
+    def enqueue(self, step: StepABC):
+        self._waiting.append(_t.cast(Step, step))
+
+    def _dequeue_waiting_step(self) -> Step|None:
         if len(self._waiting) > 0:
-            self.chain.append(self._waiting.pop(0)) # dequeue first waiting
+            next_waiting = self._waiting.pop(0)
+            self.chain.append(next_waiting) # dequeue first waiting
+            return next_waiting
+        return None
 
     def check_token_usages(self):
         if 0 < self.config.max_tokens <= self.llm.total_tokens:
@@ -292,11 +315,11 @@ class Orchestrator(Executor):
         return None
 
     def finalize_files(self):
-        files = GeneratedFile.collect_files(self.chain)
-        for file in files.keys():
-            finalize_file_step = FinalizeFileStep(description='', role=ROLE_TAO, file_name=file)
-            self.chain.append(finalize_file_step)
-            finalize_file_step.eval(self)
+        from taogpt.program import consolidate_updated_files
+        consolidate_file_steps = consolidate_updated_files(self.chain)
+        for consolidate_file_step in consolidate_file_steps:
+            self.chain.append(consolidate_file_step)
+            consolidate_file_step.eval(self)
 
     def ask_questions(self, questions: list[str]) -> dict[str, str]:
         # for now just use the console input

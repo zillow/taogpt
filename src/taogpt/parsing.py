@@ -39,6 +39,10 @@ strip_quotes_re = re.compile(r"^\s+|[\s\"\'.,]+$|[\"\']", flags=re.DOTALL)
 step_name_re = re.compile(r"^\s*(((\d|\.)+)\s+)?(.+)")
 
 
+def sanitize_step_name(step_name: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[\"'`\n\[\]]", " ", step_name)).strip()
+
+
 def fix_fenced_block_backticks(original: str|None) -> str|None:
     """
     Deprecated
@@ -121,45 +125,147 @@ _step_re = re.compile(r"^( *\[? *(at )?(step#)?(\d+): *)?(.*?)[\s\]]*$", flags=r
 _next_step_re = re.compile(r"^( *\[? *(at )?step#?\d*:? *)?(response to +)?(.*?)[\s\]]*$", flags=re.IGNORECASE)
 _proposal_re = re.compile(f"^\s*\[?{PRIOR_PROPOSAL}", flags=re.IGNORECASE)
 
-def parse_step_id_and_name(text: str, ok_without_step_id=False) -> tuple[int|None, str]:
+def parse_step_id_and_name(text: str, ok_without_step_id=False, key='') -> tuple[int|None, str]:
+    if key != '':
+        key = f"{key}: "
     text = _utils.str_or_blank(text)
     if _proposal_re.search(text) is not None:
-        raise ParseError("You tried to report error in other proposals. Error report is only for previous executed "
-                         "steps. Either report issues in previous steps or try different actions.")
+        raise ParseError(f"{key}You tried to report error in other proposals. Error report is only for previous "
+                         f"executed steps. Either report issues in previous steps or try different actions.")
     match = _step_re.match(text)
     if match is None:
-        raise ParseError("Step number and description must be in the format of 'step#<num>: <string description>'.")
+        raise ParseError(f"{key}Step ID and description must be in the format of "
+                         f"'step#<ID>: <string description>'.")
     try:
         step_num = int(match.group(4))
         return (step_num, match.group(5))
     except TypeError:
         if ok_without_step_id:
             return None, text
-        raise ParseError("Step number and description must be in the format of 'step#<num>: <string description>'.")
+        raise ParseError(f"{key}Step ID and description must be in the format of "
+                         f"'step#<ID>: <string description>'.")
 
 
 @dataclasses.dataclass
 class NextStepDesc:
-    done_with_step_id: int|None
-    done_with_step_desc: str|None
+    target_plan_id: int | None
+    target_plan_tag: str | None
+    target_plan_done: bool
     next_step_desc: str|None
+    plan_of_next_step: str|None
 
     @property
     def is_final_step(self):
         next_step = _utils.str_or_blank(self.next_step_desc).lower()
-        return 'all done' in next_step
+        completed_plan_tag = _utils.str_or_blank(self.target_plan_tag).lower()
+        return ('all done' in next_step
+                or _utils.normalized_levenstein_distance(completed_plan_tag, "top-level plan/answer") <= 0.05)
+
+    def to_json_string(self, as_markdown=False):
+        next_step_dict = self.to_dict()
+        next_step_json = json.dumps(next_step_dict) if len(next_step_dict) > 0 else None
+        if next_step_json is not None and as_markdown:
+            next_step_json = f"```json\n{next_step_json}\n```"
+        return next_step_json
+
+    def to_dict(self):
+        next_step_dict: dict[str, str|bool] = dict()
+        if self.target_plan_tag is not None:
+            next_step_dict[f'done with [{self.target_plan_tag}]'] = self.target_plan_done
+        if self.next_step_desc is not None:
+            next_step_dict['next_step'] = self.next_step_desc
+        return next_step_dict
 
 
 def parse_next_step_spec(text: str) -> NextStepDesc:
-    next_step_response: dict[str, str] = parse_json_hash(text)
-    done_with_plan = next_step_response.get('done_with_plan', None)
-    done_with_step = parse_step_id_and_name(done_with_plan) if done_with_plan is not None else (None, None)
-    next_step = next_step_response.get('next', None)
-    if next_step:
-        next_step_id, next_step = parse_step_id_and_name(next_step, ok_without_step_id=True)
-        if next_step_id is not None and next_step_id == done_with_step[0]:
-            done_with_step = (None, None)
-    return NextStepDesc(done_with_step[0], done_with_step[1], next_step)
+    next_step_response: dict[str, str|bool] = parse_json_hash(text)
+    target_plan_id: int|None = None
+    target_plan_desc: str|None = None
+    target_plan_tag: str|None = None
+    target_done: bool|None = None
+    for key, value in next_step_response.items():
+        matched = re.match(r"^\s*done\s+with\s+\[*([^]]+)", key)
+        if matched:
+            target_plan_id, target_plan_desc = parse_step_id_and_name(matched.group(1), key=key)
+            target_plan_tag = f"step#{target_plan_id}: {target_plan_desc}"
+            target_done = value
+            break
+    plan_of_next_step = next_step_response.get('plan_of_next_step', None)
+    if target_done:
+        if plan_of_next_step is not None:
+            next_plan_id, next_plan_desc = parse_step_id_and_name(plan_of_next_step, ok_without_step_id=True)
+            if target_plan_id == next_plan_id or target_plan_desc == next_plan_desc:
+                raise ParseError(f"Cannot declare {target_plan_tag} done while it's the plan of next step")
+    next_step = next_step_response.get('step', next_step_response.get('next_step', None))
+    if not isinstance(next_step, str):
+        raise ParseError(f"The key `next_step` must have a string value indicating the next step.")
+    if next_step == '':
+        raise ParseError(f'No next step specified. Set next step description to the `next_step` key.')
+    elif next_step not in ('all done', 'done'):
+        _, next_step = parse_step_id_and_name(next_step, ok_without_step_id=True)
+    return NextStepDesc(target_plan_id=target_plan_id, target_plan_tag=target_plan_tag, target_plan_done=target_done,
+                        next_step_desc=next_step, plan_of_next_step=plan_of_next_step)
+
+
+# @dataclasses.dataclass
+# class NextStepDesc:
+#     completed_plan_id: int | None
+#     completed_plan_desc: str | None
+#     next_step_desc: str|None
+#     next_step_plan_id: int | None
+#     next_step_plan_desc: str | None
+#
+#     @property
+#     def is_final_step(self):
+#         next_step = _utils.str_or_blank(self.next_step_desc).lower()
+#         done_with = _utils.str_or_blank(self.completed_plan_desc).lower()
+#         return ('all done' in next_step
+#                 or _utils.normalized_levenstein_distance(done_with, "top-level plan/answer") <= 0.05)
+#
+#     def to_json_string(self, as_markdown=False):
+#         next_step_dict = self.to_dict()
+#         next_step_json = json.dumps(next_step_dict) if len(next_step_dict) > 0 else None
+#         if next_step_json is not None and as_markdown:
+#             next_step_json = f"```json\n{next_step_json}\n```"
+#         return next_step_json
+#
+#     def to_dict(self):
+#         next_step_dict: dict[str, str] = dict()
+#         if self.completed_plan_id is not None:
+#             next_step_dict['completed_plan'] = f"step#{self.completed_plan_id}: {self.completed_plan_desc}"
+#         if self.next_step_desc is not None:
+#             next_step_dict['next_step_description'] = self.next_step_desc
+#         if self.next_step_plan_id is not None:
+#             next_step_dict['next_step_plan'] = f"step#{self.next_step_plan_id}: {self.completed_plan_desc}"
+#         elif self.next_step_plan_desc is not None:
+#             next_step_dict['next_step_plan'] = self.next_step_plan_desc
+#         return next_step_dict
+#
+#
+# def parse_next_step_spec(text: str) -> NextStepDesc:
+#     next_step_response: dict[str, str] = parse_json_hash(text)
+#     completed_plan = next_step_response.get('completed_plan', None)
+#     completed_plan_step = parse_step_id_and_name(completed_plan, key='completed_plan') \
+#         if completed_plan is not None else (None, None)
+#     next_step = next_step_response.get('next_step_description', None)
+#     next_step_plan = next_step_response.get('next_step_plan', None)
+#     next_plan_id, next_plan_desc = None, None
+#     if next_step:
+#         # next_step_id, next_step = parse_step_id_and_name(next_step, ok_without_step_id=True, key='next_step_description')
+#         # if next_step_id is not None and next_step_id == completed_plan_step[0]:
+#         #     completed_plan_step = (None, None)
+#         if next_step_plan is not None and next_step_plan.strip().lower() not in ("null", "none"):
+#             next_plan_id, next_plan_desc = parse_step_id_and_name(next_step_plan, key='next_step_plan')
+#             completed_plan_id: int|None = completed_plan_step[0]
+#             if completed_plan_id is not None:
+#                 if completed_plan_id == next_plan_id:
+#                     # while we can ask GPT to fix this, it seems to happen quite often
+#                     completed_plan_step = (None, None)
+#                 elif completed_plan_id <= next_plan_id:
+#                     raise ParseError(f"next_step_plan: Cannot claim [{completed_plan}] "
+#                                      f"while trying to work at step underneath it.")
+#     return NextStepDesc(completed_plan_id=completed_plan_step[0], completed_plan_desc=completed_plan_step[1],
+#                         next_step_desc=next_step, next_step_plan_id=next_plan_id, next_step_plan_desc=next_plan_desc)
 
 
 def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tuple[int, str]]|None]], dict]:
@@ -511,6 +617,10 @@ def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
         else:
             if current_top_level_block_lines is not None:
                 current_top_level_block_lines.append(line)
+            else:
+                # this is to make the Markdown logging not corrupted by unquoted HTML tags
+                unquoted_html_tag_re = re.compile(r"([^`])(`+)?(<[a-z]+>)(`+)?", flags=re.IGNORECASE)
+                line = unquoted_html_tag_re.sub(r"\1`\3`", line)
             if len(stack) == 0 or not collapse_blocks:
                 result.append(line)
 

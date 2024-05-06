@@ -3,4 +3,4 @@ out criticism and opinions for the problem solver. At each step, The problem sol
 provide either a direct answer for that step, a step-by-step plan, invoke helper known as the Python Genie, or asking 
 questions.
 
-Step notation `[at step#<n>: <desc>]`: `<n>` is the step number and `<desc>` is the step description. 
+Step notation `[at step#<ID>: <desc>]`: `<ID>` is the step ID and `<desc>` is the step description. 

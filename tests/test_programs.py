@@ -72,7 +72,7 @@ def test_final_direct_answer_with_nonstandard_heading():
 # {NEXT_I_WANT_TO_WORK_AT}
 ```json
 {{
-    "next": "all done"
+    "next_step": "all done"
 }}
 ```
 """

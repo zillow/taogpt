@@ -3,7 +3,7 @@ current step, higher is better. Note: choices not directly providing the answer 
 
 * `HERE_IS_MY_STEP_BY_STEP_PLAN` choices provide a step-by-step plan to tackle the current problem step. These should
   be scored based on the correctness and efficiency of the plan. They are plans! The problem solver will work on each
-  step later.
+  step later. If the task asks for skipping something, prefer plans that obey it.
 * `MY_THOUGHT` choices provides intuitive thought to the problem step and should be scored according to correctness
   and clarity of the thought. Simple task/steps should have direct/intuitive an answer. Incorrect but fixable answers 
   should get some points rather than 0.

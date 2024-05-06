@@ -9,15 +9,15 @@ responsible in the following format:
   "<what to verify>": {
     "error": "<something incorrect, subsequent steps not impacted or fixable>", 
     "content": "<content snippet related to the issue",
-    "blame": "<step#>: <step description>",
-    "affecting": ["<step#>: <step description>", "<step#>: <step description>", ...]
+    "blame": "step#<ID>: <step description>",
+    "affecting": ["step#<ID>: <step description>", "step#<ID>: <step description>", ...]
   },
   // ...
 }
 ```
 ````
 
-where `"<step#>: <step description>"` should (only) be found in the bracket "[at step#<num>: <step_description>]" of 
+where `"step#<ID>: <step description>"` should (only) be found in "[at step#<ID>: <step_description>]" snippet of 
 the steps (without the brackets.)
 
 Report only real errors. Do NOT report small issues/warnings or intermittent errors that have already been fixed.

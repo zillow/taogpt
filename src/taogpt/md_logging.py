@@ -108,10 +108,11 @@ class MarkdownLogger:
         color = role_color_map.get(role, 'white')
         if role == 'debug':
             color = 'aliceblue'
+        step_index = f"[{step_index:03d}]" if step_index is not None else ''
         self._log.write(f'<div style="background-color:{color}; padding: 5px; border-bottom: 1px dotted grey">\n'
-                 f'<div>[{step_index}] <b>{role}</b>: {tokens}</div>\n\n')
+                        f'<div>{step_index} <b>{role}</b>: {tokens}</div>\n\n')
         if self._console_out is not None:
-            print(f"--- [{step_index:03d}] {role.strip()} ---", file=self._console_out)
+            print(f"--- {step_index} {role.strip()} ---", file=self._console_out)
 
     def close_message_section(self):
         self._log.write('\n</div>\n\n')

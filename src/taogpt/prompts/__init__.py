@@ -26,6 +26,7 @@ class PromptDb:
         self.orchestrator_parse_error=_read(path / 'orchestrator_parse_error.md')
         self.tao_prior_approaches=_read(path / 'tao_prior_approaches.md')
         self.tao_summarize=_read(path / 'tao_summarize.md')
+        self.tao_summarize_partial=_read(path / 'tao_summarize_partial.md')
         self.tao_summarize_questions=_read(path / 'tao_summarize_questions.md')
         self.sage_intro=_read(path / 'sage.md')
         self.sage_final_check=_read(path / 'sage_final_check.md')
@@ -41,11 +42,8 @@ class PromptDb:
             snippet_notes_for_files=self.snippet_notes_for_files)
         self._tao_expand_any_step = self.tao_templates.format(
             snippet_report_errors=self.snippet_report_errors,
-            snippet_direct_answer=self.snippet_direct_step_answer.format(snippet_next_step=self.snippet_next_step),
+            snippet_direct_answer=self.snippet_direct_step_answer,
             snippet_notes_for_files=self.snippet_notes_for_files)
-        self.tao_next_step = self.tao_next_step.format(
-            snippet_next_step=self.snippet_next_step,
-            snippet_report_errors=self.snippet_report_errors)
 
     def reload(self, path: _path.Path=_template_dir) -> PromptDb:
         self.__init__(path)

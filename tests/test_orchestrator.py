@@ -20,14 +20,14 @@ def test_check_final_solution_success(logger):
 "rule conformance": {"ok": "All right!"},
 "calculation": {
         "warning": "Can simplify", 
-        "blame": ["step#13: complex step", "step#22: goofy step"],
-        "affecting": ["step#88: affected step"]
+        "blame": ["step#1: calculate total", "step#2: summarize"],
+        "affecting": ["step#2: summarize"]
     }
 }
     """
     concerns, _ = parse_verification_response(text)
     assert len(concerns) == 1
-    assert concerns == {"Can simplify": ("warning", [(13, "complex step"), (22, "goofy step")])}
+    assert concerns == {"Can simplify": ("warning", [(1, "calculate total"), (2, "summarize")])}
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
         if reason in ('check_final_answer', 'merge_criticisms'):
@@ -37,13 +37,13 @@ def test_check_final_solution_success(logger):
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
     orchestrator.config.verification_votes = 2
+    orchestrator.config.max_repairs = 0
     step.eval(orchestrator)
-    assert len(llm.conversation_sequence) == 5
+    assert len(llm.conversation_sequence) == 4
     assert llm.conversation_sequence[0][0] == 'summarize'
     assert llm.conversation_sequence[1][0] == 'check_final_answer'
     assert llm.conversation_sequence[2][0] == 'check_final_answer'
     assert llm.conversation_sequence[3][0] == 'merge_criticisms'
-    assert llm.conversation_sequence[4][0] == 'summarize'
 
 
 def test_check_final_solution_failed(logger):
@@ -192,7 +192,8 @@ So, the first row becomes: 4 3 2 1
 ### NEXT_I_WANT_TO_WORK_AT:
 ```json
 {
-    "next": "Fill in the second row"
+    "done with [step#2: sub-plan]": true,
+    "next_step": "Fill in the second row"
 }
 ```
 """
@@ -200,6 +201,9 @@ So, the first row becomes: 4 3 2 1
     assert isinstance(step, DirectAnswerStep), str(type(step))
     assert not step.is_final_step
     assert step.next_step.next_step_desc == 'Fill in the second row'
+    assert step.next_step.target_plan_tag == 'step#2: sub-plan'
+    assert step.next_step.target_plan_id == 2
+    assert step.next_step.target_plan_done
 
 
 def test_parse_step_by_step_no_whys():
@@ -243,3 +247,52 @@ no_such_var * 123
     step.eval(orchestrator)
     assert '314.15' in step.description
     assert step.n_tries == 2
+
+
+def test_validate_next_step_spec(logger):
+    llm = MockLLM(logger)
+    orchestrator = create_orchestrator(llm, logger)
+    step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
+    orchestrator.chain.append(step)
+    step_by_step = StepByStepPlan(description="""
+```json
+{
+  "1": {"description": "Fill in the first row"},
+  "2": {"description": "Fill in the second row"}
+}
+```""", role=ROLE_TAO, step_name='start')
+    orchestrator.chain.append(step_by_step)
+    step_by_step2 = StepByStepPlan(description="""
+```json
+{
+  "1": {"description": "Find unfilled slots"},
+  "2": {"description": "Fill slots"}
+}
+```""", role=ROLE_TAO, step_name='Fill in the first row')
+    orchestrator.chain.append(step_by_step2)
+    grandchild = DirectAnswerStep(description="Slot 2 and 3",
+                                  role=ROLE_TAO, step_name='Find unfilled slots')
+    orchestrator.chain.append(grandchild)
+
+    next_step = NextStepDesc(None, None, False, "Fill in the second row", plan_of_next_step='step#1: start')
+    validate_next_step_spec(orchestrator, next_step)
+
+    # next step in parent
+    next_step = NextStepDesc(2, 'step#2: Fill in the first row', True, "Fill in the second row",
+                             plan_of_next_step='step#1: start')
+    validate_next_step_spec(orchestrator, next_step)
+    assert next_step.next_step_desc is None # reset to ask later
+
+    # next step in grandparent
+    next_step = NextStepDesc(2, 'step#2: Fill in the first row', True, "Fill in the second row",
+                             plan_of_next_step='step#2: Fill in the first row')
+    validate_next_step_spec(orchestrator, next_step)
+    assert next_step.next_step_desc is None
+
+    try:
+        next_step = NextStepDesc(0, "step#0: This is a problem", True, "Fill in the second row",
+                                 plan_of_next_step='step#0: This is a problem')
+        validate_next_step_spec(orchestrator, next_step, current_plan=step_by_step)
+        raise AssertionError("Expecting ParseError not raised")
+    except ParseError:
+        pass

@@ -14,5 +14,5 @@ Follow this template:
 
 ### NEXT_I_WANT_TO_WORK_AT:
 
-{snippet_next_step}
+<see next step JSON format below>
 `````

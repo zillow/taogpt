@@ -180,8 +180,8 @@ The end"""
 
 ```json
 {{
-    "next": "Evaluate possible addition combinations",
-    "done_with_plan": "step#22: check arithmetics"
+    "next_step": "setup",
+    "done with [step#22: check arithmetics]": true
 }}
 ```
 
@@ -192,9 +192,10 @@ The end"""
     decision, answer = parsing.parse_next_step_reply(text)
     assert decision == NEXT_I_WANT_TO_WORK_AT
     assert isinstance(answer, parsing.NextStepDesc)
-    assert answer.next_step_desc == 'Evaluate possible addition combinations'
-    assert answer.done_with_step_id == 22
-    assert answer.done_with_step_desc == "check arithmetics"
+    assert answer.next_step_desc == 'setup'
+    assert answer.target_plan_id == 22
+    assert answer.target_plan_done
+    assert answer.target_plan_tag == "step#22: check arithmetics"
 
 
 def test_parse_python_code_snippets():
@@ -365,21 +366,35 @@ def test_parse_next_step_name():
     text = """
     ```json
     {
-        "done_with_plan": "1: top-level plan",
-        "next": "all done"
+        "done with [step#1: top-level plan]": true,
+        "next_step": "all done"
     }
     ```
     """
     next_step = parsing.parse_next_step_spec(text)
     assert next_step.next_step_desc == "all done"
-    assert next_step.done_with_step_desc == "top-level plan"
-    assert next_step.done_with_step_id == 1
+    assert next_step.target_plan_id == 1
+    assert next_step.target_plan_tag == "step#1: top-level plan"
+    assert next_step.target_plan_done
 
 
 def test_parse_next_step_invalid():
     text = """
-    "done_with_plan": "1: top-level plan",
-    "next": "all done"
+    "done with [step#1: top-level plan]": true,
+    "next_step": "all done"
+    """
+    try:
+        parsing.parse_next_step_spec(text)
+        assert False, "Expecting ParseError not raised"
+    except parsing.ParseError as e:
+        pass
+    text = """
+    ```json
+    {
+        "done with [top-level plan]": true,
+        "next_step": "all done"
+    }
+    ```
     """
     try:
         parsing.parse_next_step_spec(text)
@@ -598,3 +613,29 @@ text
         else:
             assert i <= 1, "Unexpected blocks extracted"
 
+
+def test_check_and_fix_unquoted_html_tags():
+    html_block = """````html
+<html>
+<body><div>but don't quoted the ones in html fenced block</div></body>
+</html>
+````
+"""
+    fixed, blocks = parsing.check_and_fix_fenced_blocks(f"""
+some html tags like <div> or `<table> are not quoted by backtick. Others `<div>` OK.
+{html_block}
+""", collapse_blocks=False)
+    assert fixed.strip() == f"""
+some html tags like `<div>` or `<table>` are not quoted by backtick. Others `<div>` OK.
+{html_block}""".strip(), fixed
+    for i, (digest, block) in enumerate(blocks.items()):
+        if i == 0:
+            assert block[0] == html_block.strip()
+        else:
+            assert i <= 1, "Unexpected blocks extracted"
+
+
+def test_sanitize_step_name():
+    original = "[\"'do\n''something]"
+    fixed = parsing.sanitize_step_name(original)
+    assert fixed == 'do something'
