@@ -1,4 +1,4 @@
-Next step JSON format:
+Next step direction must be in a JSON fenced block with format:
 
 ```json
 {{

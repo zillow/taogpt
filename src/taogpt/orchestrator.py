@@ -134,9 +134,12 @@ class Orchestrator(Executor):
                additional_sage_tokens: int=None):
         if additional_tokens is not None:
             self.config.max_tokens += additional_tokens
+            self.llm.max_token_usage = self.config.max_tokens * 2
             self.logger.log(f"**resume**: extend token allowance by {additional_tokens} to {self.config.max_tokens}")
         if additional_sage_tokens is not None:
             self.config.max_tokens_for_sage_llm += additional_sage_tokens
+            if self.sage_llm is not None:
+                self.sage_llm.max_token_usage = self.config.max_tokens_for_sage_llm * 2
             self.logger.log(f"**resume**: extend token allowance for sage "
                             f"LLM by {additional_sage_tokens} to {self.config.max_tokens_for_sage_llm}")
         self.config.pause_after_initial_solving_expansion = False
@@ -172,43 +175,40 @@ class Orchestrator(Executor):
     def backtrack_to(self, step_number: int):
         if step_number < 0 or step_number >= len(self.chain):
             raise ValueError(f"step number must be in [0, {len(self.chain)-1}]")
-        self.backtrack(Backtrack("Manual backtrack", self.chain[step_number]))
+        self.backtrack(Backtrack("Manual backtrack", blame=self.chain[step_number]))
         self._execute_with_backtracking()
 
     def backtrack(self, backtrack: Backtrack):
-        backtrack_from = -1
-        for i in range(len(self.chain)):
-            if self.chain[i] is backtrack.blame: # found the culprit
-                backtrack_from = i
-                break
+        backtrack_to: Step|None = _t.cast(Step, backtrack.blame).created_by
+        if backtrack_to is None or not backtrack_to.retryable(self.config):
+            i = self.step_id(backtrack.blame if backtrack_to is None else backtrack_to)
+            if i is None:
+                i = len(self.chain) - 1
+            while 0 <= i < len(self.chain):
+                step = self.chain[i]
+                if _utils.safe_is_instance(step, ExpandableStep) and step.retryable(self.config):
+                    backtrack_to = step
+                    break
+                i -= 1
 
-        last_step: Step|None = None
-        while 0 <= backtrack_from < len(self.chain):
-            step = self.chain[backtrack_from]
-            if _utils.safe_is_instance(step, ExpandableStep) and step.retryable(self.config):
-                last_step = step
-                break
-            backtrack_from -= 1
-
-        if last_step is None:
+        if backtrack_to is None:
             self.logger.log_debug(f"Cannot find culprit step: {backtrack.blame}")
             return
 
         reverted_steps = []
-        while len(self.chain) > 0 and self.chain[-1] is not last_step:
+        while len(self.chain) > 0 and self.chain[-1] is not backtrack_to:
             reverted_steps.append(self.chain.pop(-1))
         self._waiting.clear() # as we backtrack, cancel all waiting steps
         if len(self.chain) == 0:
             raise UnsolvableError('Fail to solve! No more viable options')
         self._reverted_steps = reversed(reverted_steps)
-        assert last_step is self.chain[-1] # exactly at the end
+        assert backtrack_to is self.chain[-1] # exactly at the end
 
-        desc = _utils.safe_subn(
-            last_step.step_name if last_step.step_name is not None else last_step.description)
+        desc = _t.cast(ExpandableStep, backtrack_to).step_name_for_expanded
         self.logger.log(f'---\n<div style="color: white; background-color: black">\n')
-        self.logger.log(f"# BACKTRACK to {desc}/{self.step_id(last_step)} for: {str(backtrack)}\n")
+        self.logger.log(f"# BACKTRACK to {desc}/{self.step_id(backtrack_to)} for: {str(backtrack)}\n")
         self.logger.log(f"</div>\n")
-        _t.cast(ExpandableStep, last_step).backtrack(self, backtrack)
+        _t.cast(ExpandableStep, backtrack_to).backtrack(self, backtrack)
 
     def _loop(self):
         while len(self.chain) > 0:
@@ -256,11 +256,12 @@ class Orchestrator(Executor):
             raise TokenUsageError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
                                   f"exceeded allowance of {self.config.max_tokens_for_sage_llm}", self.chain[-1])
 
-    def step_id(self, step):
+    def step_id(self, step) -> int|None:
         assert step is not None
         for i, elem in enumerate(self.chain):
             if elem is step:
                 return i
+        return None
 
     def show_conversation_thread(self, with_header=True, with_extras=False,
                                  selector: _t.Callable[[int, StepABC], bool] | None=None,
@@ -306,11 +307,11 @@ class Orchestrator(Executor):
                 elif _utils.safe_is_instance(self.chain[i], (DirectAnswerStep, AskPythonGenieStep, StepByStepPlan)):
                     break
             if is_direct_answer_only: # replace
-                final_answer_step = SummarizeStep(description='', role=ROLE_TAO)
+                final_answer_step = SummarizeStep()
                 self._waiting.append(final_answer_step)
                 return final_answer_step
 
-        summarize_step = SummarizeStep(description='', role=ROLE_TAO)
+        summarize_step = SummarizeStep()
         self._waiting.append(summarize_step)
         return None
 

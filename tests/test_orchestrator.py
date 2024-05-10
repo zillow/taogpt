@@ -30,9 +30,9 @@ def test_check_final_solution_success(logger):
     assert concerns == {"Can simplify": ("warning", [(1, "calculate total"), (2, "summarize")])}
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        if reason in ('check_final_answer', 'merge_criticisms'):
+        if reason in ('verify', 'merge_criticisms'):
             return text
-        elif reason == 'summarize':
+        elif reason == 'SummarizeStep':
             return "Here is your answer"
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
@@ -40,10 +40,10 @@ def test_check_final_solution_success(logger):
     orchestrator.config.max_repairs = 0
     step.eval(orchestrator)
     assert len(llm.conversation_sequence) == 4
-    assert llm.conversation_sequence[0][0] == 'summarize'
-    assert llm.conversation_sequence[1][0] == 'check_final_answer'
-    assert llm.conversation_sequence[2][0] == 'check_final_answer'
-    assert llm.conversation_sequence[3][0] == 'merge_criticisms'
+    assert llm.conversation_sequence[0][0] == 'verify'
+    assert llm.conversation_sequence[1][0] == 'verify'
+    assert llm.conversation_sequence[2][0] == 'merge_criticisms'
+    assert llm.conversation_sequence[3][0] == 'SummarizeStep'
 
 
 def test_check_final_solution_failed(logger):
@@ -60,14 +60,15 @@ def test_check_final_solution_failed(logger):
     assert json.loads(text).keys() == full_json.keys()
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        if reason == 'summarize':
+        if reason == 'SummarizeStep':
             return "3"
-        if reason in ('check_final_answer', 'merge_criticisms'):
+        if reason in ('verify', 'merge_criticisms'):
             return text
         assert False, f"Unexpected reason: {reason}"
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
     _t.cast(DirectAnswerStep, orchestrator.previous_step(step))._n_tries = orchestrator.config.max_repairs
+    step._reset_chain_retry_count = True
     try:
         step.eval(orchestrator)
         assert False, "expecting Backtrack not raised"
@@ -87,7 +88,7 @@ def test_check_final_solution_parse_error(logger):
         pass
 
     def reply(_conversation: [(str, str)], reason: str, _step_id: str) -> str:
-        if reason == 'check_final_answer':
+        if reason == 'verify':
             return text
         return 'huh'
 
@@ -106,7 +107,7 @@ def create_final_check_chain(reply, logger):
     orchestrator.chain.append(step)
     step = DirectAnswerStep(description="This is an answer", role=ROLE_TAO, step_name='calculate total')
     orchestrator.chain.append(step)
-    step = SummarizeStep(description="", role=ROLE_TAO)
+    step = SummarizeStep()
     orchestrator.chain.append(step)
     return step, llm, orchestrator
 

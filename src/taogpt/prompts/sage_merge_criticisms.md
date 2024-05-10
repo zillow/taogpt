@@ -3,6 +3,7 @@ does not necessary mean it is real or still applicable to the final answer.
 
 * Simply drop/discard inapplicable issues or wrong criticisms without mentioning again.
 * For the remaining issues, consolidate/merge similar ones.
+* If there is no more issue left, response with empty JSON hash.
 
 Respond according to the following format:
 

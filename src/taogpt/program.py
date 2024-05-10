@@ -3,7 +3,8 @@ import typing as _t
 from _collections import defaultdict as _defaultdict
 import math as _math
 import json as _json
-from abc import abstractmethod
+import re as _re
+from abc import abstractmethod, ABCMeta
 
 import taogpt
 import taogpt.llm_model
@@ -11,6 +12,7 @@ from . import StepABC, Backtrack, Pause, Executor, Config, GeneratedFile
 from .parsing import *
 from .constants import *
 import taogpt.utils as _utils
+from .parsing import ParseError
 from .utils import safe_subn
 from taogpt.prompts import PromptDb
 
@@ -92,6 +94,9 @@ class Step(StepABC):
 
     def retryable(self, config: Config):
         return False
+
+    def reset_retry_count(self):
+        pass
 
     def eval(self, executor: Executor) -> Step | None:
         returned = self.eval_only(executor)
@@ -181,8 +186,8 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         self.build(description)
 
     def build(self, description: str, next_step: NextStepDesc=None):
-        self.description = re.sub(rf"#+\s+{NEXT_I_WANT_TO_WORK_AT}", f"### {NEXT_I_WANT_TO_WORK_AT}:",
-                                  description, 1)
+        self.description = _re.sub(rf"#+\s+{NEXT_I_WANT_TO_WORK_AT}", f"### {NEXT_I_WANT_TO_WORK_AT}:",
+                                   description, 1)
         sections: dict[str, str] = parse_sections(self.description)
         extracted_contents = gather_file_contents(sections, pop_file_sections=True)
         self._files = {
@@ -199,7 +204,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
             self.next_step.target_plan_id = None
         reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
         self.description = '\n\n'.join(reconstructed)
-        self.description = re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=re.IGNORECASE)
+        self.description = _re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=_re.IGNORECASE)
 
     def validate(self, executor: Executor):
         super().validate(executor)
@@ -208,6 +213,9 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
     @property
     def n_tries(self) -> int:
         return self._n_tries
+
+    def reset_retry_count(self):
+        self._n_tries = 0
 
     def repair(self, executor: Executor):
         self._previous_contents.append((self.description, self._files.copy()))
@@ -230,7 +238,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                     to_be_sent,
                     temperature=0.0 if n_retries == 0.0 else executor.config.alternative_temperature,
                     reason=f"fix",
-                    step_id=f"{len(self._criticisms)}#{n_retries}")
+                    step_id=f"{executor.step_id(self)}/{len(self._criticisms)}#{n_retries}")
                 response = _utils.str_or_blank(response)
                 if not response.startswith(f"# {DirectAnswerStep.TYPE_SPEC}"):
                     response = f"# {DirectAnswerStep.TYPE_SPEC}\n\n" + response
@@ -263,7 +271,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         return file_contents
 
 
-class FinalizeFileStep(DirectAnswerStep):
+class ConsolidateFileStep(DirectAnswerStep):
     TYPE_SPEC = "CONSOLIDATE_FILE"
 
     def __init__(self, *, description: str, role: str, file_name: str, keep_content_even_if_same=False, **kwargs):
@@ -274,13 +282,21 @@ class FinalizeFileStep(DirectAnswerStep):
 
     @property
     def step_title(self) -> str:
-        return FinalizeFileStep.TYPE_SPEC
+        return ConsolidateFileStep.TYPE_SPEC
+
+    @property
+    def evaluated(self) -> bool:
+        return self._evaluated
+
+    @evaluated.setter
+    def evaluated(self, evaluated: bool):
+        self._evaluated = evaluated
 
     def retryable(self, config: Config):
         return True # always retryable
 
     def eval_only(self, executor) -> Step | None:
-        if self._evaluated:
+        if self.evaluated:
             return None
         prompt_db = executor.prompts
         system_prompt = prompt_db.tao_intro
@@ -319,7 +335,7 @@ class FinalizeFileStep(DirectAnswerStep):
                     self.description = f"The last version of file `{self._file_name}` looks good. No change."
                 else:
                     self.description = f"The file `{self._file_name}` has been reconciled with prior edits."
-                self._evaluated = True
+                self.evaluated = True
                 self.next_step = None # shouldn't happen
                 return None
             except ParseError as ex:
@@ -331,7 +347,7 @@ class FinalizeFileStep(DirectAnswerStep):
     def repair(self, executor: Executor):
         self._previous_contents.append((self.description, self._files))
         self.log_repair(executor)
-        self._evaluated = False
+        self.evaluated = False
         self.eval_only(executor)
         self.criticisms.clear()
         self._n_tries += 1
@@ -469,186 +485,105 @@ class StepByStepPlan(TaoReplyStep):
                 return _t.cast(StepByStepPlan, executor.chain[i]), i
         return None, None
 
-class SummarizeStep(TaoReplyStep, FixableStep):
-    TYPE_SPEC = SUMMARIZE_FINAL_ANSWER
 
-    def __init__(self, *, description: str, role: str = ROLE_TAO, **kwargs):
-        super().__init__(description=description, role=role, step_name=SUMMARIZE_FINAL_ANSWER, **kwargs)
-        self._n_tries = 0
-        self._evaluated = _utils.str_or_blank(self.description) != ''
-        self._pending_culprits: dict[Step, list[str]]|None = None
-        self._pending_error_count = 0
+def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, reason='verify') \
+        -> dict[str, tuple[str, list[tuple[int, str]]|None]]:
+    config = executor.config
+    votes = (votes or config.verification_votes)
+    system_prompt = executor.prompts.sage_intro
+    step_by_step_ids = {i for i in range(len(executor.chain))
+                        if _utils.safe_is_instance(executor.chain[i], StepByStepPlan)}
+    invisible_step_ids = {i for i in range(len(executor.chain)) if not executor.chain[i].visible_in_chain}
 
-    @property
-    def step_title(self) -> str:
-        return ""
-
-    @property
-    def n_tries(self) -> int:
-        return self._n_tries
-
-    def repair(self, executor: Executor):
-        self.log_repair(executor)
-        self._evaluated = False
-        self.eval_only(executor)
-
-    def eval_only(self, executor: Executor) -> Step | None:
-        if self._evaluated:
-            return None
-        system_prompt = executor.prompts.tao_intro
-        prompts = executor.show_conversation_thread(with_extras=True,
-                                                    except_step=self if len(self.description) == 0 else None,
-                                                    stop_at=self)
-        prompts.append((ROLE_ORCHESTRATOR, executor.prompts.tao_summarize))
-        if len(self.criticisms) > 0:
-            critic_text = self.format_critic_text()
-            step_id = executor.step_id(self)
-            prompts.append((ROLE_ORCHESTRATOR,
-                            executor.prompts.tao_fix_issues.format(
-                                step_id=step_id, step=self.step_name, critic_text=critic_text)))
-        self.description = executor.llm.ask(
-            system_prompt, prompts,
-            reason='summarize',
-            step_id=f"{executor.step_id(self)}",
-            temperature=0.0,
-            log_request=True)
-        self._evaluated = True
-        self._criticisms.clear()
-        self._n_tries += 1
-        return None
-
-    def eval(self, executor: Executor) -> Step | None:
-        self.eval_only(executor)
-
-        if not executor.config.check_final:
-            return None
-
-        if self._pending_culprits is None:
-            # concern: (issue, [step desc])
-            all_issues = self.check_final_answer(executor)
-            if len(all_issues) == 0:
-                return None
-            self._pending_culprits, self._pending_error_count = identify_culprits(executor, all_issues)
-        while self._pending_culprits is not None and len(self._pending_culprits) > 0:
-            if self not in self._pending_culprits: # we will always summarize again
-                self._n_tries -= 1
-                self._pending_culprits[self].append('')
-            executor.check_token_usages()
+    # issue: (level, [step desc])
+    all_issues: dict[str, _t.Tuple[str, list[tuple[int, str]]|None]] = dict()
+    number_of_issues = 0
+    issues_by_critic: list[dict] = []
+    verify_prompt = executor.prompts.sage_check_answer.format(intent=intent)
+    for i in range(votes):
+        prompts = executor.show_conversation_thread(with_extras=True)
+        prompts.append((ROLE_ORCHESTRATOR, verify_prompt))
+        n_retries = 0
+        prompts_to_be_sent = prompts.copy()
+        response: str = ''
+        while n_retries < config.max_retries:
             try:
-                repair_or_backtrack(executor, self._pending_culprits)
-            except RedoFinalCheck as e:
-                executor.logger.log(str(e))
-                self._pending_culprits, self._pending_error_count = None, 0
-                all_issues = self.check_final_answer(executor)
-                if len(all_issues) == 0:
-                    break
-                self._pending_culprits, self._pending_error_count = identify_culprits(executor, all_issues)
-        self._pending_culprits = None
-        if self._pending_error_count > 0:
-            self._pending_error_count = 0
-            return self # need to check final answer again
-        self._pending_error_count = 0
-        for consolidate_step in consolidate_updated_files(executor.chain):
-            executor.enqueue(consolidate_step)
-        return None
-
-    def check_final_answer(self,
-                           executor: Executor,
-                           votes: int=None,
-                           reason='check_final_answer') \
-            -> dict[str, tuple[str, list[tuple[int, str]]|None]]:
-        config = executor.config
-        votes = (votes or config.verification_votes)
+                response = executor.sage_llm.ask(
+                    system_prompt,
+                    prompts_to_be_sent,
+                    reason=reason,
+                    step_id=f"{step_id}/{i}#{n_retries}",
+                    temperature=0.0)
+                issues, full_json = parse_verification_response(response)
+                matched_step_by_steps: set[int] = set()
+                matched_invisible_steps: set[int] = set()
+                for severity, blames in issues.values():
+                    if severity in ('warning', 'error', 'fatal') and blames is not None:
+                        number_of_issues += 1
+                    if severity in ('error', 'fatal') and blames is not None:
+                        matched_step_by_steps.update(blame[0] for blame in blames if blame[0] in step_by_step_ids)
+                    matched_invisible_steps.update(
+                        blame[0] for blame in blames
+                        if blame[0] in invisible_step_ids or blame[0] < 0 or blame[0] >= len(executor.chain))
+                notes = ''
+                if len(matched_step_by_steps) > 0:
+                    if len(matched_step_by_steps) > 1:
+                        step_list = ', '.join(f"step#{i}" for i in matched_step_by_steps)
+                        step_list = f"{step_list} are step-by-step plans"
+                    else:
+                        step_list = f"step#{next(iter(matched_step_by_steps))} is a step-by-step plan"
+                    notes += f"Double-check: {step_list}. Errors in them are often caused by one of sub-steps. "
+                if len(matched_invisible_steps) > 0:
+                    if len(matched_invisible_steps) > 1:
+                        step_list = ', '.join(f"{i}" for i in matched_invisible_steps)
+                        step_list = f"Step IDs {step_list} do not exist"
+                    else:
+                        step_list = f"Step ID {next(iter(matched_step_by_steps))} does not exist"
+                    notes += f"Double-check: {step_list}. Step IDs are only found in `at step#<ID>`. "
+                if notes != '':
+                    prompts.append((ROLE_ORCHESTRATOR, notes))
+                    prompts_to_be_sent.append((ROLE_ORCHESTRATOR, notes))
+                    step_by_step_ids.clear()
+                    continue
+                issues_by_critic.append(full_json)
+                if len(issues) > 0:
+                    all_issues.update(issues)
+                break
+            except Exception as e:
+                n_retries += 1
+                executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
+                                            executor.prompts.orchestrator_parse_error)
+    if number_of_issues > 0 and len(issues_by_critic) > 1:
+        critic_text = "\n\n".join([
+            f"Critic {i+1}:\n```json\n{_json.dumps(report, indent=2)}\n```"
+            for i, report in enumerate(issues_by_critic)
+        ])
         system_prompt = executor.prompts.sage_intro
-        step_by_step_ids = {i for i in range(len(executor.chain))
-                            if _utils.safe_is_instance(executor.chain[i], StepByStepPlan)}
-        invisible_step_ids = {i for i in range(len(executor.chain)) if not executor.chain[i].visible_in_chain}
-
-        # issue: (level, [step desc])
-        all_issues: dict[str, _t.Tuple[str, list[tuple[int, str]]|None]] = dict()
-        issues_by_critic: list[dict] = []
-        for i in range(votes):
-            prompts = executor.show_conversation_thread(with_extras=True)
-            prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_final_check))
-            n_retries = 0
-            prompts_to_be_sent = prompts.copy()
-            response: str = ''
-            while n_retries < config.max_retries:
-                try:
-                    response = executor.sage_llm.ask(
-                        system_prompt,
-                        prompts_to_be_sent,
-                        reason=reason,
-                        step_id=f"{executor.step_id(self)}/{i}#{n_retries}",
-                        temperature=0.0)
-                    issues, full_json = parse_verification_response(response)
-                    matched_step_by_steps: set[int] = set()
-                    matched_invisible_steps: set[int] = set()
-                    for severity, blames in issues.values():
-                        if severity in ('error', 'fatal') and blames is not None:
-                            matched_step_by_steps.update(blame[0] for blame in blames if blame[0] in step_by_step_ids)
-                        matched_invisible_steps.update(
-                            blame[0] for blame in blames
-                            if blame[0] in invisible_step_ids or blame[0] < 0 or blame[0] >= len(executor.chain))
-                    notes = ''
-                    if len(matched_step_by_steps) > 0:
-                        if len(matched_step_by_steps) > 1:
-                            step_list = ', '.join(f"step#{i}" for i in matched_step_by_steps)
-                            step_list = f"{step_list} are step-by-step plans"
-                        else:
-                            step_list = f"step#{next(iter(matched_step_by_steps))} is a step-by-step plan"
-                        notes += f"Double-check: {step_list}. Errors in them are often caused by one of sub-steps. "
-                    if len(matched_invisible_steps) > 0:
-                        if len(matched_invisible_steps) > 1:
-                            step_list = ', '.join(f"{i}" for i in matched_invisible_steps)
-                            step_list = f"Step IDs {step_list} do not exist"
-                        else:
-                            step_list = f"Step ID {next(iter(matched_step_by_steps))} does not exist"
-                        notes += f"Double-check: {step_list}. Step IDs are only found in `at step#<ID>`. "
-                    if notes != '':
-                        prompts.append((ROLE_ORCHESTRATOR, notes))
-                        prompts_to_be_sent.append((ROLE_ORCHESTRATOR, notes))
-                        step_by_step_ids.clear()
-                        continue
-                    issues_by_critic.append(full_json)
-                    if len(issues) > 0:
-                        all_issues.update(issues)
-                    break
-                except Exception as e:
-                    n_retries += 1
-                    executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
-                                                executor.prompts.orchestrator_parse_error)
-        if len(issues_by_critic) > 0 and votes > 1:
-            critic_text = "\n\n".join([
-                f"Critic {i+1}:\n```json\n{_json.dumps(report, indent=2)}\n```"
-                for i, report in enumerate(issues_by_critic)
-            ])
-            system_prompt = executor.prompts.sage_intro
-            prompts = executor.show_conversation_thread(with_extras=True)
-            prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_final_check))
-            prompts.append((ROLE_ORCHESTRATOR, critic_text))
-            prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_merge_criticisms))
-            prompts_to_be_sent = prompts.copy()
-            n_retries = 0
-            response: str = ''
-            while n_retries < config.max_retries:
-                try:
-                    response = executor.sage_llm.ask(
-                        system_prompt,
-                        prompts_to_be_sent,
-                        reason='merge_criticisms',
-                        step_id=f"{executor.step_id(self)}#{n_retries}",
-                        temperature=config.first_try_temperature)
-                    all_issues, no_culprit_issues = parse_issue_report(response, len(executor.chain))
-                    for issue in no_culprit_issues:
-                        executor.logger.log(f"removing report {issue} due to no more culprit.")
-                        del all_issues[issue]
-                    break
-                except Exception as e:
-                    n_retries += 1
-                    executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
-                                                executor.prompts.orchestrator_parse_error)
-        return all_issues
+        prompts = executor.show_conversation_thread(with_extras=True)
+        prompts.append((ROLE_ORCHESTRATOR, verify_prompt))
+        prompts.append((ROLE_ORCHESTRATOR, critic_text))
+        prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_merge_criticisms))
+        prompts_to_be_sent = prompts.copy()
+        n_retries = 0
+        response: str = ''
+        while n_retries < config.max_retries:
+            try:
+                response = executor.sage_llm.ask(
+                    system_prompt,
+                    prompts_to_be_sent,
+                    reason='merge_criticisms',
+                    step_id=f"{step_id}#{n_retries}",
+                    temperature=config.first_try_temperature)
+                all_issues, no_culprit_issues = parse_issue_report(response, len(executor.chain))
+                for issue in no_culprit_issues:
+                    executor.logger.log(f"removing report {issue} due to no more culprit.")
+                    del all_issues[issue]
+                break
+            except Exception as e:
+                n_retries += 1
+                executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
+                                            executor.prompts.orchestrator_parse_error)
+    return all_issues
 
 
 def parse_issue_report(response, step_number_cutoff: int=None) \
@@ -710,7 +645,7 @@ def identify_culprits(
                 continue
     for i, step in enumerate(executor.chain):
         step = _t.cast(Step, step)
-        if _utils.safe_is_instance(step, FinalizeFileStep):
+        if _utils.safe_is_instance(step, ConsolidateFileStep):
             if step not in culprits:
                 culprits[step] = ["affected: Previous steps has been fixed. Consolidate again"]
     total_errors = 0
@@ -787,7 +722,7 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
         try:
             results = executor.ask_genie(self._code_snippets, self)
             result_markdown = '\n\n'.join(f"""```text\n{r}\n```""" for r in results)
-            logger.new_message_section(ROLE_GENIE, executor.step_id(self))
+            logger.new_message_section(ROLE_GENIE, executor.step_id(self), collapsible=len(result_markdown) > 1000)
             logger.log(result_markdown)
             logger.close_message_section()
             self.description += f"\n\nResults:\n\n{result_markdown}"
@@ -844,6 +779,8 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
     def n_tries(self) -> int:
         return self._n_tries
 
+    def reset_retry_count(self):
+        self._n_tries = 0
 
 class AskQuestionStep(TaoReplyStep):
 
@@ -910,7 +847,9 @@ def parse_to_step(response: str, config: Config,
                   working_on: str = None, init_expansion=False, limit_to: set = None) -> Step:
     step_type, step_def = parse_step_type_spec(response)
     if step_type is None:
-        raise ParseError(f"Invalid Tao response. Missing header.")
+        headers = (f"`{MY_THOUGHT}`, `{HERE_IS_MY_STEP_BY_STEP_PLAN}`, `{REPORT_ERROR}`, "
+                   f"`{WILL_ASK_QUESTIONS}`, or `{WILL_ASK_GENIE}`")
+        raise ParseError(f"Invalid Tao response. Missing header. Must start with one of {headers}")
     else:
         if step_type == DirectAnswerStep.TYPE_SPEC:
             step_class = DirectAnswerStep
@@ -943,6 +882,10 @@ class ExpandableStep(Step):
         self.set_visible_in_chain(False)
         self._ptr = 0
         self._step_name_for_expanded = step_name
+
+    @property
+    def step_name_for_expanded(self) -> str:
+        return self._step_name_for_expanded
 
     def reset_choices(self):
         self.choices.clear()
@@ -1004,10 +947,9 @@ class ExpandableStep(Step):
                                                 plan, prompt_db.orchestrator_parse_error)
 
     def _collect_criticism(self, choice: Step) -> str:
-        if _utils.safe_is_instance(choice, FixableStep):
-            choice = _t.cast(FixableStep, choice)
+        if isinstance(choice, (FixableStep, TaoReplyStep)):
             if len(choice.criticisms) > 0:
-                return f"\n---\nCriticisms received for this:\n{choice.format_critic_text()}"
+                return f"\n---\nCriticisms received for this approach:\n{choice.format_critic_text()}"
         return ''
 
     def parse_reply(self, plan, executor: Executor) -> Step:
@@ -1189,6 +1131,7 @@ class ProceedStep(ExpandableStep):
             max_expansion=config.max_search_expansion,
             step_name=next_step_desc)
         next_step.part_of = step_by_step
+        next_step.created_by = step_by_step.created_by
         return next_step
 
     @property
@@ -1297,31 +1240,43 @@ def validate_step_id(step_id: int, executor: Executor, key=''):
         raise ParseError(f"{key} step number/id must be between 0 and {len(executor.chain)-1}")
 
 
-class SummarizePartialStep(DirectAnswerStep):
+class SummarizeStepABC(DirectAnswerStep, metaclass=ABCMeta):
 
-    def __init__(self, *, role: str, step_name: str, shadowing: list[Step],
-                 consolidate_file_steps: list[FinalizeFileStep], **kwargs):
+    def __init__(self, *, step_name: str, role=ROLE_TAO, n_verifications=3, **kwargs):
         super().__init__(description='', role=role, step_name=step_name, is_final_step=False, **kwargs)
-        self._shadowing: list[Step]= shadowing
-        self.consolidate_file_steps = consolidate_file_steps
+        self._n_verifications = n_verifications
         self._evaluated = False
+        self._pending_culprits: dict[Step, list[str]]|None = None
+        self._pending_error_count: int = 0
+
+    @abstractmethod
+    def merge_consolidated_files(self, executor):
+        pass
+
+    @abstractmethod
+    def merge_steps(self, executor):
+        pass
+
+    @abstractmethod
+    def get_instruction(self, executor):
+        pass
+
+    @abstractmethod
+    def get_summarize_steps(self, executor):
+        pass
+
+    @abstractmethod
+    def get_verification_votes(self, config):
+        pass
 
     def eval_only(self, executor) -> Step | None:
         if self._evaluated:
-            return super().eval_only(executor)
-        from_step_tag = self._shadowing[0].step_name_tag(executor.step_id(self._shadowing[0]))
-        to_step_tag = self._shadowing[-1].step_name_tag(executor.step_id(self._shadowing[-1]))
+            return None
+        instr = self.get_instruction(executor)
+        involved_steps = self.get_summarize_steps(executor)
         prompt_db = executor.prompts
-        system_prompt = prompt_db.tao_intro
-        prompts = executor.show_conversation_thread(with_extras=True, stop_at=self._shadowing[-1])
-
-        instr = prompt_db.tao_summarize_partial.format(from_step=from_step_tag, to_step=to_step_tag)
+        prompts = executor.show_conversation_thread(with_extras=True, stop_at=involved_steps[-1])
         prompts.append((ROLE_ORCHESTRATOR, instr))
-        files: set[str] = set()
-        for step in self._shadowing:
-            files.update(step.collected_files.keys())
-        if len(files) > 0:
-            prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_notes_for_files))
 
         n_retries = 0
         response: str|None = None
@@ -1329,26 +1284,143 @@ class SummarizePartialStep(DirectAnswerStep):
         while n_retries < executor.config.max_retries:
             try:
                 response = executor.llm.ask(
-                    system_prompt, to_be_sent,
-                    reason='summarize_partial',
-                    step_id=f"{executor.step_id(self._shadowing[0])}#{n_retries}",
+                    prompt_db.tao_intro, to_be_sent,
+                    reason=self.__class__.__name__,
+                    step_id=f"{executor.step_id(involved_steps[0])}#{n_retries}",
                     temperature=0.0)
                 self.build(response)
                 self.next_step = None # nullify just in case, will ask later
                 self.validate(executor)
-                self.description = self.description.replace(from_step_tag, "-").replace(to_step_tag, "-")
+                for step in involved_steps:
+                    self.description = self.description.replace(step.step_name_tag(executor.step_id(step)), "-")
                 break
             except ParseError as ex:
                 n_retries += 1
                 executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
                                             prompt_db.orchestrator_parse_error)
-        executor.remove_steps(from_step=self._shadowing[0], to_step=self._shadowing[-1])
+        self.merge_steps(executor)
+        self.merge_consolidated_files(executor)
+        self.criticisms.clear()
+        self._evaluated = True
+        return None
+
+    def verify_and_fix(self, intent: str, executor: Executor) -> _t.Self|None:
+        if self._n_verifications <= 0:
+            return None
+        votes = self.get_verification_votes(executor.config)
+        if self._pending_culprits is None:
+            # concern: (issue, [step desc])
+            all_issues = verify(intent, executor, executor.step_id(self), votes=votes)
+            if len(all_issues) == 0:
+                self._pending_error_count = 0
+                self._n_verifications = 0 # no need for further check
+                return None
+            self._pending_culprits, self._pending_error_count = identify_culprits(executor, all_issues)
+        while self._pending_culprits is not None and len(self._pending_culprits) > 0:
+            executor.check_token_usages()
+            try:
+                repair_or_backtrack(executor, self._pending_culprits)
+            except RedoFinalCheck as e:
+                executor.logger.log(str(e))
+                self._pending_culprits, self._pending_error_count = None, 0
+                all_issues = verify(intent, executor, executor.step_id(self), votes=votes)
+                if len(all_issues) == 0:
+                    self._n_verifications = 0 # no need for further check
+                    self._evaluated = False
+                    break
+                self._pending_culprits, self._pending_error_count = identify_culprits(executor, all_issues)
+        self._pending_culprits = None
+        if self._pending_error_count > 0:
+            self._pending_error_count = 0
+            self._n_verifications -= 1
+            return self # need to check final answer again
+        self._pending_error_count = 0
+        self._n_verifications = 0 # no need for further check
+        self._evaluated = False
+        return None
+
+
+class SummarizePartialStep(SummarizeStepABC):
+
+    def __init__(self, *, step_name: str, shadowing: list[Step], consolidate_file_steps: list[ConsolidateFileStep],
+                 role=ROLE_TAO, **kwargs):
+        super().__init__(step_name=step_name, role=role, n_verifications=1, **kwargs)
+        self.consolidate_file_steps = consolidate_file_steps
+        self._shadowing: list[Step]= shadowing
+
+    def eval(self, executor: Executor) -> Step | None:
+        result = self.verify_and_fix("Is everything correct between these steps? "
+                                     "(Note: don't need to the whole or solve other parts of the problem.)", executor)
+        if result is not None:
+            return result
+        return self.eval_only(executor)
+
+    def merge_consolidated_files(self, executor):
         if self.consolidate_file_steps is not None:
             for consolidation in self.consolidate_file_steps:
                 self.collected_files.update(consolidation.collected_files)
             executor.remove_steps(steps=self.consolidate_file_steps)
-        self._evaluated = True
-        return super().eval_only(executor)
+
+    def merge_steps(self, executor):
+        self.created_by = self._shadowing[0].created_by
+        self.part_of = self._shadowing[0].part_of
+        executor.remove_steps(from_step=self._shadowing[0], to_step=self._shadowing[-1])
+
+    def get_instruction(self, executor: Executor):
+        from_step_tag = self._shadowing[0].step_name_tag(executor.step_id(self._shadowing[0]))
+        to_step_tag = self._shadowing[-1].step_name_tag(executor.step_id(self._shadowing[-1]))
+        return executor.prompts.tao_summarize_partial.format(from_step=from_step_tag, to_step=to_step_tag)
+
+    def get_summarize_steps(self, executor: Executor):
+        return self._shadowing
+
+    def get_verification_votes(self, config: Config):
+        return 1
+
+
+class SummarizeStep(SummarizeStepABC):
+    TYPE_SPEC = SUMMARIZE_FINAL_ANSWER
+
+    def __init__(self, *, role=ROLE_TAO, n_verifications=3, **kwargs):
+        super().__init__(step_name=SUMMARIZE_FINAL_ANSWER, role=role, n_verifications=n_verifications, **kwargs)
+        self._reset_chain_retry_count = False
+
+    @property
+    def step_title(self) -> str:
+        return ''
+
+    def eval(self, executor: Executor) -> Step | None:
+        if executor.config.check_final:
+            result = self.verify_and_fix('Is the solution correct?', executor)
+            if result is not None:
+                return result
+        return self.eval_only(executor)
+
+    def verify_and_fix(self, intent: str, executor: Executor) -> _t.Self | None:
+        if not self._reset_chain_retry_count:
+            for step in executor.chain:
+                _t.cast(Step, step).reset_retry_count()
+            self._reset_chain_retry_count = True
+        return super().verify_and_fix(intent, executor)
+
+    def merge_consolidated_files(self, executor):
+        consolidate_file_steps = consolidate_updated_files(self.get_summarize_steps(executor))
+        for consolidate_file_step in consolidate_file_steps:
+            if not consolidate_file_step.evaluated:
+                executor.enqueue(consolidate_file_step)
+
+    def merge_steps(self, executor):
+        pass
+
+    def get_instruction(self, executor: Executor):
+        return executor.prompts.tao_summarize
+
+    def get_summarize_steps(self, executor: Executor):
+        my_index = executor.step_id(self)
+        return executor.chain[:my_index]
+
+    def get_verification_votes(self, config: Config):
+        return config.verification_votes
 
 
 def proceed_next(current_step: Step, executor: Executor, next_step_spec: NextStepDesc) -> Step:
@@ -1363,9 +1435,9 @@ def proceed_next(current_step: Step, executor: Executor, next_step_spec: NextSte
 
         consolidate_file_steps = consolidate_updated_files(partial)
         for consolidate_file_step in consolidate_file_steps:
-            if not consolidate_file_step._evaluated:
+            if not consolidate_file_step.evaluated:
                 executor.enqueue(consolidate_file_step)
-        summarize = SummarizePartialStep(role=ROLE_TAO, step_name=finished_plan.step_name, shadowing=partial,
+        summarize = SummarizePartialStep(step_name=finished_plan.step_name, shadowing=partial,
                                          consolidate_file_steps=consolidate_file_steps)
         if _utils.safe_is_instance(finished_plan.created_by, ExpandableStep):
             _t.cast(ExpandableStep, finished_plan.created_by).insert_choice(summarize, increase_max=True)
@@ -1396,12 +1468,12 @@ def consolidate_updated_files(steps: list[StepABC]):
     file_updates = count_file_updates(steps)
     consolidate_file_steps = []
     for file, content in files.items():
-        consolidate_file_step = FinalizeFileStep(description='', role=ROLE_TAO, file_name=file,
-                                                 keep_content_even_if_same=True)
+        consolidate_file_step = ConsolidateFileStep(description='', role=ROLE_TAO, file_name=file,
+                                                    keep_content_even_if_same=True)
         consolidate_file_steps.append(consolidate_file_step)
         if file_updates.get(file, 0) == 1:  # only if more than 1 update. 0 shouldn't happen
             consolidate_file_step.collected_files[file] = content
-            consolidate_file_step._evaluated = True
+            consolidate_file_step.evaluated = True
     return consolidate_file_steps
 
 
@@ -1422,6 +1494,9 @@ class PresentTaskStep(FixableStep):
     @property
     def n_tries(self) -> int:
         return self._n_tries
+
+    def reset_retry_count(self):
+        self._n_tries = 0
 
     def record_criticisms(self, criticisms: list[str]):
         self._criticisms.extend(criticisms)

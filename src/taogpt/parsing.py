@@ -1,27 +1,24 @@
 from __future__ import annotations
 
+import logging as _logging
 import dataclasses
 import random as _random
-import re
 import hashlib as _hashlib
 import json
+import re as _re
 import typing as _t
 import dataclasses as _dc
 import taogpt.utils as _utils
 from taogpt.constants import (
-    WILL_ASK_QUESTIONS,
-    MY_THOUGHT,
     FREE_TEXT,
     NEXT_I_WANT_TO_WORK_AT,
     PRIOR_PROPOSAL,
     REPORT_ERROR
 )
 
-_all_step_types = '|'.join([
-    MY_THOUGHT,
-    WILL_ASK_QUESTIONS
-])
-step_type_re = re.compile(
+_logger = _logging.getLogger(__file__)
+
+step_type_re = _re.compile(
     r"(^|\n)#{1,2}\s*(MY_THOUGHT"
     r"|LET_ME_ASK_THE_PYTHON_GENIE"
     r"|I_FOUND_ERRORS"
@@ -29,18 +26,18 @@ step_type_re = re.compile(
     r"|I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED"
     r"|HERE_IS_MY_STEP_BY_STEP_PLAN).*\n((.|\n)+)"
 )
-_true_false_answer_re = re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
-                                   flags=re.MULTILINE|re.DOTALL|re.IGNORECASE)
-_whitespace_re = re.compile(r"\s+", flags=re.DOTALL)
-_ordered_list_re = re.compile(r'\n\s*(\d+)\.\s+(.*?)(?=\n\s*(\d+)|\n\n|\Z)', flags=re.DOTALL)
-_fix_fenced_block_backticks_re = re.compile(r"^(\s*)(```+)(\d*)")
+_true_false_answer_re = _re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
+                                   flags=_re.MULTILINE|_re.DOTALL|_re.IGNORECASE)
+_whitespace_re = _re.compile(r"\s+", flags=_re.DOTALL)
+_ordered_list_re = _re.compile(r'\n\s*(\d+)\.\s+(.*?)(?=\n\s*(\d+)|\n\n|\Z)', flags=_re.DOTALL)
+_fix_fenced_block_backticks_re = _re.compile(r"^(\s*)(```+)(\d*)")
 
-strip_quotes_re = re.compile(r"^\s+|[\s\"\'.,]+$|[\"\']", flags=re.DOTALL)
-step_name_re = re.compile(r"^\s*(((\d|\.)+)\s+)?(.+)")
+strip_quotes_re = _re.compile(r"^\s+|[\s\"\'.,]+$|[\"\']", flags=_re.DOTALL)
+step_name_re = _re.compile(r"^\s*(((\d|\.)+)\s+)?(.+)")
 
 
 def sanitize_step_name(step_name: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[\"'`\n\[\]]", " ", step_name)).strip()
+    return _re.sub(r"\s+", " ", _re.sub(r"[\"'`\n\[\]]", " ", step_name)).strip()
 
 
 def fix_fenced_block_backticks(original: str|None) -> str|None:
@@ -60,14 +57,23 @@ def parse_step_name(text: str|None) -> tuple[str|None, str|None]:
 
 
 class ParseError(ValueError):
-    pass
+    def __init__(self, message: str, original:str=None, *args):
+        super().__init__(message, *args)
+        self._original = original
+        # we want to inspect all of these
+        log_text = f"\n{original}" if original is not None else ""
+        _logger.warning(f"{self.__class__}: {message}{log_text}")
+
+    @property
+    def original_text(self) -> str|None:
+        return self._original
 
 
 def parse_step_type_spec(text: str) -> tuple[str|None, str|None]|None:
     text = _utils.str_or_blank(text)
     if text == '':
         return None, None
-    match: re.Match = step_type_re.search(text)
+    match: _re.Match = step_type_re.search(text)
     if match is None:
         return None, None
     step_type, definition = match.group(2), _utils.str_or_blank(match.group(3))
@@ -84,7 +90,7 @@ def parse_sections(text: str, section_level: str='##') -> dict[str, str|None]:
     matched_sections = {FREE_TEXT: ''}
     section = FREE_TEXT
     for line in text.split('\n'):
-        match: re.Match = re.match(rf"^{section_level}+\s+([^\n]+)", line)
+        match: _re.Match = _re.match(rf"^{section_level}+\s+([^\n]+)", line)
         if match is not None:
             section = match.group(1).strip()
             while section != 'FILE:' and section.endswith(':'):
@@ -117,13 +123,13 @@ def parse_ordered_list(markdown_text, at_least_one_list=True) -> list[str]:
     return matches
 
 
-_json_response_re = re.compile(r"^.*(```(json)?\n+)(.+)(```).*$|^\s*(\{.+})\s*$", flags=re.DOTALL | re.IGNORECASE)
-_final_solution_check_re = re.compile(r"^\s*(yes|no)[.,]?\s+(.+)$", flags=re.DOTALL|re.IGNORECASE)
+_json_response_re = _re.compile(r"^.*(```(json)?\n+)(.+)(```).*$|^\s*(\{.+})\s*$", flags=_re.DOTALL | _re.IGNORECASE)
+_final_solution_check_re = _re.compile(r"^\s*(yes|no)[.,]?\s+(.+)$", flags=_re.DOTALL|_re.IGNORECASE)
 
-at_step_re = re.compile(r"\s*\[ *at +step(.*?)]", flags=re.IGNORECASE)
-_step_re = re.compile(r"^( *\[? *(at )?(step#)?(\d+): *)?(.*?)[\s\]]*$", flags=re.IGNORECASE)
-_next_step_re = re.compile(r"^( *\[? *(at )?step#?\d*:? *)?(response to +)?(.*?)[\s\]]*$", flags=re.IGNORECASE)
-_proposal_re = re.compile(f"^\s*\[?{PRIOR_PROPOSAL}", flags=re.IGNORECASE)
+at_step_re = _re.compile(r"\s*\[ *at +step(.*?)]", flags=_re.IGNORECASE)
+_step_re = _re.compile(r"^( *\[? *(at )?(step#)?(\d+): *)?(.*?)[\s\]]*$", flags=_re.IGNORECASE)
+_next_step_re = _re.compile(r"^( *\[? *(at )?step#?\d*:? *)?(response to +)?(.*?)[\s\]]*$", flags=_re.IGNORECASE)
+_proposal_re = _re.compile(f"^\s*\[?{PRIOR_PROPOSAL}", flags=_re.IGNORECASE)
 
 def parse_step_id_and_name(text: str, ok_without_step_id=False, key='') -> tuple[int|None, str]:
     if key != '':
@@ -184,7 +190,7 @@ def parse_next_step_spec(text: str) -> NextStepDesc:
     target_plan_tag: str|None = None
     target_done: bool|None = None
     for key, value in next_step_response.items():
-        matched = re.match(r"^\s*done\s+with\s+\[*([^]]+)", key)
+        matched = _re.match(r"^\s*done\s+with\s+\[*([^]]+)", key)
         if matched:
             target_plan_id, target_plan_desc = parse_step_id_and_name(matched.group(1), key=key)
             target_plan_tag = f"step#{target_plan_id}: {target_plan_desc}"
@@ -195,7 +201,7 @@ def parse_next_step_spec(text: str) -> NextStepDesc:
         if plan_of_next_step is not None:
             next_plan_id, next_plan_desc = parse_step_id_and_name(plan_of_next_step, ok_without_step_id=True)
             if target_plan_id == next_plan_id or target_plan_desc == next_plan_desc:
-                raise ParseError(f"Cannot declare {target_plan_tag} done while it's the plan of next step")
+                target_plan_id, target_plan_tag, target_done = None, None, False
     next_step = next_step_response.get('step', next_step_response.get('next_step', None))
     if not isinstance(next_step, str):
         raise ParseError(f"The key `next_step` must have a string value indicating the next step.")
@@ -205,67 +211,6 @@ def parse_next_step_spec(text: str) -> NextStepDesc:
         _, next_step = parse_step_id_and_name(next_step, ok_without_step_id=True)
     return NextStepDesc(target_plan_id=target_plan_id, target_plan_tag=target_plan_tag, target_plan_done=target_done,
                         next_step_desc=next_step, plan_of_next_step=plan_of_next_step)
-
-
-# @dataclasses.dataclass
-# class NextStepDesc:
-#     completed_plan_id: int | None
-#     completed_plan_desc: str | None
-#     next_step_desc: str|None
-#     next_step_plan_id: int | None
-#     next_step_plan_desc: str | None
-#
-#     @property
-#     def is_final_step(self):
-#         next_step = _utils.str_or_blank(self.next_step_desc).lower()
-#         done_with = _utils.str_or_blank(self.completed_plan_desc).lower()
-#         return ('all done' in next_step
-#                 or _utils.normalized_levenstein_distance(done_with, "top-level plan/answer") <= 0.05)
-#
-#     def to_json_string(self, as_markdown=False):
-#         next_step_dict = self.to_dict()
-#         next_step_json = json.dumps(next_step_dict) if len(next_step_dict) > 0 else None
-#         if next_step_json is not None and as_markdown:
-#             next_step_json = f"```json\n{next_step_json}\n```"
-#         return next_step_json
-#
-#     def to_dict(self):
-#         next_step_dict: dict[str, str] = dict()
-#         if self.completed_plan_id is not None:
-#             next_step_dict['completed_plan'] = f"step#{self.completed_plan_id}: {self.completed_plan_desc}"
-#         if self.next_step_desc is not None:
-#             next_step_dict['next_step_description'] = self.next_step_desc
-#         if self.next_step_plan_id is not None:
-#             next_step_dict['next_step_plan'] = f"step#{self.next_step_plan_id}: {self.completed_plan_desc}"
-#         elif self.next_step_plan_desc is not None:
-#             next_step_dict['next_step_plan'] = self.next_step_plan_desc
-#         return next_step_dict
-#
-#
-# def parse_next_step_spec(text: str) -> NextStepDesc:
-#     next_step_response: dict[str, str] = parse_json_hash(text)
-#     completed_plan = next_step_response.get('completed_plan', None)
-#     completed_plan_step = parse_step_id_and_name(completed_plan, key='completed_plan') \
-#         if completed_plan is not None else (None, None)
-#     next_step = next_step_response.get('next_step_description', None)
-#     next_step_plan = next_step_response.get('next_step_plan', None)
-#     next_plan_id, next_plan_desc = None, None
-#     if next_step:
-#         # next_step_id, next_step = parse_step_id_and_name(next_step, ok_without_step_id=True, key='next_step_description')
-#         # if next_step_id is not None and next_step_id == completed_plan_step[0]:
-#         #     completed_plan_step = (None, None)
-#         if next_step_plan is not None and next_step_plan.strip().lower() not in ("null", "none"):
-#             next_plan_id, next_plan_desc = parse_step_id_and_name(next_step_plan, key='next_step_plan')
-#             completed_plan_id: int|None = completed_plan_step[0]
-#             if completed_plan_id is not None:
-#                 if completed_plan_id == next_plan_id:
-#                     # while we can ask GPT to fix this, it seems to happen quite often
-#                     completed_plan_step = (None, None)
-#                 elif completed_plan_id <= next_plan_id:
-#                     raise ParseError(f"next_step_plan: Cannot claim [{completed_plan}] "
-#                                      f"while trying to work at step underneath it.")
-#     return NextStepDesc(completed_plan_id=completed_plan_step[0], completed_plan_desc=completed_plan_step[1],
-#                         next_step_desc=next_step, next_step_plan_id=next_plan_id, next_step_plan_desc=next_plan_desc)
 
 
 def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tuple[int, str]]|None]], dict]:
@@ -340,6 +285,8 @@ class StepDescriptor:
     description: str
     why: str|None
     sub_steps: dict[str, _t.Any]|None = None
+    is_final_verification: bool = False
+    is_final_summary: bool = False
 
 
 def parse_step_by_step_plan(text: str) -> dict[int, StepDescriptor]:
@@ -355,8 +302,9 @@ def parse_step_by_step_plan(text: str) -> dict[int, StepDescriptor]:
 def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> dict[int, StepDescriptor]:
     results: dict[int, StepDescriptor] = dict()
     last_index = -1
+    last_summary_verification: int|None = None
     for i, item in plan.items():
-        if not re.match(r"^\d+$", i):
+        if not _re.match(r"^\d+$", i):
             raise ParseError(f"JSON hash key '{i}' is not an integer")
         key = int(i.split('.')[-1]) # sometimes we get step number in the form like "3.1", take the last
         if key <= last_index:
@@ -365,8 +313,15 @@ def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> dict[int, StepDescrip
         last_index = key
         if 'description' not in item:
             raise ParseError(f'Missing description for step {key}')
-        results[len(results) + 1] = StepDescriptor(item['description'], item.get('why', None),
-                                                   item.get('sub_steps', None))
+
+        descriptor = StepDescriptor(item['description'], item.get('why', None), item.get('sub_steps', None),
+                                    is_final_verification=item.get('is_final_verification', False),
+                                    is_final_summary=item.get('is_final_summary', False))
+        if descriptor.is_final_summary or descriptor.is_final_verification:
+            last_summary_verification = key
+        elif last_summary_verification is not None:
+            raise ParseError(f"Step#{key} {descriptor.description} is after final verification or summary step.")
+        results[len(results) + 1] = descriptor
     if len(results) == 0:
         raise ParseError("Should have at least 2 steps in the plan. If only one step, answer directly")
     if len(results) == 1:
@@ -383,7 +338,7 @@ def parse_ranking_response(text: str, expected_number: int) -> tuple[dict[int, f
     dupes: {int: int} = dict()
     removing = set()
     for i, item in rankings.items():
-        if not re.match(r"^\d+$", i):
+        if not _re.match(r"^\d+$", i):
             raise ParseError(f"JSON hash key '{i}' is not an integer")
         i = int(i)
         if i < 1 or i > expected_number:
@@ -468,14 +423,14 @@ def parse_next_step_reply(text: str) -> tuple[str, NextStepDesc|str]:
     return NEXT_I_WANT_TO_WORK_AT, next_step
 
 
-_python_response_re = re.compile(r"```python\n+(.+?)```", flags=re.DOTALL | re.IGNORECASE)
+_python_response_re = _re.compile(r"```python\n+(.+?)```", flags=_re.DOTALL | _re.IGNORECASE)
 
 
 def parse_python_snippets(text: str) -> list[str]:
     return [m.group(1) for m in _python_response_re.finditer(text)]
 
 
-_markdown_fenced_block_re = re.compile(r"```+", flags=re.DOTALL | re.IGNORECASE)
+_markdown_fenced_block_re = _re.compile(r"```+", flags=_re.DOTALL | _re.IGNORECASE)
 
 
 def extract_fenced_blocks(text) -> tuple[dict[str, str], str]:
@@ -489,7 +444,7 @@ def extract_fenced_blocks(text) -> tuple[dict[str, str], str]:
         if match is not None:
             open_pos = match.span()[0]
             n_backquotes = len(match.group(0))
-            pattern = re.compile('`' * n_backquotes)
+            pattern = _re.compile('`' * n_backquotes)
             match = pattern.search(text, open_pos + n_backquotes)
             if match is not None:
                 end_pos = match.span()[1]
@@ -510,7 +465,7 @@ def restore_fenced_block(text: str, fenced_blocks: dict[str, str]):
     return text
 
 
-file_section_re = re.compile(r"FILE[\s:]+[\s\"\'`]*([^\s\"\'`]+)?[\s\"\'`]*")
+file_section_re = _re.compile(r"FILE[\s:]+[\s\"\'`]*([^\s\"\'`]+)?[\s\"\'`]*")
 
 
 def gather_file_contents(sections: dict[str, str], pop_file_sections=False) \
@@ -518,7 +473,7 @@ def gather_file_contents(sections: dict[str, str], pop_file_sections=False) \
     file_sections = set()
     results: dict[str, tuple[str, str, str, str]] = dict()
     for section, markdown_full_content in sections.items():
-        match = re.match(file_section_re, section)
+        match = _re.match(file_section_re, section)
         if match is None:
             continue
         file_path = match.group(1)
@@ -549,7 +504,11 @@ def match_step_name(actual: str, expected_step_num: int, expected_step_name: str
     return dist < (0.95 * len(actual))
 
 
-_fenced_block_quote_re = re.compile(r"^(\s*)(`{3,})(\S*)\s*$")
+_fenced_block_quote_re = _re.compile(r"^(\s*)(`{3,})(\S*)\s*$")
+
+
+class UnbalancedBlockParseError(ParseError):
+    pass
 
 
 def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
@@ -568,7 +527,7 @@ def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
             indentation: str = m.group(1).replace("\t", "    ")
             backticks: str = m.group(2)
             content_type: str = m.group(3)
-            if re.match(r"^\d+$", content_type):
+            if _re.match(r"^\d+$", content_type):
                 content_type = ''
             normalized_backticks = f"{indentation}{backticks}{content_type}"
 
@@ -577,15 +536,23 @@ def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
                 # It's an opening fence, push onto the stack
                 if last_block is not None:
                     if len(last_block[1][1]) < len(backticks):
+                        err_msg = """\
+Outer block open fence at line {last_block} has less backticks than inner block at line {line_number}; 
+likely the block at {last_block} is not closed properly, or if there is nested fenced block, follow the rule below:
+
+````markdown
+An outer fenced block's backtick quote
+* must has more backticks than
+  ```
+  an inner block
+  ```
+````
+""".format(last_block=last_block[0], line_number=line_number)
+                        raise UnbalancedBlockParseError(err_msg, original=markdown_text)
+                    if last_block[1][2] is not None and last_block[1][2] not in ('markdown', ''):
                         raise ParseError(
-                            f"Outer block open fence at line {last_block[0]} has less backticks than inner block"
-                            f" at line {line_number}; likely the block at {last_block[0]} is not closed properly, "
-                            f"or the rule that outer block is fenced with more backticks than inner blocks is not "
-                            f"followed.")
-                    if last_block[1][2] != 'markdown':
-                        raise ParseError(
-                            f"Outer block at line {last_block[0]} is not of markdown type "
-                            f"but contains nested fenced block. This is not supported. ")
+                            f"Outer block at line {last_block[0]} is not of `markdown` type "
+                            f"but contains nested fenced block. This is not supported. ", original=markdown_text)
                 if current_top_level_block_lines is not None:
                     current_top_level_block_lines.append(normalized_backticks)
                 else: # new block
@@ -596,17 +563,19 @@ def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
                 # It's a closing fence, pop from the stack
                 open_line, open_fence = stack.pop()
                 if indentation != open_fence[0]:
-                    raise ParseError(f"Unbalanced indentation for fenced block at {open_line}:{line_number}.")
+                    raise ParseError(f"Unbalanced indentation for fenced block at {open_line}:{line_number}.",
+                                     original=markdown_text)
                 if len(content_type) > 0:
-                    raise ParseError(f"New fenced block detected at line {line_number} before the block at line"
-                                     f" {open_line} is closed properly. Also check the nested block syntax.")
+                    raise UnbalancedBlockParseError(
+                        f"New fenced block detected at line {line_number} before the block at line"
+                        f" {open_line} is closed properly. Also check the nested block syntax.", original=markdown_text)
                 if current_top_level_block_lines is not None:
                     current_top_level_block_lines.append(normalized_backticks)
                 if len(stack) == 0:
                     block_content = '\n'.join(current_top_level_block_lines)
                     if "# NEXT_I_WANT_TO_WORK_AT" in block_content:
                         raise ParseError("There is a heading line `NEXT_I_WANT_TO_WORK_AT` in the fenced block. "
-                                         "Looks like the block is not closed properly.")
+                                         "Looks like the block is not closed properly.", original=markdown_text)
                     digest = _hashlib.sha256(block_content.encode('UTF-8')).hexdigest()
                     blocks_by_hash[digest] = (block_content, open_fence[2], open_line)
                     if collapse_blocks:
@@ -619,7 +588,7 @@ def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
                 current_top_level_block_lines.append(line)
             else:
                 # this is to make the Markdown logging not corrupted by unquoted HTML tags
-                unquoted_html_tag_re = re.compile(r"([^`])(`+)?(<[a-z]+>)(`+)?", flags=re.IGNORECASE)
+                unquoted_html_tag_re = _re.compile(r"([^`])(`+)?(<[a-z]+>)(`+)?", flags=_re.IGNORECASE)
                 line = unquoted_html_tag_re.sub(r"\1`\3`", line)
             if len(stack) == 0 or not collapse_blocks:
                 result.append(line)
@@ -628,5 +597,39 @@ def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
         unmatched_lines = list(str(block[0]) for block in stack)
         unmatched_lines = ('line ' if len(unmatched_lines) == 1 else 'lines ') + ', '.join(unmatched_lines)
         raise ParseError(f"Unbalanced fenced block detected. No matching closing backticks for fenced block "
-                         f"stating at line {unmatched_lines}.")
+                         f"stating at line {unmatched_lines}.", original=markdown_text)
     return '\n'.join(result), blocks_by_hash
+
+
+def annotate_fenced_block_backtick_quotes(content):
+    marker_count = 0
+
+    def annotate_backticks(match: _re.Match):
+        nonlocal marker_count
+        marker_count += 1
+        return f"{match.group(1)}{match.group(2) or ''} # BACKTICK{marker_count}\n"
+
+    content = _re.sub(r"(`{3,})([a-z][a-z0-9]+)?\d*(\n|$)", annotate_backticks, content)
+    return content
+
+
+def fix_nested_markdown_blocks_by_report(content: str, report: list[dict[str, str|int|None]]):
+    max_level = max(item['level'] for item in report if item['close'] is not None)
+    report_sorted = sorted(report, key=lambda x: x['level'], reverse=True)
+    for item in report_sorted:
+        open_tag = item['open']
+        close_tag = item['close']
+        level = item['level']
+
+        if close_tag is None:
+            raise ParseError(f"Unmatched backtick quote.")
+
+        num_backticks = 3 + max_level - level
+
+        new_backticks = '`' * num_backticks
+        content = _re.sub(rf"`{{3,}}(\S*) *# {open_tag}.*", rf"{new_backticks}\1", content)
+        content = _re.sub(rf"`{{3,}} *# {close_tag}.*", new_backticks, content)
+
+    # Remove all remaining backtick markers
+    content = _re.sub(r" # BACKTICK\d+", "", content)
+    return content

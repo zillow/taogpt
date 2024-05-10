@@ -116,7 +116,7 @@ def create_orchestrator(
     prompts = PromptDb.load_defaults()
     logger = MarkdownLogger(_p.Path(log_path) / 'taogpt_log.md', log_debug=debug, console_out=log_to_stdout)
     long_ctx_llm = _ChatOpenAI(model_name=long_llm) if long_llm is not None and long_llm != llm else None
-    primary_model = LangChainLLM(_ChatOpenAI(model_name=llm), logger=logger,
+    primary_model = LangChainLLM(_ChatOpenAI(model_name=llm), logger=logger, max_token_usage=config.max_tokens * 2,
                                  long_context_llm=long_ctx_llm,
                                  long_context_token_threshold=long_context_token_threshold)
     sage_model: LangChainLLM|None = None
@@ -124,6 +124,7 @@ def create_orchestrator(
         long_ctx_llm = _ChatOpenAI(model_name=long_sage_llm) \
             if long_sage_llm is not None and long_sage_llm != sage_llm else None
         sage_model = LangChainLLM(_ChatOpenAI(model_name=sage_llm), logger=logger,
+                                  max_token_usage=config.max_tokens,
                                   long_context_llm=long_ctx_llm,
                                   long_context_token_threshold=long_context_token_threshold)
     executor = Orchestrator(

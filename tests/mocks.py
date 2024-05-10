@@ -13,7 +13,7 @@ class MockLLM(LLM):
     def __init__(self,
                  logger: MarkdownLogger,
                  reply_fn: _t.Callable[[(str, str), str, str], str]=None):
-        super().__init__()
+        super().__init__(max_token_usage=10000)
         self._logger = logger
         self._total_tokens = 0
         self._n_requests = 0

@@ -239,7 +239,7 @@ free text after
 
 
 def test_parse_step_by_step_plan_raise_invalid_json():
-    text = f"""# HERE_IS_MY_STEP_BY_STP_PALN
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PLAN
 ```json
 {{
     "1": {{"description": "", "why": ""}},
@@ -253,7 +253,7 @@ def test_parse_step_by_step_plan_raise_invalid_json():
 
 
 def test_parse_step_by_step_plan_raise_less_than_2_steps():
-    text = f"""# HERE_IS_MY_STEP_BY_STP_PALN
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PLAN
 ```json
 {{
     "1": {{"description": "", "why": ""}}
@@ -268,7 +268,7 @@ def test_parse_step_by_step_plan_raise_less_than_2_steps():
 
 
 def test_parse_step_by_step_plan_raise_key_not_integer():
-    text = f"""# HERE_IS_MY_STEP_BY_STP_PALN
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PLAN
 ```json
 {{
     "1": {{"description": "", "why": ""}},
@@ -286,7 +286,7 @@ def test_parse_step_by_step_plan_raise_key_not_integer():
 def test_parse_step_by_step_plan_raise_on_invalid_ordering():
     steps = ["step 1", "step 2"]
     reasons = ["reason 1"]
-    text = f"""# HERE_IS_MY_STEP_BY_STP_PALN
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PLAN
 ```json
 {{
     "2": {{"description": "{steps[1]}"}},
@@ -301,23 +301,43 @@ def test_parse_step_by_step_plan_raise_on_invalid_ordering():
         assert "Element keys should be a contiguous natural number sequence starting at 1" in str(e)
 
 
+def test_parse_step_by_step_plan_raise_final_steps_not_last():
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PLAN
+```json
+{{
+    "1": {{"description": "do A"}},
+    "2": {{"description": "check everything", "is_final_verification": true}},
+    "3": {{"description": "do B"}}
+}}
+```
+"""
+    try:
+        parsing.parse_step_by_step_plan(text)
+        assert False, "Expecting ParseError but not raised"
+    except parsing.ParseError as e:
+        assert "is after final verification or summary step" in str(e)
+
+
 def test_parse_step_by_step_plan():
-    steps = ["step 1", "step 2"]
+    steps = ["step 1", "step 2", "final check"]
     reasons = ["reason 1"]
-    text = f"""# HERE_IS_MY_STEP_BY_STP_PALN
+    text = f"""# HERE_IS_MY_STEP_BY_STP_PLAN
 ```json
 {{
     "1": {{"description": "{steps[0]}", "why": "{reasons[0]}"}},
-    "2": {{"description": "{steps[1]}"}}
+    "2": {{"description": "{steps[1]}"}},
+    "3": {{"description": "{steps[2]}", "is_final_verification": true}}
 }}
 ```
 """
     results = parsing.parse_step_by_step_plan(text)
-    assert len(results) == 2
+    assert len(results) == 3
     assert results[1].description == steps[0]
     assert results[1].why == reasons[0]
     assert results[2].description == steps[1]
     assert results[2].why is None
+    assert results[3].description == steps[2]
+    assert results[3].is_final_verification
 
 
 def test_replacement_with_multiple_identical_fenced_blocks():
@@ -639,3 +659,50 @@ def test_sanitize_step_name():
     original = "[\"'do\n''something]"
     fixed = parsing.sanitize_step_name(original)
     assert fixed == 'do something'
+
+
+def test_fix_nested_fenced_blocks():
+    original = """# MY_THOUGHT
+[at step#14: Set up a basic README file in the root directory]
+
+To provide basic guidance on setting up and running the application, we will create a README file in the root directory of the project. This file will include instructions on how to install dependencies, set up the virtual environment, and run the Flask application.
+
+### FILE: ChineseZodiacApp/README.md
+```markdown
+1. Clone the repository to your local machine.
+2. Navigate to the project directory.
+3. Create a virtual environment:
+   ```bash
+   python -m venv venv
+   ```
+```
+
+### NEXT_I_WANT_TO_WORK_AT:
+```json
+{
+    "done with [at step#4: Set up the project structure including necessary directories and files for a Python Flask web application]": true
+}
+```"""
+    expected_annotated = """# MY_THOUGHT
+[at step#14: Set up a basic README file in the root directory]
+
+To provide basic guidance on setting up and running the application, we will create a README file in the root directory of the project. This file will include instructions on how to install dependencies, set up the virtual environment, and run the Flask application.
+
+### FILE: ChineseZodiacApp/README.md
+```markdown # BACKTICK1
+1. Clone the repository to your local machine.
+2. Navigate to the project directory.
+3. Create a virtual environment:
+   ```bash # BACKTICK2
+   python -m venv venv
+   ``` # BACKTICK3
+``` # BACKTICK4
+
+### NEXT_I_WANT_TO_WORK_AT:
+```json # BACKTICK5
+{
+    "done with [at step#4: Set up the project structure including necessary directories and files for a Python Flask web application]": true
+}
+``` # BACKTICK6"""
+    annotated = parsing.annotate_fenced_block_backtick_quotes(original)
+    assert annotated.strip() == expected_annotated.strip()

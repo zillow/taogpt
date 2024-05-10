@@ -29,7 +29,7 @@ class PromptDb:
         self.tao_summarize_partial=_read(path / 'tao_summarize_partial.md')
         self.tao_summarize_questions=_read(path / 'tao_summarize_questions.md')
         self.sage_intro=_read(path / 'sage.md')
-        self.sage_final_check=_read(path / 'sage_final_check.md')
+        self.sage_check_answer=_read(path / 'sage_check_answer.md')
         self.tao_fix_issues=_read(path / 'tao_fix_issues.md')
         self.snippet_report_errors=_read(path / 'snippet_report_errors.md')
         self.sage_merge_criticisms=_read(path / 'sage_merge_criticisms.md')

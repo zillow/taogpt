@@ -14,11 +14,13 @@ from langchain_core.runnables.config import ensure_config
 from langchain_core.runnables import RunnableConfig
 from langchain_core.outputs import ChatGeneration
 
-import taogpt.md_logging
+from taogpt import md_logging
+from taogpt import Pause
 from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_TAO, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
 import taogpt.utils as _utils
 from . import LLM
-from taogpt.parsing import check_and_fix_fenced_blocks, ParseError
+from taogpt.parsing import check_and_fix_fenced_blocks, ParseError, \
+    annotate_fenced_block_backtick_quotes, fix_nested_markdown_blocks_by_report
 
 _last_conversation: _t.List|None = None
 
@@ -70,12 +72,14 @@ class LangChainLLM(LLM):
 
     def __init__(self,
                  llm: _ChatOpenAI,
-                 logger: taogpt.logging.MarkdownLogger,
+                 logger: md_logging.MarkdownLogger,
+                 *,
+                 max_token_usage: int,
                  approx_token_factor: float=None,
                  long_context_token_threshold: int=None,
                  long_context_llm: _ChatOpenAI=None,
                  long_context_llm_token_factor: float=2.0):
-        super().__init__()
+        super().__init__(max_token_usage=max_token_usage)
         self._total_tokens = 0
         self.llm = llm
         self._logger = logger
@@ -137,8 +141,8 @@ class LangChainLLM(LLM):
         if system_prompt is not None and len(system_prompt) > 0:
             tokens = self.count_tokens(system_prompt)
             context_tokens += tokens
-            self._logger.new_message_section(ROLE_SYSTEM, -1, tokens=tokens)
             content_to_be_logged = self.deduplicate_for_logging(system_prompt, ROLE_SYSTEM)
+            self._logger.new_message_section(ROLE_SYSTEM, -1, tokens=tokens)
             self._logger.log(content_to_be_logged, demote_h1=True, role=ROLE_SYSTEM)
             self._logger.close_message_section()
             messages.append(SystemMessage(content=system_prompt))
@@ -149,8 +153,9 @@ class LangChainLLM(LLM):
             effective_role = LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[role]
             tokens = self.count_tokens(message)
             context_tokens += tokens
-            self._logger.new_message_section(role, i, tokens=tokens)
             deduped_msg = self.deduplicate_for_logging(message, role=role)
+            deduped_tokens = self.count_tokens(deduped_msg)
+            self._logger.new_message_section(role, i, tokens=tokens, collapsible=deduped_tokens > 32)
             self._logger.log(deduped_msg, demote_h1=True, role=role)
             self._logger.close_message_section()
             chat_message = ChatMessage(role=effective_role, content=message)
@@ -183,10 +188,9 @@ class LangChainLLM(LLM):
             self._total_tokens += token_count
 
             self._logger.new_message_section(role='reply', step_index=None, tokens=reply_tokens)
-            self._logger.log(f"{is_json}Reply: temperature={temperature}")
             self._logger.log(reply_content_logged, demote_h1=True)
-            self._logger.log(f"context tokens: {context_tokens}, subtotal: {token_count}{eff_tokens}. "
-                             f"cumulative total: {self.total_tokens}\n")
+            self._logger.log(f"temperature={temperature}. context tokens: {context_tokens}, "
+                             f"subtotal: {token_count}{eff_tokens}. cumulative total: {self.total_tokens}\n")
             self._logger.close_message_section()
             return reply_content
         except Exception as e:
@@ -214,13 +218,12 @@ class LangChainLLM(LLM):
             reply_content = ''
             while True:
                 # will fail when reaching max
+                if self._total_tokens >= self.max_token_usage:
+                    raise Pause(f"Cumulative token usage is {self._total_tokens}, "
+                                f"exceeding max limit {self.max_token_usage}", cause=None)
                 reply_with_gi = llm.invoke_with_gen_info(to_be_sent, max_tokens=max_tokens)
                 this_content = reply_with_gi.message.content
                 reply_content += this_content
-                if _fix_fenced_block_backticks_re.search(reply_content) is not None:
-                    print(f"%%%%%%%%% LLM reason {reply_with_gi.generation_info.get('finish_reason', '')} %%%%%%%%")
-                    print(reply_content)
-                    print("%%%%%%%%%%%%%%%%%")
                 if reply_with_gi.generation_info.get('finish_reason', '') != 'length':
                     break
                 to_be_sent = messages.copy()
@@ -234,30 +237,7 @@ class LangChainLLM(LLM):
         else:
             reply = llm.invoke(messages, max_tokens=max_tokens)
             reply_content = reply.content
-        try:
-            reply_content, _ = check_and_fix_fenced_blocks(reply_content)
-        except ParseError as e:
-            reply_tokens = self.count_tokens(reply_content)
-            self._logger.log(f"Corrupted Markdown fenced block detected: {e}. Reply tokens: {reply_tokens}")
-            if fenced_block_fixes >= 3:
-                # we don't re-raise ParseError here because we already retry a few times
-                raise ValueError(str(e))
-            sent = messages.copy()
-            if fenced_block_fixes > 0:
-                assert sent[-1].content.strip().startswith(CORRUPTED_RESPONSE_MARKER)
-                sent.pop(-1)
-                sent.pop(-1)
-            sent.append(ChatMessage(role=LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[ROLE_TAO],
-                                    content=reply_content))
-            sent.append(
-                ChatMessage(role=LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[ROLE_ORCHESTRATOR],
-                            content=f"{CORRUPTED_RESPONSE_MARKER}\n\n{e}\n\n"
-                                    f"Repeat the full response verbatim with the fenced blocks fixed."))
-            result = self.invoke_llm(
-                llm, sent, max_tokens=max_tokens,
-                return_context_token_usages=return_context_token_usages,
-                fenced_block_fixes=fenced_block_fixes + 1)
-            return (result[0], total_context_tokens + result[1]) if return_context_token_usages else result[0]
+        reply_content = fix_nested_markdown_backticks(llm, reply_content)
         _old = reply_content
         reply_content = _utils.str_or_blank(reply_content)
         return (reply_content, total_context_tokens) if return_context_token_usages else reply_content
@@ -274,8 +254,6 @@ class LangChainLLM(LLM):
         return len(tokens)
 
 
-_fix_fenced_block_backticks_re = _re.compile(r"(`{3,})(\d+)")
-
 def fix_model_name(model_name: str, required=False, default_to: str=None):
     if model_name is None:
         assert not required or default_to is not None
@@ -285,6 +263,48 @@ def fix_model_name(model_name: str, required=False, default_to: str=None):
 
 def get_long_model(model_name: str):
     return GPT_LONG_CONTEXT_MODEL_MAP.get(model_name, model_name)
+
+
+_debug_content = None
+_debug_reply = None
+
+
+def fix_nested_markdown_backticks(llm: ChatOpenAIWithGenInfo, original_content: str):
+    try:
+        fixed, _ = check_and_fix_fenced_blocks(original_content)
+        return fixed
+    except ParseError as e:
+        pass
+
+    content = annotate_fenced_block_backtick_quotes(original_content)
+
+    task = """
+A Markdown content generator fails to understand the backtick rules on nested fenced block and produce corrupted 
+fenced blocks. In the following content snippet, I annotate each open and close backtick quote with `BACKTICK<n>` 
+markers:
+
+---
+{content}
+---
+I want to identify the matching backticks as well as the level of the block enclosed. Respond using the following JSON 
+format:
+
+```json
+[
+    {{"open": "BACKTICK<n1>", "close": "BACKTICK<n2>", level: 1}}, // topmost level is 1
+    {{"open": "BACKTICK<n3>", "close": "BACKTICK<n4>", level: 3}},
+    {{"open": "BACKTICK<n5>", "close": null}} // no match
+]
+```
+""".format(content=content)
+
+    invoke_with_gen_info = llm.invoke_with_gen_info(task, temperature=0.)
+    reply = invoke_with_gen_info.message.content
+    json_match = _re.match(r".*`{3,}json\n([^`]+)`{3,}", reply, flags=_re.DOTALL|_re.MULTILINE)
+    if json_match is None:
+        return original_content
+    report = json.loads(json_match.group(1))
+    return fix_nested_markdown_blocks_by_report(content, report)
 
 
 GPT_MODEL_ALIAS = {

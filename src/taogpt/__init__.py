@@ -15,6 +15,17 @@ class LLM:
     collapsed_contents: dict[str, str] = dict()
     _encountered_collapsed_contents: dict[str, str] = dict()
 
+    def __init__(self, max_token_usage: int):
+        self._max_token_usage = max_token_usage
+
+    @property
+    def max_token_usage(self) -> int:
+        return self._max_token_usage
+
+    @max_token_usage.setter
+    def max_token_usage(self, new_limit: int):
+        self._max_token_usage = new_limit
+
     @property
     @_abc.abstractmethod
     def model_id(self) -> str:
@@ -35,7 +46,7 @@ class LLM:
     def count_tokens(self, text: str) -> int:
         pass
 
-    def deduplicate_for_logging(self, message, role: str, always_log_first=False):
+    def deduplicate_for_logging(self, message, role: str, always_log_first=True):
         content = _utils.str_or_blank(message)
         tokens = self.count_tokens(content)
         normalized = content.lower()
@@ -45,14 +56,6 @@ class LLM:
                 LLM._encountered_collapsed_contents[normalized] = deduped
                 return content
             return deduped
-        if tokens > 2048:
-            suffix = 0
-            while True:
-                msg_key = f"{role}_{tokens}_{suffix}"
-                if msg_key not in LLM.collapsed_contents:
-                    self.merge_collapsed_contents({msg_key: message})
-                    break
-                suffix += 1
         return content
 
     def merge_collapsed_contents(self, collapse_contents: _t.Dict[str, str], immediate=False):
@@ -256,7 +259,7 @@ class Backtrack(RuntimeError):
 
 
 class Pause(RuntimeError):
-    def __init__(self, reason: str | None, cause: StepABC):
+    def __init__(self, reason: str | None, cause: StepABC|None):
         super().__init__(reason)
         self.cause = cause
 
