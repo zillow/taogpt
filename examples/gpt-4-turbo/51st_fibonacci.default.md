@@ -1,4 +1,4 @@
-# GPT-4-turbo default system prompt (2024/03/10=2)
+# GPT-4-turbo default system prompt (2024/03/10)
 
 **user:**
 

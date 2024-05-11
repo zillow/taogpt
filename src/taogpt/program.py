@@ -6,6 +6,8 @@ import json as _json
 import re as _re
 from abc import abstractmethod, ABCMeta
 
+import openai
+
 import taogpt
 import taogpt.llm_model
 from . import StepABC, Backtrack, Pause, Executor, Config, GeneratedFile
@@ -657,6 +659,7 @@ def identify_culprits(
 
 def repair_or_backtrack(executor: Executor, remedies: dict[Step, list[str]]):
     n_errors_fixed = 0
+    too_hard_msg = "Likely, it is too hard. Try to rework this with a step-by-step plan."
     for blamed_step in list(remedies.keys()):
         blames = remedies.get(blamed_step)
         if len(blames) == 0:  # shouldn't happen
@@ -664,15 +667,29 @@ def repair_or_backtrack(executor: Executor, remedies: dict[Step, list[str]]):
         n_errors, n_fatals = count_errors_in_issues(blames)
         if n_fatals == 0 and _utils.safe_is_instance(blamed_step, FixableStep):
             if blamed_step.retryable(executor.config):
-                _t.cast(FixableStep, blamed_step).repair(executor)
+                try:
+                    _t.cast(FixableStep, blamed_step).repair(executor)
+                except openai.InternalServerError as ex:
+                    executor.logger.log(f"Got error: {repr(ex)}")
+                    if '504 Gateway Time-out'.lower() in str(ex).lower():
+                        if n_errors > 0 or n_fatals > 0:
+                            raise Backtrack(f"Time-out encountered during repair. {too_hard_msg}", blame=blamed_step)
+                        # else only warning, ignore
+                    else:
+                        raise ex
                 n_errors_fixed += n_errors + n_fatals
                 del remedies[blamed_step]
             elif n_errors > 0:
-                raise Backtrack(blames[0], blame=blamed_step)
+                executor.logger.log(f"Request backtracking due to max-repairs reached.")
+                blames.append(f"We have tried repair a few times. {too_hard_msg}")
+                message = '\n\n'.join(blames)
+                raise Backtrack(message, blame=blamed_step)
             else:
                 del remedies[blamed_step]
         elif n_fatals > 0 or n_errors > 0:
-            raise Backtrack(blames[0], blame=blamed_step)
+            executor.logger.log(f"Request backtracking due fatal issue.")
+            message = '\n\n'.join(blames)
+            raise Backtrack(message, blame=blamed_step)
         else: # warning and not fixable
             del remedies[blamed_step]
     return n_errors_fixed
@@ -990,7 +1007,9 @@ class ExpandableStep(Step):
 
         tao_templates = prompt_db.tao_expand_init_step if initial else prompt_db.tao_expand_any_step
         base_prompts.append((ROLE_ORCHESTRATOR, tao_templates))
-        if not initial:
+        if initial:
+            base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_encourage_question))
+        else:
             next_step_instr = prompt_db.snippet_next_step.format(step=current_plan)
             base_prompts.append((ROLE_ORCHESTRATOR, next_step_instr))
         return system_prompt, base_prompts
@@ -1390,7 +1409,7 @@ class SummarizeStep(SummarizeStepABC):
         return ''
 
     def eval(self, executor: Executor) -> Step | None:
-        if executor.config.check_final:
+        if self._n_verifications > 0:
             result = self.verify_and_fix('Is the solution correct?', executor)
             if result is not None:
                 return result

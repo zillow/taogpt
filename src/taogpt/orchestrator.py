@@ -169,6 +169,13 @@ class Orchestrator(Executor):
                         self._pending_backtrack = backtrack
                         raise Pause(f"Backtracking is requested for {backtrack}", backtrack.blame)
                     perform_backtracking(backtrack)
+                except Pause as paused:
+                    self.logger.log(f'Pause requested: {paused}\n')
+                    raise paused
+                except Exception as e:
+                    self.logger.log(f'<div style="background-color: red; color: white">\n\n{repr(e)}\n</div>\n\n')
+                    raise e
+
         except UnsolvableError as e:
             self.chain.append(SummarizeStep(description=str(e), role=ROLE_TAO))
 
@@ -179,6 +186,9 @@ class Orchestrator(Executor):
         self._execute_with_backtracking()
 
     def backtrack(self, backtrack: Backtrack):
+        blamed_step = _t.cast(Step, backtrack.blame)
+        if _utils.safe_is_instance(blamed_step, TaoReplyStep):
+            _t.cast(TaoReplyStep, blamed_step).record_criticisms([str(backtrack)])
         backtrack_to: Step|None = _t.cast(Step, backtrack.blame).created_by
         if backtrack_to is None or not backtrack_to.retryable(self.config):
             i = self.step_id(backtrack.blame if backtrack_to is None else backtrack_to)
@@ -194,6 +204,11 @@ class Orchestrator(Executor):
         if backtrack_to is None:
             self.logger.log_debug(f"Cannot find culprit step: {backtrack.blame}")
             return
+        elif _utils.safe_is_instance(backtrack_to, ExpandableStep):
+            choices = _t.cast(ExpandableStep, backtrack_to).choices
+            if (len(choices) > 0 and
+                    _utils.safe_is_instance(choices[-1], TaoReplyStep) and choices[-1] is not blamed_step):
+                _t.cast(TaoReplyStep, choices[-1]).record_criticisms([str(backtrack)])
 
         reverted_steps = []
         while len(self.chain) > 0 and self.chain[-1] is not backtrack_to:
@@ -307,11 +322,11 @@ class Orchestrator(Executor):
                 elif _utils.safe_is_instance(self.chain[i], (DirectAnswerStep, AskPythonGenieStep, StepByStepPlan)):
                     break
             if is_direct_answer_only: # replace
-                final_answer_step = SummarizeStep()
+                final_answer_step = SummarizeStep(n_verifications=self.config.n_final_checks)
                 self._waiting.append(final_answer_step)
                 return final_answer_step
 
-        summarize_step = SummarizeStep()
+        summarize_step = SummarizeStep(n_verifications=self.config.n_final_checks)
         self._waiting.append(summarize_step)
         return None
 

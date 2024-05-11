@@ -1,0 +1,58 @@
+/* Basic styling for the game container */
+#game-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f4f4f4;
+}
+
+/* Styling for the Weiqi board */
+.board {
+    display: grid;
+    grid-template-columns: repeat(19, 1fr);
+    grid-template-rows: repeat(19, 1fr);
+    gap: 2px;
+    background-color: #dcb35c;
+    width: 80vmin; /* Responsive size based on viewport, with a maximum size */
+    height: 80vmin; /* Responsive size based on viewport, with a maximum size */
+    max-width: 800px; /* Maximum size to prevent overly large board on very large screens */
+    max-height: 800px; /* Maximum size to prevent overly large board on very large screens */
+}
+
+/* Styling for the stones */
+.stone {
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+}
+
+.black-stone {
+    background-image: url('assets/black_stone.png');
+}
+
+.white-stone {
+    background-image: url('assets/white_stone.png');
+}
+
+/* Additional styling for the cells of the board */
+.cell {
+    width: 100%;
+    height: 100%;
+    background-color: transparent;
+    border: 1px solid #333; /* subtle border for cells */
+}
+
+/* Styling for the reset button */
+button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+/* Styling for the score display */
+#score-display {
+    margin-top: 10px;
+    font-size: 18px;
+}
