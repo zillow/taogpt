@@ -35,6 +35,7 @@ class PromptDb:
         self.sage_merge_criticisms=_read(path / 'sage_merge_criticisms.md')
         self.tao_ensure_updated_file_integrity=_read(path / 'tao_ensure_updated_file_integrity.md')
         self.tao_encourage_question=_read(path / 'tao_encourage_question.md')
+        self.orchestrator_note_past_criticisms =_read(path / 'orchestrator_note_past_criticisms.md')
 
         # substituted
         self._tao_expand_init_step = self.tao_templates.format(

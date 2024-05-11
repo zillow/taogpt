@@ -61,7 +61,9 @@ Follow this markdown template:
        }},
   // ...
   "n-1": {{"description": "<high-level description without details>", is_final_verification=boolean}}, // of this plan
-  "n": {{"description": "<high-level description without details>", is_final_summary=boolean}} // of this plan
+  "n": {{"description": "<high-level description without details>", is_final_summary=boolean}}, // of this plan
+  "has_branching": true or false, // does this plan has any conditional branching or early stopping/breaking step?
+  "has_loop": true or false // does this plan has any looping step?
 }}
 ```
 `````

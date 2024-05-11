@@ -207,7 +207,7 @@ So, the first row becomes: 4 3 2 1
     assert step.next_step.target_plan_done
 
 
-def test_parse_step_by_step_no_whys():
+def test_parse_sequential_step_by_step_and_stepping():
     text = """# HERE_IS_MY_STEP_BY_STEP_PLAN
 
 
@@ -216,15 +216,47 @@ def test_parse_step_by_step_no_whys():
 {
   "1": {"description": "Fill in the first row"},
   "2": {"description": "Fill in the second row"},
-  "3": {"description": "Fill in the third row"},
-  "4": {"description": "Fill in the fourth row"}
+  "has_branching": false,
+  "has_loop": false
 }
 ```
 This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must contain all of the numbers from 1 to 4 exactly once. We will fill in the rows one by one, making sure that each number appears exactly once in each row and column, and in each 2x2 square. This is a recursive, top-down approach to solving the puzzle.
 """
     step = parse_to_step(text, config=Config())
     assert isinstance(step, StepByStepPlan)
-    assert step.first_step == 'Fill in the first row'
+    next_step = step.advance_to_next_step()
+    assert next_step[0] == 1
+    assert next_step[1] == 'Fill in the first row'
+    next_step = step.advance_to_next_step(trial=True)
+    assert next_step[0] == 2
+    assert next_step[1] == 'Fill in the second row'
+    next_step = step.advance_to_next_step()
+    assert next_step[0] == 2
+    assert next_step[1] == 'Fill in the second row'
+    next_step = step.advance_to_next_step()
+    assert next_step is None
+
+
+def test_parse_looping_step_by_step_and_stepping():
+    text = """# HERE_IS_MY_STEP_BY_STEP_PLAN
+
+```json
+{
+  "1": {"description": "Fill in the first row"},
+  "2": {"description": "Repeat step 1"},
+  "has_branching": false,
+  "has_loop": true
+}
+```
+This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must contain all of the numbers from 1 to 4 exactly once. We will fill in the rows one by one, making sure that each number appears exactly once in each row and column, and in each 2x2 square. This is a recursive, top-down approach to solving the puzzle.
+"""
+    step = parse_to_step(text, config=Config())
+    assert isinstance(step, StepByStepPlan)
+    next_step = step.advance_to_next_step()
+    assert next_step[0] == 1
+    assert next_step[1] == 'Fill in the first row'
+    next_step = step.advance_to_next_step()
+    assert next_step is None
 
 
 def test_python_genie_execution_error(logger):

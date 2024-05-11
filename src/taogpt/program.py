@@ -35,6 +35,36 @@ class Step(StepABC):
         super().__init__(description=description, role=role, step_name=step_name)
         self._part_of: StepByStepPlan|None = None
         self._created_by: Step|None = None
+        self._criticisms: list[str] = list()
+        self._past_criticisms: list[str] = list()
+
+    def record_criticisms(self, additional_criticisms: list[str]):
+        self._criticisms.extend(additional_criticisms)
+
+    @property
+    def criticisms(self) -> list[str]:
+        return self._criticisms
+
+    def clear_criticisms(self):
+        for new in self._criticisms:
+            already_reported = False
+            if 'Time-out encountered during repair' in new:
+                continue
+            for old in self._past_criticisms:
+                if _utils.normalized_levenstein_distance(new, old) <= 0.1:
+                    already_reported = True
+                    break
+            if not already_reported:
+                self._past_criticisms.append(new)
+        self._criticisms.clear()
+
+    @property
+    def past_criticisms(self) -> list[str]:
+        return self._past_criticisms
+
+    def format_critic_text(self):
+        all_criticisms = [f'* {c}' if not c.startswith('* ') else c for c in self.criticisms]
+        return "\n".join(all_criticisms)
 
     @property
     def step_title(self) -> str:
@@ -132,19 +162,6 @@ class FixableStep(Step):
         pass
 
     @abstractmethod
-    def record_criticisms(self, criticisms: list[str]):
-        pass
-
-    @property
-    @abstractmethod
-    def criticisms(self) -> list[str]:
-        pass
-
-    def format_critic_text(self):
-        all_criticisms = [f'* {c}' if not c.startswith('* ') else c for c in self.criticisms]
-        return "\n".join(all_criticisms)
-
-    @abstractmethod
     def repair(self, executor: Executor):
         pass
 
@@ -160,14 +177,6 @@ class TaoReplyStep(Step):
 
     def __init__(self, *, description: str, role: str, step_name: str|None, **kwargs):
         super().__init__(description=description, role=role, step_name=step_name, **kwargs)
-        self._criticisms: list[str] = list()
-
-    def record_criticisms(self, additional_criticisms: list[str]):
-        self._criticisms.extend(additional_criticisms)
-
-    @property
-    def criticisms(self) -> list[str]:
-        return self._criticisms
 
 
 class DirectAnswerStep(TaoReplyStep, FixableStep):
@@ -253,7 +262,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                 n_retries += 1
                 executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
                                             executor.prompts.orchestrator_parse_error)
-        self._criticisms.clear()
+        self.clear_criticisms()
         self._n_tries += 1
 
     def eval_only(self, executor: Executor) -> Step | None:
@@ -351,7 +360,7 @@ class ConsolidateFileStep(DirectAnswerStep):
         self.log_repair(executor)
         self.evaluated = False
         self.eval_only(executor)
-        self.criticisms.clear()
+        self.clear_criticisms()
         self._n_tries += 1
 
 
@@ -414,17 +423,16 @@ class StepByStepPlan(TaoReplyStep):
                     raise ParseError(f"Expect only one JSON block, but found multiple. Please merge into one")
         if json_block is None:
             raise ParseError(f"Expecting step-by-step plan in a JSON fenced block, found none.")
-        self._steps = parse_step_by_step_plan(json_block)
+        self._steps, self._has_branching, self._has_loop = parse_step_by_step_plan(json_block)
         # erase sub_steps
         def stringyfy(steps) -> str:
             return "\n".join([f"{i}. {_utils.single_space(strip_quotes_re.sub('', step.description))}"
                               for i, step in steps.items()])
         step_desc = stringyfy(self._steps).strip()
 
-        self.first_step = f"{self._steps[1].description}" # 1-base
+        self._next_step_i = 1 # 1-base
         sections: dict[str, str] = parse_sections(free_text, section_level='#')
         sections.pop(NEXT_I_WANT_TO_WORK_AT, None) # just ignore
-        self.first_step = f"{self._steps[1].description}" # 1-base
 
         free_text = _utils.str_or_blank(sections.pop(FREE_TEXT))
         free_text = "\n\n".join([free_text] + [f"## {heading}\n{content}" for heading, content in sections.items()])
@@ -438,9 +446,24 @@ class StepByStepPlan(TaoReplyStep):
     def steps(self) -> dict[int, StepDescriptor]:
         return self._steps
 
+    def advance_to_next_step(self, trial=False) -> tuple[int, str]|None:
+        sequential = not (self._has_branching or self._has_loop)
+        if (self._next_step_i == 1 or sequential) and 0 < self._next_step_i <= len(self._steps): # 1-based
+            i = self._next_step_i
+            if not trial:
+                if sequential:
+                    self._next_step_i += 1
+                else:
+                    self._next_step_i= -1 # signal
+            return i, self._steps[i].description
+        return None
+
     def eval_only(self, executor) -> Step | None:
         # when evaluating this node, we are always at the first step
-        return ProceedStep.create_proceed_step(executor, self.first_step, self)
+        first_step = self.advance_to_next_step()
+        assert first_step is not None
+        assert first_step[0] == 1
+        return ProceedStep.create_proceed_step(executor, first_step[1], self)
 
     @property
     def realized_steps(self) -> list[Step]:
@@ -496,15 +519,30 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
     step_by_step_ids = {i for i in range(len(executor.chain))
                         if _utils.safe_is_instance(executor.chain[i], StepByStepPlan)}
     invisible_step_ids = {i for i in range(len(executor.chain)) if not executor.chain[i].visible_in_chain}
+    all_past_criticisms: list[str] = list()
+    for i, step in enumerate(executor.chain):
+        if i in invisible_step_ids:
+            continue
+        step = _t.cast(Step, step)
+        past_criticisms = step.past_criticisms
+        if len(past_criticisms) > 0:
+            step_tag = step.step_name_tag(i)
+            sublist = [c.replace("\n", " ") for c in past_criticisms]
+            sublist = "\n".join(f"  {k}. {c}" for k, c in enumerate(sublist))
+            all_past_criticisms.append(f"* {step_tag}\n{sublist}")
+    all_past_criticism_text = "\n".join(all_past_criticisms) if len(all_past_criticisms) > 0 else ""
 
     # issue: (level, [step desc])
     all_issues: dict[str, _t.Tuple[str, list[tuple[int, str]]|None]] = dict()
     number_of_issues = 0
     issues_by_critic: list[dict] = []
     verify_prompt = executor.prompts.sage_check_answer.format(intent=intent)
+    prompts = executor.show_conversation_thread(with_extras=True)
+    prompts.append((ROLE_ORCHESTRATOR, verify_prompt))
+    if len(all_past_criticism_text) > 0:
+        note = executor.prompts.orchestrator_note_past_criticisms.format(past_criticisms=all_past_criticism_text)
+        prompts.append((ROLE_ORCHESTRATOR, note))
     for i in range(votes):
-        prompts = executor.show_conversation_thread(with_extras=True)
-        prompts.append((ROLE_ORCHESTRATOR, verify_prompt))
         n_retries = 0
         prompts_to_be_sent = prompts.copy()
         response: str = ''
@@ -789,7 +827,7 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
                 n_retries += 1
                 executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
                                             executor.prompts.orchestrator_parse_error)
-        self._criticisms.clear()
+        self.clear_criticisms()
         return self.execute_python_snippet(executor)
 
     @property
@@ -1319,7 +1357,7 @@ class SummarizeStepABC(DirectAnswerStep, metaclass=ABCMeta):
                                             prompt_db.orchestrator_parse_error)
         self.merge_steps(executor)
         self.merge_consolidated_files(executor)
-        self.criticisms.clear()
+        self.clear_criticisms()
         self._evaluated = True
         return None
 
@@ -1448,6 +1486,13 @@ def proceed_next(current_step: Step, executor: Executor, next_step_spec: NextSte
 
     current_index = executor.step_id(current_step)
     assert current_index == len(executor.chain)-1
+    # to be completed
+    # matched_plan, _ = StepByStepPlan.find_last_step_by_step(executor, before=current_index)
+    # next_step = matched_plan.advance_to_next_step()
+    # if next_step is not None:
+    #     return ProceedStep.create_proceed_step(executor, next_step[1], matched_plan)
+    # unknown or beyond plan
+
     if next_step_spec.target_plan_id is not None and next_step_spec.target_plan_done:
         finished_plan = _t.cast(Step, executor.chain[next_step_spec.target_plan_id])
         partial = _t.cast(list[Step], executor.chain[next_step_spec.target_plan_id:current_index + 1])
@@ -1501,7 +1546,6 @@ class PresentTaskStep(FixableStep):
     def __init__(self, *, description: str, role: str, step_name='task statement', **kwargs):
         super().__init__(description=description, role=role, step_name=step_name, **kwargs)
         self._n_tries = 1 # already evaluated once since the description is the result
-        self._criticisms: list[str] = []
 
     @property
     def step_title(self) -> str:
@@ -1516,13 +1560,6 @@ class PresentTaskStep(FixableStep):
 
     def reset_retry_count(self):
         self._n_tries = 0
-
-    def record_criticisms(self, criticisms: list[str]):
-        self._criticisms.extend(criticisms)
-
-    @property
-    def criticisms(self) -> list[str]:
-        return self._criticisms
 
     def repair(self, executor: Executor):
         errors = [f"{i+1}. Please clarify this concern of your task: {issue}"

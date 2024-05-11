@@ -289,9 +289,10 @@ class StepDescriptor:
     is_final_summary: bool = False
 
 
-def parse_step_by_step_plan(text: str) -> dict[int, StepDescriptor]:
+def parse_step_by_step_plan(text: str) -> tuple[dict[int, StepDescriptor], bool, bool]:
     try:
-        plan = parse_json_hash(text, nested_hashes=True)
+        plan = parse_json_hash(text, nested_hashes=True,
+                               except_keys={'has_branching', 'has_branch', 'has_loop', 'looping'})
     except ParseError as ex:
         if not 'no JSON hash found' in str(ex):
             raise ex
@@ -299,8 +300,10 @@ def parse_step_by_step_plan(text: str) -> dict[int, StepDescriptor]:
     return validate_step_by_step_plan(plan)
 
 
-def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> dict[int, StepDescriptor]:
+def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> tuple[dict[int, StepDescriptor], bool, bool]:
     results: dict[int, StepDescriptor] = dict()
+    has_branching = plan.pop('has_branching', plan.pop('has_branch', False))
+    has_loop = plan.pop('has_loop', plan.pop('looping', False))
     last_index = -1
     last_summary_verification: int|None = None
     for i, item in plan.items():
@@ -329,7 +332,7 @@ def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> dict[int, StepDescrip
         if sub_steps is None or len(sub_steps) == 0:
             raise ParseError("Should have at least 2 steps in the plan. If only one step, answer directly")
         return validate_step_by_step_plan(sub_steps)
-    return results
+    return results, has_branching, has_loop
 
 
 def parse_ranking_response(text: str, expected_number: int) -> tuple[dict[int, float], dict[int, int]]:
@@ -372,7 +375,8 @@ def parse_ranking_response(text: str, expected_number: int) -> tuple[dict[int, f
     return results, dupes
 
 
-def parse_json_hash(text, nested_hashes=False, nested_list=False):
+def parse_json_hash(text, nested_hashes=False, nested_list=False, except_keys: set[str]=None):
+    except_keys = except_keys or set()
     match = _json_response_re.match(text)
     responses: dict[str, _t.Any]
     if match is None:
@@ -388,9 +392,11 @@ def parse_json_hash(text, nested_hashes=False, nested_list=False):
             raise ParseError(f"JSON parse error: {e}")
     if not _utils.safe_is_instance(responses, dict):
         raise ParseError("The response must be a JSON hash")
-    if nested_hashes and not all([_utils.safe_is_instance(x, dict) for x in responses.values()]):
+    if nested_hashes and not all([_utils.safe_is_instance(x, dict)
+                                  for k, x in responses.items() if k not in except_keys]):
         raise ParseError("The response must be a JSON hash of hashes")
-    elif nested_list and not all([_utils.safe_is_instance(x, list) for x in responses.values()]):
+    elif nested_list and not all([_utils.safe_is_instance(x, list)
+                                  for k, x in responses.items() if k not in except_keys]):
         raise ParseError("The response must be a JSON hash of lists")
     return responses
 

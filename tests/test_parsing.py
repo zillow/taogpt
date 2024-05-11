@@ -326,11 +326,12 @@ def test_parse_step_by_step_plan():
 {{
     "1": {{"description": "{steps[0]}", "why": "{reasons[0]}"}},
     "2": {{"description": "{steps[1]}"}},
-    "3": {{"description": "{steps[2]}", "is_final_verification": true}}
+    "3": {{"description": "{steps[2]}", "is_final_verification": true}},
+    "has_loop": true
 }}
 ```
 """
-    results = parsing.parse_step_by_step_plan(text)
+    results, has_branching, has_loop = parsing.parse_step_by_step_plan(text)
     assert len(results) == 3
     assert results[1].description == steps[0]
     assert results[1].why == reasons[0]
@@ -338,6 +339,8 @@ def test_parse_step_by_step_plan():
     assert results[2].why is None
     assert results[3].description == steps[2]
     assert results[3].is_final_verification
+    assert not has_branching
+    assert has_loop
 
 
 def test_replacement_with_multiple_identical_fenced_blocks():
