@@ -214,7 +214,7 @@ def test_parse_sequential_step_by_step_and_stepping():
 
 ```json
 {
-  "1": {"description": "Fill in the first row"},
+  "1": {"description": "Fill in the first row", "difficulty": 1},
   "2": {"description": "Fill in the second row"},
   "has_branching": false,
   "has_loop": false
@@ -227,12 +227,14 @@ This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must
     next_step = step.advance_to_next_step()
     assert next_step[0] == 1
     assert next_step[1] == 'Fill in the first row'
+    assert next_step[2] == 1
     next_step = step.advance_to_next_step(trial=True)
     assert next_step[0] == 2
     assert next_step[1] == 'Fill in the second row'
     next_step = step.advance_to_next_step()
     assert next_step[0] == 2
     assert next_step[1] == 'Fill in the second row'
+    assert next_step[2] == 5
     next_step = step.advance_to_next_step()
     assert next_step is None
 
@@ -279,7 +281,7 @@ no_such_var * 123
     step = AskPythonGenieStep(description=code, role=ROLE_TAO, step_name='ask')
     step.eval(orchestrator)
     assert '314.15' in step.description
-    assert step.n_tries == 2
+    assert step.n_tries == 1
 
 
 def test_validate_next_step_spec(logger):

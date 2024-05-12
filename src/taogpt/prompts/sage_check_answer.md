@@ -1,6 +1,7 @@
 {intent} Please verify concerns, determine severity of issues, and identify steps responsible for errors and 
-warnings, but avoid nitpicking. Do NOT report intermittent errors that are fixed subsequently. We should generally 
-respect user's assumptions even if they are inaccurate as assumptions are meant to simplify the problem. Respond using the following JSON template:
+warnings, but avoid nitpicking. For any step, do NOT report issues that are to be or are already taken care of in 
+subsequent steps. We should generally respect user's assumptions even if they are inaccurate as assumptions are 
+meant to simplify the problem. Respond using the following JSON template:
 
 ```json
 {{
@@ -8,11 +9,13 @@ respect user's assumptions even if they are inaccurate as assumptions are meant 
     "error": "<something incorrect with reasoning and recommendation>",
     "content": "<content snippet related to the issue",
     "blame": "step#<ID>: <step description>",
+    "fixed_in_subsequent_step": true or false,
     "affecting": ["step#<ID>: <step description>", "step#<ID>: <step description>", ...]
   }},
   "<what to verify>": {{
     "warning": "<something can be improved with reasoning and recommendation>",
     "content": "<content snippet related to the issue",
+    "fixed_in_subsequent_step": true or false,
     "blame": "step#<ID>: <step description>"
   }},
   "<what to verify>": {{"ok": "<this looks good>"}},

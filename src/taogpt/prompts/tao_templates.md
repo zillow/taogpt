@@ -27,7 +27,7 @@ questions to the user. Nobody would answer if you try to ask questions using oth
 
 ## Make a step-by-step plan
 
-To solve this task step, outline a sequence of high-level, action-oriented plan.
+Deliberate on this task step, outline a sequence of high-level, action-oriented plan.
 
 * Outcome-oriented! Pay attention to the intention of the task problem. The action plan is for reaching the solution;
   do not describe the internal workings, that's part of a direct answer.
@@ -51,24 +51,40 @@ Follow this markdown template:
 
 ```json
 {{
-  "1": {{"description": "<high-level description without details>"}},
+  "1": {{
+    "description": "<high-level description without details>", 
+    "difficulty": 1 to 10 // level of difficulty; 10 is most difficult
+  }},
   "2": {{
-        "description": "<high-level description without details>",
+        "description": "<high-level description without details>", "difficulty": 1 to 10,
         "sub_steps": {{
-            "1": {{"description": "<high-level description without details>"}},
-            "2": {{"description": "<high-level description without details>"}}
+            "1": {{"description": "<high-level description without details>", "difficulty": 1 to 10}},
+            "2": {{"description": "<high-level description without details>", "difficulty": 1 to 10}}
         }}
        }},
   // ...
-  "n-1": {{"description": "<high-level description without details>", is_final_verification=boolean}}, // of this plan
-  "n": {{"description": "<high-level description without details>", is_final_summary=boolean}}, // of this plan
+  "<n-1>": {{"description": "<high-level description without details>", "difficulty": 1 to 10, "is_final_verification": true or false}}, // of this plan
+  "<n>": {{"description": "<high-level description without details>", "difficulty": 1 to 10, "is_final_summary": true of false}}, // of this plan
   "has_branching": true or false, // does this plan has any conditional branching or early stopping/breaking step?
   "has_loop": true or false // does this plan has any looping step?
 }}
 ```
 `````
 
-{snippet_direct_answer}
+## Answer directly
+
+Just answer directly if this is simple.
+
+Follow this template:
+
+`````markdown
+# MY_THOUGHT
+<answer and explanation>
+
+### FILE: <path_to_be_create>/<file_name>
+<file content section only in need of writing a file>
+{snippet_direct_answer_next_step}
+`````
 
 {snippet_notes_for_files}
 

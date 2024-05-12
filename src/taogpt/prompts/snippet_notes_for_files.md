@@ -6,12 +6,17 @@ in a block. Example:
 <short description of this file>
 
 ```python
+// content from previous
+
 def foo():
     x += 1 
+
+// rest of the content
 ```
 ````
 
 Note:
 * Must have a file path name.
+* When updating a file, OK to omit existing contents with notes.
 * There is no need to create directories; if a file name has a parent directory, it will be created by the Orchestrator.
 * Orchestrator has no way to move or delete files.

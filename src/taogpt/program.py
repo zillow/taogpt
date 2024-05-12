@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import typing as _t
 from _collections import defaultdict as _defaultdict
 import math as _math
@@ -29,6 +30,27 @@ def add_files_to_prompts(executor, prompts, role=ROLE_ORCHESTRATOR) -> dict[str,
     return files
 
 
+@dataclasses.dataclass
+class IssueSeverityCount:
+    fatals: int
+    errors: int
+    warnings: int
+    affected: int
+
+    @property
+    def severe_issues(self) -> int:
+        return self.fatals + self.errors
+
+
+def count_issue_severities(issues: list[str]) -> IssueSeverityCount:
+    return IssueSeverityCount(
+        fatals=sum(int(issue.startswith('fatal:')) for issue in issues),
+        errors=sum(int(issue.startswith('error:')) for issue in issues),
+        warnings=sum(int(issue.startswith('warnings:')) for issue in issues),
+        affected=sum(int(issue.startswith('affected:')) for issue in issues),
+    )
+
+
 class Step(StepABC):
 
     def __init__(self, *, description: str, role: str, step_name: str|None, **_):
@@ -48,7 +70,7 @@ class Step(StepABC):
     def clear_criticisms(self):
         for new in self._criticisms:
             already_reported = False
-            if 'Time-out encountered during repair' in new:
+            if 'Time-out encountered during repair' in new or new.startswith('affected:'):
                 continue
             for old in self._past_criticisms:
                 if _utils.normalized_levenstein_distance(new, old) <= 0.1:
@@ -262,12 +284,12 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                 n_retries += 1
                 executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
                                             executor.prompts.orchestrator_parse_error)
+        self._n_tries += int(count_issue_severities(self.criticisms).severe_issues > 0)
         self.clear_criticisms()
-        self._n_tries += 1
 
     def eval_only(self, executor: Executor) -> Step | None:
         if self.next_step is not None:
-            return proceed_next(self, executor, self.next_step)
+            return proceed_next(self, executor, self.next_step, difficulty=5) # don't know exact difficulty'
         return None
 
     @property
@@ -286,7 +308,7 @@ class ConsolidateFileStep(DirectAnswerStep):
     TYPE_SPEC = "CONSOLIDATE_FILE"
 
     def __init__(self, *, description: str, role: str, file_name: str, keep_content_even_if_same=False, **kwargs):
-        super().__init__(description=description, role=role, step_name=f"finalizing file {file_name}", **kwargs)
+        super().__init__(description=description, role=role, step_name=f"consolidate file {file_name}", **kwargs)
         self._file_name = file_name
         self.keep_content_even_if_same = keep_content_even_if_same
         self._evaluated = False
@@ -360,8 +382,8 @@ class ConsolidateFileStep(DirectAnswerStep):
         self.log_repair(executor)
         self.evaluated = False
         self.eval_only(executor)
+        self._n_tries += int(count_issue_severities(self.criticisms).severe_issues > 0)
         self.clear_criticisms()
-        self._n_tries += 1
 
 
 class GiveUpStep(TaoReplyStep):
@@ -409,7 +431,7 @@ class StepByStepPlan(TaoReplyStep):
         desc = ';'.join([_utils.safe_subn(step.description, 10) for step in self._steps.values()])
         return f"[{desc}]"
 
-    def __init__(self, *, description: str, role: str, step_name: str|None, init_expansion=False, **kwargs):
+    def __init__(self, *, description: str, role: str, step_name: str|None, **kwargs):
         super().__init__(description=description, role=role, step_name=step_name, **kwargs)
         self._realized_steps: list[Step] = list()
         free_text, blocks = check_and_fix_fenced_blocks(self.description, collapse_blocks=True)
@@ -424,6 +446,10 @@ class StepByStepPlan(TaoReplyStep):
         if json_block is None:
             raise ParseError(f"Expecting step-by-step plan in a JSON fenced block, found none.")
         self._steps, self._has_branching, self._has_loop = parse_step_by_step_plan(json_block)
+        for step_i in list(self._steps.keys()):
+            step = self._steps[step_i]
+            if step.is_final_verification or step.is_final_summary:
+                del self._steps[step_i]
         # erase sub_steps
         def stringyfy(steps) -> str:
             return "\n".join([f"{i}. {_utils.single_space(strip_quotes_re.sub('', step.description))}"
@@ -446,24 +472,27 @@ class StepByStepPlan(TaoReplyStep):
     def steps(self) -> dict[int, StepDescriptor]:
         return self._steps
 
-    def advance_to_next_step(self, trial=False) -> tuple[int, str]|None:
-        sequential = not (self._has_branching or self._has_loop)
-        if (self._next_step_i == 1 or sequential) and 0 < self._next_step_i <= len(self._steps): # 1-based
+    def advance_to_next_step(self, trial=False) -> tuple[int, str, int]|None:
+        if (self._next_step_i == 1 or self.sequential) and 0 < self._next_step_i <= len(self._steps): # 1-based
             i = self._next_step_i
             if not trial:
-                if sequential:
+                if self.sequential:
                     self._next_step_i += 1
                 else:
                     self._next_step_i= -1 # signal
-            return i, self._steps[i].description
+            return i, self._steps[i].description, self._steps[i].difficulty
         return None
+
+    @property
+    def sequential(self) -> bool:
+        return not (self._has_branching or self._has_loop)
 
     def eval_only(self, executor) -> Step | None:
         # when evaluating this node, we are always at the first step
         first_step = self.advance_to_next_step()
         assert first_step is not None
         assert first_step[0] == 1
-        return ProceedStep.create_proceed_step(executor, first_step[1], self)
+        return ProceedStep.create_proceed_step(executor, first_step[1], self, first_step[2])
 
     @property
     def realized_steps(self) -> list[Step]:
@@ -519,18 +548,18 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
     step_by_step_ids = {i for i in range(len(executor.chain))
                         if _utils.safe_is_instance(executor.chain[i], StepByStepPlan)}
     invisible_step_ids = {i for i in range(len(executor.chain)) if not executor.chain[i].visible_in_chain}
-    all_past_criticisms: list[str] = list()
-    for i, step in enumerate(executor.chain):
-        if i in invisible_step_ids:
-            continue
-        step = _t.cast(Step, step)
-        past_criticisms = step.past_criticisms
-        if len(past_criticisms) > 0:
-            step_tag = step.step_name_tag(i)
-            sublist = [c.replace("\n", " ") for c in past_criticisms]
-            sublist = "\n".join(f"  {k}. {c}" for k, c in enumerate(sublist))
-            all_past_criticisms.append(f"* {step_tag}\n{sublist}")
-    all_past_criticism_text = "\n".join(all_past_criticisms) if len(all_past_criticisms) > 0 else ""
+    # all_past_criticisms: list[str] = list()
+    # for i, step in enumerate(executor.chain):
+    #     if i in invisible_step_ids:
+    #         continue
+    #     step = _t.cast(Step, step)
+    #     past_criticisms = step.past_criticisms
+    #     if len(past_criticisms) > 0:
+    #         step_tag = step.step_name_tag(i)
+    #         sublist = [c.replace("\n", " ") for c in past_criticisms]
+    #         sublist = "\n".join(f"  {k+1}. {c}" for k, c in enumerate(sublist))
+    #         all_past_criticisms.append(f"* {step_tag}\n{sublist}")
+    # all_past_criticism_text = "\n".join(all_past_criticisms) if len(all_past_criticisms) > 0 else ""
 
     # issue: (level, [step desc])
     all_issues: dict[str, _t.Tuple[str, list[tuple[int, str]]|None]] = dict()
@@ -539,9 +568,9 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
     verify_prompt = executor.prompts.sage_check_answer.format(intent=intent)
     prompts = executor.show_conversation_thread(with_extras=True)
     prompts.append((ROLE_ORCHESTRATOR, verify_prompt))
-    if len(all_past_criticism_text) > 0:
-        note = executor.prompts.orchestrator_note_past_criticisms.format(past_criticisms=all_past_criticism_text)
-        prompts.append((ROLE_ORCHESTRATOR, note))
+    # if len(all_past_criticism_text) > 0:
+    #     note = executor.prompts.orchestrator_note_past_criticisms.format(past_criticisms=all_past_criticism_text)
+    #     prompts.append((ROLE_ORCHESTRATOR, note))
     for i in range(votes):
         n_retries = 0
         prompts_to_be_sent = prompts.copy()
@@ -665,22 +694,22 @@ def identify_culprits(
         for (step_num, step_desc), issues_of_step in blames.items():
             if (step_num == i or step_desc is not None and
                     _utils.normalized_levenstein_distance(step.step_name, step_desc) <.05):
+                severities = count_issue_severities(issues_of_step)
                 if _utils.safe_is_instance(step, (FixableStep, TaoReplyStep)):
                     _t.cast(FixableStep, step).record_criticisms(issues_of_step)
                 if _utils.safe_is_instance(step, SummarizeStep):
-                    n_fatals = sum(issue.startswith("fatal:") for issue in issues_of_step)
-                    if n_fatals > 0:
+                    if severities.fatals > 0:
                         # no point of backtracking the summary step as it is the final step
                         issues_of_step = [issue.replace("fatal:", "error:") for issue in issues_of_step]
                         cls = step.__class__.__name__
-                        executor.logger.log(f"WARNING: change {n_fatals} fatal issues for {cls} step to errors")
+                        executor.logger.log(f"WARNING: change {severities.fatals} fatal issues for {cls} step to errors")
                 elif _utils.safe_is_instance(step, (AskQuestionStep,)):
-                    n_errors = sum(issue.startswith("error:") for issue in issues_of_step)
-                    if n_errors > 0:
+                    if severities.severe_issues > 0:
                         # these are not fixable currently but should backtrack only if fatal for these types
                         issues_of_step = [issue.replace("error:", "warning:") for issue in issues_of_step]
                         cls = step.__class__.__name__
-                        executor.logger.log(f"WARNING: change {n_errors} errors for {cls} step to warnings")
+                        executor.logger.log(f"WARNING: change {severities.severe_issues} errors "
+                                            f"for {cls} step to warnings")
                 culprits[step].extend(issues_of_step)
                 continue
     for i, step in enumerate(executor.chain):
@@ -690,8 +719,8 @@ def identify_culprits(
                 culprits[step] = ["affected: Previous steps has been fixed. Consolidate again"]
     total_errors = 0
     for culprits_issues in culprits.values():
-        n_errors, n_fatals = count_errors_in_issues(culprits_issues)
-        total_errors += n_errors + n_fatals
+        severities = count_issue_severities(culprits_issues)
+        total_errors += severities.severe_issues
     return culprits, total_errors
 
 
@@ -702,43 +731,35 @@ def repair_or_backtrack(executor: Executor, remedies: dict[Step, list[str]]):
         blames = remedies.get(blamed_step)
         if len(blames) == 0:  # shouldn't happen
             continue
-        n_errors, n_fatals = count_errors_in_issues(blames)
-        if n_fatals == 0 and _utils.safe_is_instance(blamed_step, FixableStep):
+        severities = count_issue_severities(blames)
+        if severities.fatals == 0 and _utils.safe_is_instance(blamed_step, FixableStep):
             if blamed_step.retryable(executor.config):
                 try:
                     _t.cast(FixableStep, blamed_step).repair(executor)
                 except openai.InternalServerError as ex:
                     executor.logger.log(f"Got error: {repr(ex)}")
                     if '504 Gateway Time-out'.lower() in str(ex).lower():
-                        if n_errors > 0 or n_fatals > 0:
+                        if severities.severe_issues > 0:
                             raise Backtrack(f"Time-out encountered during repair. {too_hard_msg}", blame=blamed_step)
                         # else only warning, ignore
                     else:
                         raise ex
-                n_errors_fixed += n_errors + n_fatals
+                n_errors_fixed += severities.severe_issues
                 del remedies[blamed_step]
-            elif n_errors > 0:
+            elif severities.errors > 0:
                 executor.logger.log(f"Request backtracking due to max-repairs reached.")
                 blames.append(f"We have tried repair a few times. {too_hard_msg}")
                 message = '\n\n'.join(blames)
                 raise Backtrack(message, blame=blamed_step)
             else:
                 del remedies[blamed_step]
-        elif n_fatals > 0 or n_errors > 0:
-            executor.logger.log(f"Request backtracking due fatal issue.")
+        elif severities.severe_issues > 0:
+            executor.logger.log(f"Request backtracking due {severities.severe_issues} severe issues.")
             message = '\n\n'.join(blames)
             raise Backtrack(message, blame=blamed_step)
         else: # warning and not fixable
             del remedies[blamed_step]
     return n_errors_fixed
-
-
-def count_errors_in_issues(blames: _t.Sequence[str]|None):
-    if blames is None:
-        return 0, 0
-    n_fatals = sum(b.startswith('fatal') for b in blames)
-    n_errors = sum(b.startswith('error') or b.startswith('affected') for b in blames)
-    return n_errors, n_fatals
 
 
 class AskPythonGenieStep(TaoReplyStep, FixableStep):
@@ -782,7 +803,6 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
             logger.close_message_section()
             self.description += f"\n\nResults:\n\n{result_markdown}"
             self._evaluated = True
-            self._n_tries += 1
             return True
         except _utils.PythonGenieRuntimeError as e:
             error_text = f"""error: {str(e.error)} when executing this code snippet."""
@@ -790,8 +810,7 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
             logger.log(error_text)
             logger.close_message_section()
             self._evaluated = True
-            self._n_tries += 1
-            self.record_criticisms([error_text])
+            self.record_criticisms([f"error: {error_text}"])
             return False
 
     def repair(self, executor: Executor):
@@ -827,6 +846,7 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
                 n_retries += 1
                 executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
                                             executor.prompts.orchestrator_parse_error)
+        self._n_tries += int(count_issue_severities(self.criticisms).severe_issues > 0)
         self.clear_criticisms()
         return self.execute_python_snippet(executor)
 
@@ -927,7 +947,7 @@ def parse_to_step(response: str, config: Config,
 class ExpandableStep(Step):
 
     def __init__(self, *, description: str, role: str, step_name: str|None,
-                 choices: list[Step] = None, first_expansion: int = 1,
+                 declare_next_step=True, difficulty: int=5, choices: list[Step] = None, first_expansion: int = 1,
                  incremental_expansion: int = 1, max_expansion: int = 4, **kwargs):
         super().__init__(description=description, role=role, step_name=None, **kwargs)
         self.choices = choices if choices is not None else []
@@ -937,6 +957,8 @@ class ExpandableStep(Step):
         self.set_visible_in_chain(False)
         self._ptr = 0
         self._step_name_for_expanded = step_name
+        self.declare_next_step = declare_next_step
+        self._difficulty = difficulty
 
     @property
     def step_name_for_expanded(self) -> str:
@@ -1025,6 +1047,7 @@ class ExpandableStep(Step):
         config = executor.config
         step_by_step = self.part_of
         n_step_by_step_plans = 0
+        choice_hinted = False
         if step_by_step is not None:
             plan_id = executor.step_id(step_by_step)
             current_plan = step_by_step.step_name_tag(plan_id)
@@ -1041,15 +1064,27 @@ class ExpandableStep(Step):
                 work_prompt += (f"\n\n You've spent {frac:0.0%} of your LLM token budget; be mindful of cost. "
                                 f"The step-by-step plan is at {n_step_by_step_plans} levels deep; "
                                 f"try to avoid `{HERE_IS_MY_STEP_BY_STEP_PLAN}` actions.")
+                choice_hinted = True
             base_prompts.append((ROLE_ORCHESTRATOR, work_prompt))
 
-        tao_templates = prompt_db.tao_expand_init_step if initial else prompt_db.tao_expand_any_step
+        tao_templates = prompt_db.tao_templates_with_next_step if self.declare_next_step \
+            else prompt_db.tao_templates_without_next_step
         base_prompts.append((ROLE_ORCHESTRATOR, tao_templates))
         if initial:
             base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_encourage_question))
-        else:
+            choice_hinted = True
+        elif self.declare_next_step:
             next_step_instr = prompt_db.snippet_next_step.format(step=current_plan)
             base_prompts.append((ROLE_ORCHESTRATOR, next_step_instr))
+        hint = None
+        if not choice_hinted:
+            hint = f"This step looks easy! I think you can try direct answer (`{MY_THOUGHT}`.)"
+            if self._difficulty <= 3:
+                hint = f"This step looks easy! I think you can try direct answer (`{MY_THOUGHT}`.)"
+            elif self._difficulty >= 7:
+                hint = f"This step looks hard! I think you can try `{HERE_IS_MY_STEP_BY_STEP_PLAN}`."
+        if hint is not None:
+            base_prompts.append((ROLE_ORCHESTRATOR, hint))
         return system_prompt, base_prompts
 
     def rank_choices(self, executor: Executor, n_existing_choices: int = 0):
@@ -1179,13 +1214,14 @@ class ExpandableStep(Step):
 
 class ProceedStep(ExpandableStep):
     @staticmethod
-    def create_proceed_step(executor: Executor, next_step_desc: str, step_by_step: StepByStepPlan):
+    def create_proceed_step(executor: Executor, next_step_desc: str, step_by_step: StepByStepPlan, difficulty: int):
         config = executor.config
         next_step = ProceedStep(
             description='',
             role=ROLE_ORCHESTRATOR,
             first_expansion=config.first_expansion,
             max_expansion=config.max_search_expansion,
+            declare_next_step=not step_by_step.sequential,
             step_name=next_step_desc)
         next_step.part_of = step_by_step
         next_step.created_by = step_by_step.created_by
@@ -1207,14 +1243,44 @@ class NextStep(Step):
         return ""
 
     def eval_only(self, executor) -> Step | None:
-        prompt_db = executor.prompts
-        system_prompt = prompt_db.tao_intro
-        prompts = executor.show_conversation_thread(with_header=True, with_extras=True)
         parent_plan, plan_id = StepByStepPlan.find_last_step_by_step(executor, before=self)
         assert parent_plan is not None
         assert plan_id is not None
+        next_step = parent_plan.advance_to_next_step()
+        if next_step is not None:
+            return ProceedStep.create_proceed_step(executor, next_step[1], parent_plan, next_step[2])
+        if parent_plan.sequential: # we are done with the parent plan, summarize
+            gp, gp_id = StepByStepPlan.find_last_step_by_step(executor, before=parent_plan)
+            next_step_name = None
+            difficulty = 5
+            while gp is not None and gp.sequential:
+                next_step = gp.advance_to_next_step(trial=True)
+                if next_step is None: # this ancestor is done
+                    gp, gp_id = StepByStepPlan.find_last_step_by_step(executor, before=gp)
+                    continue
+                next_step_name = next_step[1]
+                difficulty = next_step[2]
+                break
+            if gp is None: # reach root
+                next_step_name = 'all done'
+            if next_step_name is not None:
+                next_step_spec = NextStepDesc(
+                    target_plan_id=plan_id,
+                    target_plan_tag=parent_plan.step_name_tag(plan_id),
+                    target_plan_done=True,
+                    next_step_desc=next_step_name,
+                    plan_of_next_step=gp.step_name_tag(gp_id) if gp is not None else None)
+                return proceed_next(self, executor, next_step_spec, difficulty)
+            # else we need to ask
+
+        prompt_db = executor.prompts
+        system_prompt = prompt_db.tao_intro
+        prompts = executor.show_conversation_thread(with_header=True, with_extras=True)
+        last_step = _t.cast(Step, executor.chain[-2])
+        last_step_tag = last_step.step_name_tag(executor.step_id(last_step))
         snippet_next_step = prompt_db.snippet_next_step.format(step=parent_plan.step_name_tag(plan_id))
         tao_next_step = prompt_db.tao_next_step.format(
+            last_step=last_step_tag, at_plan=parent_plan.step_name_tag(plan_id),
             snippet_next_step=snippet_next_step, snippet_report_errors=prompt_db.snippet_report_errors)
         prompts.append((ROLE_ORCHESTRATOR, tao_next_step))
         n_retries = 0
@@ -1245,7 +1311,7 @@ class NextStep(Step):
         if decision == NEXT_I_WANT_TO_WORK_AT:
             next_step_spec = _t.cast(NextStepDesc, details)
             validate_next_step_spec(executor, next_step_spec, no_spec_ok=False)
-            return proceed_next(self, executor, next_step_spec)
+            return proceed_next(self, executor, next_step_spec, difficulty=5) # don't know exact difficulty
         else:
             step = parse_to_step(_t.cast(str, details), config=config, working_on=None)
             step.validate(executor)
@@ -1480,17 +1546,16 @@ class SummarizeStep(SummarizeStepABC):
         return config.verification_votes
 
 
-def proceed_next(current_step: Step, executor: Executor, next_step_spec: NextStepDesc) -> Step:
+def proceed_next(current_step: Step, executor: Executor, next_step_spec: NextStepDesc, difficulty: int=5) -> Step:
     if next_step_spec.is_final_step:
         return _t.cast(Step, executor.summarize_final_answer())
 
     current_index = executor.step_id(current_step)
     assert current_index == len(executor.chain)-1
-    # to be completed
-    # matched_plan, _ = StepByStepPlan.find_last_step_by_step(executor, before=current_index)
-    # next_step = matched_plan.advance_to_next_step()
-    # if next_step is not None:
-    #     return ProceedStep.create_proceed_step(executor, next_step[1], matched_plan)
+    matched_plan, _ = StepByStepPlan.find_last_step_by_step(executor, before=current_index)
+    next_step = matched_plan.advance_to_next_step()
+    if next_step is not None:
+        return ProceedStep.create_proceed_step(executor, next_step[1], matched_plan, difficulty)
     # unknown or beyond plan
 
     if next_step_spec.target_plan_id is not None and next_step_spec.target_plan_done:
@@ -1510,7 +1575,6 @@ def proceed_next(current_step: Step, executor: Executor, next_step_spec: NextSte
             return _t.cast(Step, executor.summarize_final_answer())
         return summarize
 
-    matched_plan, _ = StepByStepPlan.find_last_step_by_step(executor, before=current_index)
     return ProceedStep.create_proceed_step(executor, next_step_spec.next_step_desc, matched_plan)
 
 
@@ -1573,5 +1637,5 @@ class PresentTaskStep(FixableStep):
         my_index = executor.step_id(self)
         executor.chain.insert(my_index+1, ask_step)
         ask_step.eval_only(executor)
-        self._n_tries += 1
+        self._n_tries += int(count_issue_severities(self.criticisms).severe_issues > 0)
         raise RedoFinalCheck(self)

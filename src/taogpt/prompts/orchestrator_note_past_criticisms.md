@@ -1,4 +1,4 @@
-We have already seen and tried to fix these issues before:
+Tao has already seen and fixed these issues before:
 
 {past_criticisms}
 

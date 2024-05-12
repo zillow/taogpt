@@ -111,6 +111,7 @@ class Orchestrator(Executor):
                                      role=ROLE_ORCHESTRATOR,
                                      first_expansion=self.config.initial_expansion,
                                      max_expansion=self.config.max_search_expansion,
+                                     declare_next_step=False,
                                      step_name="top-level plan/answer")
         self.chain.append(work_next_step)
         self._execute_with_backtracking()

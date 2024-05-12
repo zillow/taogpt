@@ -12,9 +12,8 @@ def _read(path) -> str:
 class PromptDb:
     def __init__(self, path=_template_dir):
         self.tao_intro=_read(path / 'tao.md')
-        self.tao_templates=_read(path / 'tao_templates.md')
-        self.snippet_intuitive_answer =_read(path / 'snippet_intuitive_answer.md')
-        self.snippet_direct_step_answer=_read(path / 'snippet_direct_step_answer.md')
+        self._tao_templates=_read(path / 'tao_templates.md')
+        self.snippet_direct_answer_next_step =_read(path / 'snippet_direct_answer_next_step.md')
         self.snippet_next_step=_read(path / 'snippet_next_step.md')
         self.snippet_notes_for_files=_read(path / 'snippet_notes_for_files.md')
         self.sage_rank_choices=_read(path / 'sage_rank_choices.md')
@@ -37,29 +36,19 @@ class PromptDb:
         self.tao_encourage_question=_read(path / 'tao_encourage_question.md')
         self.orchestrator_note_past_criticisms =_read(path / 'orchestrator_note_past_criticisms.md')
 
-        # substituted
-        self._tao_expand_init_step = self.tao_templates.format(
+        decl_next_step = self.snippet_direct_answer_next_step
+        self.tao_templates_with_next_step = self._tao_templates.format(
             snippet_report_errors=self.snippet_report_errors,
-            snippet_direct_answer=self.snippet_intuitive_answer,
+            snippet_direct_answer_next_step=decl_next_step,
             snippet_notes_for_files=self.snippet_notes_for_files)
-        self._tao_expand_any_step = self.tao_templates.format(
+        self.tao_templates_without_next_step = self._tao_templates.format(
             snippet_report_errors=self.snippet_report_errors,
-            snippet_direct_answer=self.snippet_direct_step_answer,
+            snippet_direct_answer_next_step='',
             snippet_notes_for_files=self.snippet_notes_for_files)
 
     def reload(self, path: _path.Path=_template_dir) -> PromptDb:
         self.__init__(path)
         return self
-
-    @property
-    def tao_expand_init_step(self) -> str:
-        assert self._tao_expand_init_step is not None
-        return self._tao_expand_init_step
-
-    @property
-    def tao_expand_any_step(self) -> str:
-        assert self._tao_expand_any_step is not None
-        return self._tao_expand_any_step
 
     def to_dict(self) -> dict[str, str]:
         return vars(self)

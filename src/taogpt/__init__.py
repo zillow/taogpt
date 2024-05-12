@@ -85,7 +85,7 @@ class Config:
     verification_votes: int = 2
 
     # behavioral
-    n_final_checks: int = 5
+    n_final_checks: int = 3
 
     # token usage controls
     max_tokens: int = 10000

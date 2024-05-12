@@ -221,6 +221,9 @@ def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tu
     concerns: dict[str, tuple[str, tuple[int, str]|None]] = dict()
     overall_correctness: bool = True
     for concern, judgement in judgements.items():
+        fixed = judgement.get("fixed_in_subsequent_step", False)
+        if fixed: # GPT seems not understanding an issues already fixed subsequently are OK
+            continue
         has_ok = 'ok' in judgement
         has_warning = 'warning' in judgement
         has_error = 'error' in judgement
@@ -287,6 +290,7 @@ class StepDescriptor:
     sub_steps: dict[str, _t.Any]|None = None
     is_final_verification: bool = False
     is_final_summary: bool = False
+    difficulty: int = 5
 
 
 def parse_step_by_step_plan(text: str) -> tuple[dict[int, StepDescriptor], bool, bool]:
@@ -319,7 +323,8 @@ def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> tuple[dict[int, StepD
 
         descriptor = StepDescriptor(item['description'], item.get('why', None), item.get('sub_steps', None),
                                     is_final_verification=item.get('is_final_verification', False),
-                                    is_final_summary=item.get('is_final_summary', False))
+                                    is_final_summary=item.get('is_final_summary', False),
+                                    difficulty=item.get('difficulty', 5))
         if descriptor.is_final_summary or descriptor.is_final_verification:
             last_summary_verification = key
         elif last_summary_verification is not None:
