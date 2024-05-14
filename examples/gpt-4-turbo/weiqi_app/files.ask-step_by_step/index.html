@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weiqi Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="board">
+            <!-- Dynamically generated board will be inserted here via JavaScript -->
+        </div>
+        <div id="game-info">
+            <div id="player-turn">Player Turn: <span id="current-player">Black</span></div>
+            <div id="score">
+                <div>Black Score: <span id="black-score">0</span></div>
+                <div>White Score: <span id="white-score">0</span></div>
+            </div>
+            <button id="pass-button">Pass Turn</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>

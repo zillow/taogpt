@@ -71,6 +71,9 @@ Follow this markdown template:
 ```
 `````
 
+The Orchestrator requires that final verification steps only check the answers and summarization steps only 
+summarize verbally what have been done, neither without making any real changes.
+
 ## Answer directly
 
 Just answer directly if this is simple.

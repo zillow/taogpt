@@ -3,6 +3,7 @@ import dataclasses as _dc
 import typing as _t
 import datetime as _datetime
 import json as _json
+import re as _re
 
 import taogpt.md_logging
 from . import UnsolvableError, MarkdownLogger, TokenUsageError
@@ -139,8 +140,8 @@ class Orchestrator(Executor):
             self.logger.log(f"**resume**: extend token allowance by {additional_tokens} to {self.config.max_tokens}")
         if additional_sage_tokens is not None:
             self.config.max_tokens_for_sage_llm += additional_sage_tokens
-            if self.sage_llm is not None:
-                self.sage_llm.max_token_usage = self.config.max_tokens_for_sage_llm * 2
+            if self._sage_llm is not None:
+                self._sage_llm.max_token_usage = self.config.max_tokens_for_sage_llm * 2
             self.logger.log(f"**resume**: extend token allowance for sage "
                             f"LLM by {additional_sage_tokens} to {self.config.max_tokens_for_sage_llm}")
         self.config.pause_after_initial_solving_expansion = False
@@ -174,7 +175,7 @@ class Orchestrator(Executor):
                     self.logger.log(f'Pause requested: {paused}\n')
                     raise paused
                 except Exception as e:
-                    self.logger.log(f'<div style="background-color: red; color: white">\n\n{repr(e)}\n</div>\n\n')
+                    self.logger.log_error(repr(e))
                     raise e
 
         except UnsolvableError as e:
@@ -389,7 +390,7 @@ def ask_questions(input_fn, questions: list[str], one_prompt: bool) -> dict[str,
             reply = input_fn(ui_prompt).strip()
             if reply.lower() == 'cancel':
                 raise KeyboardInterrupt("User cancelled")
-            answers = [re.sub(r"\d+\.\s*", '', s) for s in re.split(r";\s+\d+\.\s+", reply)]
+            answers = [_re.sub(r"\d+\.\s*", '', s) for s in _re.split(r";\s+\d+\.\s+", reply)]
             if len(answers) != len(questions):
                 ui_prompt = f"ERROR: there are {len(questions)} but found {len(answers)} answers.\n{ui_prompt}"
                 continue

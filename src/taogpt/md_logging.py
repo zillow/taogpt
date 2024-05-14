@@ -86,6 +86,9 @@ class MarkdownLogger:
         finally:
             self._log.flush()
 
+    def log_error(self, error: str):
+        self.log(f'<div style="background-color: red; color: white">\n\n{error}\n</div>\n\n')
+
     @staticmethod
     def demote_h1(message: str):
         original = message

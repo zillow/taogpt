@@ -6,18 +6,21 @@ import math as _math
 import json as _json
 import re as _re
 from abc import abstractmethod, ABCMeta
+from difflib import unified_diff as _unified_diff
 
 import openai
 
 import taogpt
 import taogpt.llm_model
 from . import StepABC, Backtrack, Pause, Executor, Config, GeneratedFile
+from .llm_model import is_chatgpt_timeout
 from .parsing import *
 from .constants import *
 import taogpt.utils as _utils
 from .parsing import ParseError
 from .utils import safe_subn
 from taogpt.prompts import PromptDb
+import dataclasses
 
 
 def add_files_to_prompts(executor, prompts, role=ROLE_ORCHESTRATOR) -> dict[str, GeneratedFile]:
@@ -345,7 +348,15 @@ class ConsolidateFileStep(DirectAnswerStep):
             instr = prompt_db.tao_fix_issues.format(step_id=step_id, step=self.step_name, critic_text=critic_text)
             prompts.append((ROLE_ORCHESTRATOR, instr))
 
-        last_version = GeneratedFile.collect_files(executor.chain, self)[self._file_name]
+        all_versions = collect_all_versions(_t.cast(list[Step], executor.chain), self._file_name)
+        if len(all_versions) == 0:
+            raise ValueError(f"No file snippet found for {self._file_name} in the chain")
+        if len(all_versions) == 1:
+            if self.keep_content_even_if_same:
+                self.collected_files[self._file_name] = all_versions[-1]
+            self._evaluated = True
+            return None
+        last_version = all_versions[-1]
         n_retries = 0
         response: str|None = None
         to_be_sent = prompts.copy()
@@ -355,27 +366,41 @@ class ConsolidateFileStep(DirectAnswerStep):
                     system_prompt, to_be_sent,
                     reason=self.TYPE_SPEC,
                     step_id=f"{executor.step_id(self)}#{n_retries}",
-                    temperature=0.0 if n_retries == 0 else executor.config.alternative_temperature,
-                    log_request=n_retries == 0)
+                    temperature=0.0 if n_retries == 0 else executor.config.alternative_temperature)
                 self.build(response)
                 if len(self.collected_files) != 1 or self._file_name not in self.collected_files:
                     raise ParseError(f"You should respond (only) with the complete content of file {self._file_name}")
-                if self.keep_content_even_if_same:
-                    pass
-                elif self.collected_files[self._file_name].content == last_version.content and \
-                    self.collected_files[self._file_name].content_type == last_version.content_type:
-                    self.collected_files.clear()
-                    self.description = f"The last version of file `{self._file_name}` looks good. No change."
-                else:
-                    self.description = f"The file `{self._file_name}` has been reconciled with prior edits."
-                self.evaluated = True
-                self.next_step = None # shouldn't happen
+                self.finish_consolidation(last_version)
                 return None
+            except openai.InternalServerError as ex:
+                if is_chatgpt_timeout(ex):
+                    executor.logger.log_error(f"Got 504 Gateway Time-out during file consolidation")
+                    markdown_content, content = rolling_diff_file_consolidate(executor, self._file_name)
+                    self.collected_files[self._file_name] = GeneratedFile(
+                        last_version.content_type,
+                        content,
+                        markdown_content,
+                        '')
+                    self.finish_consolidation(last_version)
+                    return None
+                raise ex
             except ParseError as ex:
                 n_retries += 1
                 executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
                                             prompt_db.orchestrator_parse_error)
         return None
+
+    def finish_consolidation(self, last_version):
+        if self.keep_content_even_if_same:
+            pass
+        elif self.collected_files[self._file_name].content == last_version.content and \
+                self.collected_files[self._file_name].content_type == last_version.content_type:
+            self.collected_files.clear()
+            self.description = f"The last version of file `{self._file_name}` looks good. No change."
+        else:
+            self.description = f"The file `{self._file_name}` has been reconciled with prior edits."
+        self.evaluated = True
+        self.next_step = None  # shouldn't happen
 
     def repair(self, executor: Executor):
         self._previous_contents.append((self.description, self._files))
@@ -734,16 +759,21 @@ def repair_or_backtrack(executor: Executor, remedies: dict[Step, list[str]]):
         severities = count_issue_severities(blames)
         if severities.fatals == 0 and _utils.safe_is_instance(blamed_step, FixableStep):
             if blamed_step.retryable(executor.config):
-                try:
-                    _t.cast(FixableStep, blamed_step).repair(executor)
-                except openai.InternalServerError as ex:
-                    executor.logger.log(f"Got error: {repr(ex)}")
-                    if '504 Gateway Time-out'.lower() in str(ex).lower():
-                        if severities.severe_issues > 0:
-                            raise Backtrack(f"Time-out encountered during repair. {too_hard_msg}", blame=blamed_step)
-                        # else only warning, ignore
-                    else:
-                        raise ex
+                max_time_out_retries = 2
+                for tries in range(max_time_out_retries):
+                    try:
+                        _t.cast(FixableStep, blamed_step).repair(executor)
+                        break
+                    except openai.InternalServerError as ex:
+                        if is_chatgpt_timeout(ex):
+                            executor.logger.log_error(f"Got 504 Time-out error")
+                            if severities.severe_issues > 0 and tries >= max_time_out_retries-1:
+                                raise Backtrack(f"Time-out encountered during repair. {too_hard_msg}",
+                                                blame=blamed_step)
+                            else: # only warning, ignore
+                                break
+                        else:
+                            raise ex
                 n_errors_fixed += severities.severe_issues
                 del remedies[blamed_step]
             elif severities.errors > 0:
@@ -1011,8 +1041,7 @@ class ExpandableStep(Step):
                         system_prompt, prompts_to_be_sent,
                         reason=self._expansion_reason,
                         step_id=f"{executor.step_id(self)}/{len(self.choices)}#{n_retries}",
-                        temperature=temperature,
-                        log_request=(len(self.choices) == 0 and n_retries == 0))
+                        temperature=temperature)
                     choice = self.parse_reply(plan, executor)
                     if executor.is_init_solving_expansion() and _utils.safe_is_instance(choice, DirectAnswerStep):
                         _t.cast(DirectAnswerStep, choice).is_final_step = True
@@ -1078,11 +1107,10 @@ class ExpandableStep(Step):
             base_prompts.append((ROLE_ORCHESTRATOR, next_step_instr))
         hint = None
         if not choice_hinted:
-            hint = f"This step looks easy! I think you can try direct answer (`{MY_THOUGHT}`.)"
             if self._difficulty <= 3:
-                hint = f"This step looks easy! I think you can try direct answer (`{MY_THOUGHT}`.)"
+                hint = f"This step looks easy! I think you may want to avoid `{HERE_IS_MY_STEP_BY_STEP_PLAN}` approach."
             elif self._difficulty >= 7:
-                hint = f"This step looks hard! I think you can try `{HERE_IS_MY_STEP_BY_STEP_PLAN}`."
+                hint = f"This step looks hard! I think you may want to try `{HERE_IS_MY_STEP_BY_STEP_PLAN}`."
         if hint is not None:
             base_prompts.append((ROLE_ORCHESTRATOR, hint))
         return system_prompt, base_prompts
@@ -1129,8 +1157,7 @@ class ExpandableStep(Step):
                         system_prompt, prompts_to_be_sent,
                         reason='rank_choices',
                         step_id=f"{executor.step_id(self)}/{n_success}#{n_retries}",
-                        temperature=config.first_try_temperature if n_success == 0 else config.alternative_temperature,
-                        log_request=(n_success == 0 and n_retries == 0))
+                        temperature=config.first_try_temperature if n_success == 0 else config.alternative_temperature)
                     scores, dupes = parse_ranking_response(response, len(self.choices))
                     for plan, score in scores.items():
                         rankings_one_based[plan] += score
@@ -1222,6 +1249,7 @@ class ProceedStep(ExpandableStep):
             first_expansion=config.first_expansion,
             max_expansion=config.max_search_expansion,
             declare_next_step=not step_by_step.sequential,
+            difficulty=difficulty,
             step_name=next_step_desc)
         next_step.part_of = step_by_step
         next_step.created_by = step_by_step.created_by
@@ -1292,8 +1320,7 @@ class NextStep(Step):
                     system_prompt, to_be_sent,
                     reason='next_step',
                     step_id=f"{executor.step_id(self)}#{n_retries}",
-                    temperature=0.0 if n_retries == 0 else executor.config.alternative_temperature,
-                    log_request=n_retries == 0)
+                    temperature=0.0 if n_retries == 0 else executor.config.alternative_temperature)
                 proceed_step = self.parse_reply(response, executor)
                 self.set_visible_in_chain(False)
                 return proceed_step
@@ -1465,29 +1492,43 @@ class SummarizeStepABC(DirectAnswerStep, metaclass=ABCMeta):
 
 class SummarizePartialStep(SummarizeStepABC):
 
-    def __init__(self, *, step_name: str, shadowing: list[Step], consolidate_file_steps: list[ConsolidateFileStep],
-                 role=ROLE_TAO, **kwargs):
-        super().__init__(step_name=step_name, role=role, n_verifications=1, **kwargs)
-        self.consolidate_file_steps = consolidate_file_steps
+    def __init__(self, *, step_name: str, shadowing: list[Step], role=ROLE_TAO, **kwargs):
+        super().__init__(step_name=step_name, role=role, n_verifications=3, **kwargs)
         self._shadowing: list[Step]= shadowing
 
     def eval(self, executor: Executor) -> Step | None:
-        result = self.verify_and_fix("Is everything correct between these steps? "
-                                     "(Note: don't need to the whole or solve other parts of the problem.)", executor)
-        if result is not None:
-            return result
+        if self._n_verifications > 0:
+            result = self.verify_and_fix(
+                "Is everything correct between these steps? "
+                "(Note: don't need to the whole or solve other parts of the problem.)", executor)
+            if result is not None:
+                return result
         return self.eval_only(executor)
 
-    def merge_consolidated_files(self, executor):
-        if self.consolidate_file_steps is not None:
-            for consolidation in self.consolidate_file_steps:
-                self.collected_files.update(consolidation.collected_files)
-            executor.remove_steps(steps=self.consolidate_file_steps)
+    def eval_only(self, executor) -> Step | None:
+        if self._evaluated:
+            return None
+        self.consolidated_files_in_these_steps(executor)
+        saved = self.collected_files.copy()
+        next_step = super().eval_only(executor)
+        self.collected_files.update(saved)
+        return next_step
+
+    def consolidated_files_in_these_steps(self, executor):
+        files = GeneratedFile.collect_files(self.get_summarize_steps(executor), stop_at_step=self)
+        for path, file in files.items():
+            consolidation = ConsolidateFileStep(description='', role=ROLE_TAO, file_name=path,
+                                                keep_content_even_if_same=True)
+            consolidation.eval(executor)
+            self.collected_files.update(consolidation.collected_files)
 
     def merge_steps(self, executor):
         self.created_by = self._shadowing[0].created_by
         self.part_of = self._shadowing[0].part_of
         executor.remove_steps(from_step=self._shadowing[0], to_step=self._shadowing[-1])
+
+    def merge_consolidated_files(self, executor):
+        pass
 
     def get_instruction(self, executor: Executor):
         from_step_tag = self._shadowing[0].step_name_tag(executor.step_id(self._shadowing[0]))
@@ -1562,12 +1603,7 @@ def proceed_next(current_step: Step, executor: Executor, next_step_spec: NextSte
         finished_plan = _t.cast(Step, executor.chain[next_step_spec.target_plan_id])
         partial = _t.cast(list[Step], executor.chain[next_step_spec.target_plan_id:current_index + 1])
 
-        consolidate_file_steps = consolidate_updated_files(partial)
-        for consolidate_file_step in consolidate_file_steps:
-            if not consolidate_file_step.evaluated:
-                executor.enqueue(consolidate_file_step)
-        summarize = SummarizePartialStep(step_name=finished_plan.step_name, shadowing=partial,
-                                         consolidate_file_steps=consolidate_file_steps)
+        summarize = SummarizePartialStep(step_name=finished_plan.step_name, shadowing=partial)
         if _utils.safe_is_instance(finished_plan.created_by, ExpandableStep):
             _t.cast(ExpandableStep, finished_plan.created_by).insert_choice(summarize, increase_max=True)
         if next_step_spec.is_final_step:
@@ -1575,7 +1611,7 @@ def proceed_next(current_step: Step, executor: Executor, next_step_spec: NextSte
             return _t.cast(Step, executor.summarize_final_answer())
         return summarize
 
-    return ProceedStep.create_proceed_step(executor, next_step_spec.next_step_desc, matched_plan)
+    return ProceedStep.create_proceed_step(executor, next_step_spec.next_step_desc, matched_plan, difficulty)
 
 
 def count_file_updates(chain: list[StepABC], stop_at_step: StepABC=None) -> dict[str, int]:
@@ -1639,3 +1675,85 @@ class PresentTaskStep(FixableStep):
         ask_step.eval_only(executor)
         self._n_tries += int(count_issue_severities(self.criticisms).severe_issues > 0)
         raise RedoFinalCheck(self)
+
+
+def collect_all_versions(chain: list[Step], file: str) -> list[GeneratedFile]:
+    all_versions = []
+    for step in chain:
+        files = step.collected_files
+        if file in files:
+            all_versions.append(files[file])
+    return all_versions
+
+
+def collect_all_snippets(chain: list[Step], file: str) -> tuple[list[tuple[str, str]], str]:
+    markdown_blocks = []
+    content_type = ''
+    for g_file in collect_all_versions(chain, file):
+        markdown_blocks.append((g_file.markdown_snippet, g_file.content))
+        content_type = g_file.content_type
+    return markdown_blocks, content_type
+
+
+def rolling_diff_file_consolidate(executor: Executor, file: str,
+                                  chain: list[Step]=None, critic_text: str=None) -> tuple[str, str]:
+    snippets, content_type = collect_all_snippets(chain or executor.chain, 'scripts.js')
+    prompt_db = executor.prompts
+    while len(snippets) > 1:
+        collecting = snippets[:2] # 2 snippets at a time
+        snippets = snippets[2:]
+        executor.logger.log(f"Rolling consolidation. starting snippets: {len(snippets)}, "
+                            f"text: {len(collecting[0])}")
+        prompts = []
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_ensure_updated_file_integrity.format(
+            file_name=file)))
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_notes_for_files))
+        original: tuple[str, str]
+        snippet_text = "\n\n".join(f"### FILE: {file}\nUpdate#{k+1}\n\n{original[0]}"
+                                   for k, original in enumerate(collecting))
+        diffs = _unified_diff(collecting[0][1].split('\n'), collecting[1][1].split('\n'),
+                              fromfile='Update#1', tofile='Update#2', lineterm='')
+        diffs = '\n'.join(line for line in diffs if not line.startswith('-'))
+        snippet_text += f"""
+To help you, here are the ADDITIONS of the update#2 (because only part of the file may be shown during an update, 
+full diffs would look confusing); it is possible lines are removed intentionally, check it for yourself:
+
+`````
+{diffs}
+`````
+"""
+        prompts.append((ROLE_ORCHESTRATOR, snippet_text))
+        if critic_text is not None and len(critic_text) > 0:
+            prompts.append((ROLE_ORCHESTRATOR, f"Prior issues trying this:\n\n{critic_text}"))
+        response: str|None = None
+        try:
+            response = executor.llm.ask(None, prompts, reason='rolling_consolidate')
+        except openai.InternalServerError as ex:
+            if is_chatgpt_timeout(ex):
+                executor.logger.log_error(f"Got 504 Gateway Time-out during file consolidation")
+                merge_file = '/tmp/taogpt_manual_merge.md'
+                with open(merge_file, 'w') as f:
+                    f.write(f"## FILE: {file}\n\n")
+                    for snippet in snippets:
+                        f.write(snippet[0])
+                        f.write('\n\n')
+                    question = (f"Too hard to merge file snippets for `{file}`. Please edit `{merge_file}` to merge. "
+                                f"Reply 'OK' when done or 'cancel' to stop.")
+                    user_answer = executor.ask_questions([question])[question].lower().strip()
+                    if user_answer == 'ok':
+                        with open(merge_file, 'r') as f:
+                            response = f.read()
+                    else:
+                        raise ValueError(f"User gave unexpected answer: {user_answer}")
+            else:
+                raise ex
+        sections: dict[str, str] = parse_sections(response)
+        extracted_contents = gather_file_contents(sections, pop_file_sections=True)
+        files = {
+            file_path: GeneratedFile(content_type, content, snippet, desc)
+            for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
+        }
+        updated = files[file]
+        snippets.insert(0, (updated.markdown_snippet, updated.content))
+    assert len(snippets) == 1
+    return snippets[0]

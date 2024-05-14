@@ -1,0 +1,55 @@
+/* General styles for the game container and board */
+#game-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: Arial, sans-serif;
+}
+
+#board {
+    display: grid;
+    grid-template-columns: repeat(19, 100px);
+    grid-template-rows: repeat(19, 100px);
+    gap: 0px;
+}
+
+/* Styles for each type of grid point */
+.grid-point {
+    width: 100px;
+    height: 100px;
+    background-size: cover;
+}
+
+/* Specific grid point styles based on position */
+.grid-point-mid { background-image: url('assets/grid_point_mid.png'); }
+.grid-point-north { background-image: url('assets/grid_point_north.png'); }
+.grid-point-south { background-image: url('assets/grid_point_south.png'); }
+.grid-point-east { background-image: url('assets/grid_point_east.png'); }
+.grid-point-west { background-image: url('assets/grid_point_west.png'); }
+.grid-point-north-east { background-image: url('assets/grid_point_north_east.png'); }
+.grid-point-north-west { background-image: url('assets/grid_point_north_west.png'); }
+.grid-point-south-east { background-image: url('assets/grid_point_south_east.png'); }
+.grid-point-south-west { background-image: url('assets/grid_point_south_west.png'); }
+
+/* Styles for stones */
+.stone {
+    width: 80px;
+    height: 80px;
+    background-size: cover;
+    position: relative;
+    top: 10px; /* Centering stone in the grid */
+    left: 10px;
+}
+
+.black-stone { background-image: url('assets/black_stone.png'); }
+.white-stone { background-image: url('assets/white_stone.png'); }
+
+/* Game info styles */
+#game-info {
+    margin-top: 20px;
+    text-align: center;
+}
+
+#player-turn, #score {
+    margin-bottom: 10px;
+}

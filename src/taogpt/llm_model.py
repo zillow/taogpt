@@ -131,7 +131,8 @@ class LangChainLLM(LLM):
     def _ask(self,  system_prompt: str|None, conversation: _t.List[_t.Tuple[str, str]],
             reason=None, step_id = None, log_request = True,
             temperature: float|None=None) -> str:
-        self._logger.start_conversation_chain(f"# SEND TO LLM for {reason}/{step_id}")
+        if log_request:
+            self._logger.start_conversation_chain(f"# SEND TO LLM for {reason}/{step_id}")
 
         if temperature is not None:
             self.llm.temperature = temperature
@@ -142,9 +143,10 @@ class LangChainLLM(LLM):
             tokens = self.count_tokens(system_prompt)
             context_tokens += tokens
             content_to_be_logged = self.deduplicate_for_logging(system_prompt, ROLE_SYSTEM)
-            self._logger.new_message_section(ROLE_SYSTEM, -1, tokens=tokens)
-            self._logger.log(content_to_be_logged, demote_h1=True, role=ROLE_SYSTEM)
-            self._logger.close_message_section()
+            if log_request:
+                self._logger.new_message_section(ROLE_SYSTEM, -1, tokens=tokens)
+                self._logger.log(content_to_be_logged, demote_h1=True, role=ROLE_SYSTEM)
+                self._logger.close_message_section()
             messages.append(SystemMessage(content=system_prompt))
 
         for i, (role, message) in enumerate(conversation):
@@ -155,9 +157,10 @@ class LangChainLLM(LLM):
             context_tokens += tokens
             deduped_msg = self.deduplicate_for_logging(message, role=role)
             deduped_tokens = self.count_tokens(deduped_msg)
-            self._logger.new_message_section(role, i, tokens=tokens, collapsible=deduped_tokens > 32)
-            self._logger.log(deduped_msg, demote_h1=True, role=role)
-            self._logger.close_message_section()
+            if log_request:
+                self._logger.new_message_section(role, i, tokens=tokens, collapsible=deduped_tokens > 32)
+                self._logger.log(deduped_msg, demote_h1=True, role=role)
+                self._logger.close_message_section()
             chat_message = ChatMessage(role=effective_role, content=message)
             messages.append(chat_message)
         try:
@@ -168,6 +171,7 @@ class LangChainLLM(LLM):
             if self.long_context_llm is not None and context_tokens > self.long_context_token_threshold:
                 llm = self.long_context_llm
                 token_factor = self.long_context_llm_token_factor
+            self._logger.log("\n<span></span>\n\n") # to make browser scrolling smoother
             reply_content, context_tokens = self.invoke_llm(llm, messages, return_context_token_usages=True)
             # if the whole reply is just a Markdown, then extract the markdown content
             g = _re.match(r"^```+markdown\n(.*)```+$", reply_content, flags=_re.MULTILINE|_re.DOTALL)
@@ -187,14 +191,15 @@ class LangChainLLM(LLM):
             eff_tokens = f" (eff. tokens: {token_count * token_factor})" if token_factor != 1.0 else ''
             self._total_tokens += token_count
 
-            self._logger.new_message_section(role='reply', step_index=None, tokens=reply_tokens)
-            self._logger.log(reply_content_logged, demote_h1=True)
-            self._logger.log(f"temperature={temperature}. context tokens: {context_tokens}, "
-                             f"subtotal: {token_count}{eff_tokens}. cumulative total: {self.total_tokens}\n")
-            self._logger.close_message_section()
+            if log_request:
+                self._logger.new_message_section(role='reply', step_index=None, tokens=reply_tokens)
+                self._logger.log(reply_content_logged, demote_h1=True)
+                self._logger.log(f"temperature={temperature}. context tokens: {context_tokens}, "
+                                 f"subtotal: {token_count}{eff_tokens}. cumulative total: {self.total_tokens}\n")
+                self._logger.close_message_section()
             return reply_content
         except Exception as e:
-            _time.sleep(3)
+            _time.sleep(1)
             raise e
 
     def invoke_llm(self, llm: _ChatOpenAI, messages: list[BaseMessage],
@@ -334,3 +339,6 @@ CONTINUATION_PROMPT = ("You reached output token limit in the last reply. "
 
 CORRUPTED_RESPONSE_MARKER = "Corrupted fenced block is found in your response above:"
 
+
+def is_chatgpt_timeout(exception: Exception):
+    return '504 Gateway Time-out'.lower() in str(exception).lower()

@@ -1,7 +1,13 @@
 {intent} Please verify concerns, determine severity of issues, and identify steps responsible for errors and 
-warnings, but avoid nitpicking. For any step, do NOT report issues that are to be or are already taken care of in 
-subsequent steps. We should generally respect user's assumptions even if they are inaccurate as assumptions are 
-meant to simplify the problem. Respond using the following JSON template:
+warnings, but avoid nitpicking. 
+
+* For any step, do NOT report issues that are to be or are already taken care of in subsequent steps. For example, 
+  dummy/placeholder/temporary values that are to be taken care of later.
+* We should generally respect user's assumptions even if they are inaccurate as assumptions are meant to simplify 
+  the problem.
+* Subsequent steps depending on the culprit a step, such as updating the same file, may be affected by the issue.
+
+Respond using the following JSON template:
 
 ```json
 {{
@@ -25,5 +31,3 @@ meant to simplify the problem. Respond using the following JSON template:
 
 where `"step#<ID>: <step description>"` can be found in the bracket "[at step#<ID>: <step_description>]" of the steps 
 (without the brackets.)
-
-If a blamed step wrote/updated a file, also blame subsequent steps updating that file.
