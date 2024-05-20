@@ -1,3 +1,4 @@
+import taogpt.exceptions
 from taogpt import parsing
 from taogpt.program import ExpandableStep
 from taogpt.constants import *
@@ -114,7 +115,7 @@ def test_checking_rankings_with_invalid_dupes():
     try:
         ExpandableStep.check_duplicates(dupes, results, ranking_types)
         raise RuntimeError('expecting parse error not raised')
-    except parsing.ParseError:
+    except taogpt.exceptions.ParseError:
         pass
     assert len(results) == 3
     assert results[1] == 5.1
@@ -154,7 +155,7 @@ def test_parse_next_step_next_missing_next_work_at():
     try:
         parsing.parse_next_step_reply(text)
         assert False, "Expecting ParseError not raised"
-    except parsing.ParseError:
+    except taogpt.exceptions.ParseError:
         pass
 
 
@@ -248,7 +249,7 @@ def test_parse_step_by_step_plan_raise_invalid_json():
     try:
         parsing.parse_step_by_step_plan(text)
         assert False, "Expecting ParseError but not raised"
-    except parsing.ParseError:
+    except taogpt.exceptions.ParseError:
         pass
 
 
@@ -263,7 +264,7 @@ def test_parse_step_by_step_plan_raise_less_than_2_steps():
     try:
         parsing.parse_step_by_step_plan(text)
         assert False, "Expecting ParseError but not raised"
-    except parsing.ParseError as e:
+    except taogpt.exceptions.ParseError as e:
         assert "Should have at least 2 steps" in str(e)
 
 
@@ -279,7 +280,7 @@ def test_parse_step_by_step_plan_raise_key_not_integer():
     try:
         parsing.parse_step_by_step_plan(text)
         assert False, "Expecting ParseError but not raised"
-    except parsing.ParseError as e:
+    except taogpt.exceptions.ParseError as e:
         assert "not an integer" in str(e)
 
 
@@ -297,7 +298,7 @@ def test_parse_step_by_step_plan_raise_on_invalid_ordering():
     try:
         parsing.parse_step_by_step_plan(text)
         assert False, "Expecting ParseError but not raised"
-    except parsing.ParseError as e:
+    except taogpt.exceptions.ParseError as e:
         assert "Element keys should be a contiguous natural number sequence starting at 1" in str(e)
 
 
@@ -314,7 +315,7 @@ def test_parse_step_by_step_plan_raise_final_steps_not_last():
     try:
         parsing.parse_step_by_step_plan(text)
         assert False, "Expecting ParseError but not raised"
-    except parsing.ParseError as e:
+    except taogpt.exceptions.ParseError as e:
         assert "is after final verification or summary step" in str(e)
 
 
@@ -385,12 +386,13 @@ Implement the client-side logic for handling user inputs and actions"""
     assert NEXT_I_WANT_TO_WORK_AT in sections
 
 
-def test_parse_next_step_name():
+def test_parse_next_step():
     text = """
     ```json
     {
         "done with [step#1: top-level plan]": true,
-        "next_step": "all done"
+        "next_step": "all done",
+        "difficulty": 8
     }
     ```
     """
@@ -399,6 +401,7 @@ def test_parse_next_step_name():
     assert next_step.target_plan_id == 1
     assert next_step.target_plan_tag == "step#1: top-level plan"
     assert next_step.target_plan_done
+    assert next_step.difficulty == 8
 
 
 def test_parse_next_step_invalid():
@@ -409,7 +412,7 @@ def test_parse_next_step_invalid():
     try:
         parsing.parse_next_step_spec(text)
         assert False, "Expecting ParseError not raised"
-    except parsing.ParseError as e:
+    except taogpt.exceptions.ParseError as e:
         pass
     text = """
     ```json
@@ -422,7 +425,7 @@ def test_parse_next_step_invalid():
     try:
         parsing.parse_next_step_spec(text)
         assert False, "Expecting ParseError not raised"
-    except parsing.ParseError as e:
+    except taogpt.exceptions.ParseError as e:
         pass
 
 
@@ -436,7 +439,7 @@ def test_parse_step_id_and_name():
         try:
             parsing.parse_step_id_and_name(invalid)
             raise AssertionError(f"expecting ParseError not raised for patten '{invalid}'")
-        except parsing.ParseError:
+        except taogpt.exceptions.ParseError:
             pass
 
 
@@ -445,7 +448,7 @@ def test_prior_proposal_in_step_id_name():
     try:
         result = parsing.parse_step_id_and_name(text)
         raise AssertionError(f"Expecting ParseError not raised. Got: '{result}'")
-    except parsing.ParseError as e:
+    except taogpt.exceptions.ParseError as e:
         assert "You tried to report error in other proposals" in str(e)
 
 
@@ -464,7 +467,7 @@ def test_gather_file_sections_missing_path():
         sessions = parsing.parse_sections(text)
         parsing.gather_file_contents(sessions)
         assert False, "Expecting ParseError not raised"
-    except parsing.ParseError:
+    except taogpt.exceptions.ParseError:
         pass
 
 
@@ -709,3 +712,30 @@ To provide basic guidance on setting up and running the application, we will cre
 ``` # BACKTICK6"""
     annotated = parsing.annotate_fenced_block_backtick_quotes(original)
     assert annotated.strip() == expected_annotated.strip()
+
+
+
+
+def test_parse_issue_report():
+    issue = "The calculation (6 / (1 + 2)) * 7 results in 14, not 24."
+    blamed_desc = "Derive result equals 24."
+    text = f"""
+```json
+{{
+  "Final solution verification": {{
+    "error": "{issue}",
+    "content": "(6 / (1 + 2)) * 7 = 24",
+    "blame": ["step#10: {blamed_desc}"],
+    "affecting": []
+  }}
+}}
+```
+"""
+    all_issues, no_culprit_issues = parsing.parse_issue_report(text)
+    assert len(all_issues) == 1
+    level, blames = all_issues[issue]
+    assert level == 'error'
+    assert len(blames) == 1
+    assert  blames[0][0] == 10
+    assert blames[0][1] == blamed_desc
+    assert len(no_culprit_issues) == 0

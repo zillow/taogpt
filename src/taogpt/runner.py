@@ -6,7 +6,7 @@ import typing as _t
 from io import TextIOBase as _TextIOBase
 import pickle as _pickle
 
-from taogpt import Pause, MarkdownLogger, PromptDb, Config, GeneratedFile
+from taogpt import MarkdownLogger, PromptDb, Config, GeneratedFile, Pause
 from taogpt.llm_model import (
     LangChainLLM,
     fix_model_name,

@@ -76,20 +76,19 @@ def test_final_direct_answer_with_nonstandard_heading():
 }}
 ```
 """
-    step = _t.cast(DirectAnswerStep, parse_to_step(text, config=Config()))
+    step = _t.cast(DirectAnswerStep, parse_to_step(text))
     assert step.description == '22'
     assert step.next_step.is_final_step
 
 
 def test_parse_error_report_with_blame_string(logger):
-    step = GiveUpStep(description="""
+    report_json = """
 {
     "Placement of numbers": {
       "error": "Incorrect placement of numbers",
       "blame": "step#4: response to Fill in the missing numbers in the first row"
     }
-}""", role='tao')
+}"""
+    step = GiveUpStep(description=report_json, role='tao')
 
-    assert step.description.strip() == """
-* error: Incorrect placement of numbers at [step#4: response to Fill in the missing numbers in the first row]
-""".strip()
+    assert step.description.strip() == report_json.strip()

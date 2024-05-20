@@ -8,29 +8,17 @@ import re as _re
 from abc import abstractmethod, ABCMeta
 from difflib import unified_diff as _unified_diff
 
-import openai
-
 import taogpt
 import taogpt.llm_model
-from . import StepABC, Backtrack, Pause, Executor, Config, GeneratedFile
-from .llm_model import is_chatgpt_timeout
+from . import StepABC, Backtrack, Executor, Config, GeneratedFile, Pause
+from .exceptions import RedoFinalCheck, ThisMaybeTooHardError
 from .parsing import *
 from .constants import *
 import taogpt.utils as _utils
-from .parsing import ParseError
+from .parsing import parse_issue_report
 from .utils import safe_subn
 from taogpt.prompts import PromptDb
 import dataclasses
-
-
-def add_files_to_prompts(executor, prompts, role=ROLE_ORCHESTRATOR) -> dict[str, GeneratedFile]:
-    file_contents = ''
-    files = GeneratedFile.collect_files(executor.chain)
-    for path, file in files.items():
-        file_contents += f"### FILE: {path}\n\n{file.markdown_snippet}\n\n"
-    if file_contents != '':
-        prompts.append((role, f'Current files we have so far:\n\n{file_contents}'))
-    return files
 
 
 @dataclasses.dataclass
@@ -165,15 +153,11 @@ class Step(StepABC):
     def validate(self, executor: Executor):
         pass
 
-class RedoFinalCheck(RuntimeError):
-    """
-    This error is used internally to signal the repair mechanism to discard all previous criticisms and perform the
-    final check again.
-    """
 
-    def __init__(self, step: Step):
-        super().__init__(f"Step {step.step_name} requests redo the final check")
+class Idle(Step):
 
+    def __init__(self, **_):
+        super().__init__(description='', role=ROLE_ORCHESTRATOR, step_name='waiting for task', **_)
 
 
 class FixableStep(Step):
@@ -236,8 +220,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         else:
             self.next_step = next_step
         if self.is_final_step:
-            self.next_step.next_step_desc = "all done"
-            self.next_step.target_plan_id = None
+            self.next_step = NextStepDesc(None, None, True, "all done", None)
         reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
         self.description = '\n\n'.join(reconstructed)
         self.description = _re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=_re.IGNORECASE)
@@ -278,8 +261,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                 response = _utils.str_or_blank(response)
                 if not response.startswith(f"# {DirectAnswerStep.TYPE_SPEC}"):
                     response = f"# {DirectAnswerStep.TYPE_SPEC}\n\n" + response
-                dummy = parse_to_step(response, executor.config, working_on=self.step_name,
-                                      limit_to={DirectAnswerStep})
+                dummy = parse_to_step(response, working_on=self.step_name, limit_to={DirectAnswerStep})
                 dummy.validate(executor)
                 self.build(f"{dummy.description}\n\n{dummy.extras}", next_step=self.next_step)
                 break
@@ -292,7 +274,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
 
     def eval_only(self, executor: Executor) -> Step | None:
         if self.next_step is not None:
-            return proceed_next(self, executor, self.next_step, difficulty=5) # don't know exact difficulty'
+            return proceed_next(self, executor, self.next_step, difficulty=self.next_step.difficulty)
         return None
 
     @property
@@ -372,18 +354,16 @@ class ConsolidateFileStep(DirectAnswerStep):
                     raise ParseError(f"You should respond (only) with the complete content of file {self._file_name}")
                 self.finish_consolidation(last_version)
                 return None
-            except openai.InternalServerError as ex:
-                if is_chatgpt_timeout(ex):
-                    executor.logger.log_error(f"Got 504 Gateway Time-out during file consolidation")
-                    markdown_content, content = rolling_diff_file_consolidate(executor, self._file_name)
-                    self.collected_files[self._file_name] = GeneratedFile(
-                        last_version.content_type,
-                        content,
-                        markdown_content,
-                        '')
-                    self.finish_consolidation(last_version)
-                    return None
-                raise ex
+            except ThisMaybeTooHardError as ex:
+                executor.logger.log_error(str(ex))
+                markdown_content, content = rolling_diff_file_consolidate(executor, self._file_name)
+                self.collected_files[self._file_name] = GeneratedFile(
+                    last_version.content_type,
+                    content,
+                    markdown_content,
+                    '')
+                self.finish_consolidation(last_version)
+                return None
             except ParseError as ex:
                 n_retries += 1
                 executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
@@ -418,23 +398,26 @@ class GiveUpStep(TaoReplyStep):
     def step_title(self) -> str:
         return GiveUpStep.TYPE_SPEC
 
-    def __init__(self, *, description: str, role: str, **kwargs):
+    def __init__(self, *, description: str, role: str, step_name:str=None, **kwargs):
+        _ = step_name
+        sections: dict[str, str] = parse_sections(description)
+        error_report = _utils.str_or_blank(sections.pop(FREE_TEXT, None))
+        if error_report == '':
+            raise ParseError(f"Must have a `# {REPORT_ERROR}` section with an error report")
+
         # issue: (level, [step desc])
-        issues, _ = parse_issue_report(description, None)
-        report_lines = []
-        for issue, (level, steps) in issues.items():
-            if steps is None or _utils.str_or_blank(level) == '':
-                continue
-            report_lines.extend([f"* {level}: {issue} at [step#{step_num}: {step_desc}]"
-                                    for step_num, step_desc in steps])
-        super().__init__(description='\n'.join(report_lines), role=role, step_name=None, **kwargs)
+        issues, _ = parse_issue_report(error_report, None)
+        super().__init__(description=error_report, role=role, step_name=None, **kwargs)
         self.issues = issues
 
     def eval_only(self, executor):
         if len(self.issues) > 0:
             culprits, n_errors = identify_culprits(executor, self.issues)
             if len(culprits) > 0:
-                repair_or_backtrack(executor, culprits)
+                try:
+                    repair_or_backtrack(executor, culprits)
+                except RedoFinalCheck as failure:
+                    raise Backtrack("Repair attempt failed", self)
                 # No Backtrack raised, we have fixed all errors, pop itself
                 previous = executor.previous_step(self)
                 assert previous is not None and _utils.safe_is_instance(previous, ExpandableStep)
@@ -470,11 +453,9 @@ class StepByStepPlan(TaoReplyStep):
                     raise ParseError(f"Expect only one JSON block, but found multiple. Please merge into one")
         if json_block is None:
             raise ParseError(f"Expecting step-by-step plan in a JSON fenced block, found none.")
-        self._steps, self._has_branching, self._has_loop = parse_step_by_step_plan(json_block)
-        for step_i in list(self._steps.keys()):
-            step = self._steps[step_i]
-            if step.is_final_verification or step.is_final_summary:
-                del self._steps[step_i]
+        steps, self._has_branching, self._has_loop = parse_step_by_step_plan(json_block)
+        self._steps = {i+1: step for i, step
+                       in enumerate(step for step in steps.values() if not step.is_final_verification)}
         # erase sub_steps
         def stringyfy(steps) -> str:
             return "\n".join([f"{i}. {_utils.single_space(strip_quotes_re.sub('', step.description))}"
@@ -573,18 +554,6 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
     step_by_step_ids = {i for i in range(len(executor.chain))
                         if _utils.safe_is_instance(executor.chain[i], StepByStepPlan)}
     invisible_step_ids = {i for i in range(len(executor.chain)) if not executor.chain[i].visible_in_chain}
-    # all_past_criticisms: list[str] = list()
-    # for i, step in enumerate(executor.chain):
-    #     if i in invisible_step_ids:
-    #         continue
-    #     step = _t.cast(Step, step)
-    #     past_criticisms = step.past_criticisms
-    #     if len(past_criticisms) > 0:
-    #         step_tag = step.step_name_tag(i)
-    #         sublist = [c.replace("\n", " ") for c in past_criticisms]
-    #         sublist = "\n".join(f"  {k+1}. {c}" for k, c in enumerate(sublist))
-    #         all_past_criticisms.append(f"* {step_tag}\n{sublist}")
-    # all_past_criticism_text = "\n".join(all_past_criticisms) if len(all_past_criticisms) > 0 else ""
 
     # issue: (level, [step desc])
     all_issues: dict[str, _t.Tuple[str, list[tuple[int, str]]|None]] = dict()
@@ -593,9 +562,6 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
     verify_prompt = executor.prompts.sage_check_answer.format(intent=intent)
     prompts = executor.show_conversation_thread(with_extras=True)
     prompts.append((ROLE_ORCHESTRATOR, verify_prompt))
-    # if len(all_past_criticism_text) > 0:
-    #     note = executor.prompts.orchestrator_note_past_criticisms.format(past_criticisms=all_past_criticism_text)
-    #     prompts.append((ROLE_ORCHESTRATOR, note))
     for i in range(votes):
         n_retries = 0
         prompts_to_be_sent = prompts.copy()
@@ -632,7 +598,7 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
                         step_list = ', '.join(f"{i}" for i in matched_invisible_steps)
                         step_list = f"Step IDs {step_list} do not exist"
                     else:
-                        step_list = f"Step ID {next(iter(matched_step_by_steps))} does not exist"
+                        step_list = f"Step ID {next(iter(matched_invisible_steps))} does not exist"
                     notes += f"Double-check: {step_list}. Step IDs are only found in `at step#<ID>`. "
                 if notes != '':
                     prompts.append((ROLE_ORCHESTRATOR, notes))
@@ -678,23 +644,6 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
                 executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
                                             executor.prompts.orchestrator_parse_error)
     return all_issues
-
-
-def parse_issue_report(response, step_number_cutoff: int=None) \
-        -> tuple[dict[str, _t.Tuple[str, list[tuple[int, str]]|None]], set[str]]:
-    all_issues, _ = parse_verification_response(response)
-    no_culprit_issues = set()
-    for issue, (level, steps) in all_issues.items():
-        if level in ('error', 'fatal'):
-            if steps is None or len(steps) == 0:
-                raise ParseError(f'Error "{issue}" has missing culprit. '
-                                 f'Please add the "blame" attribute to assign the culprit step.')
-            for si, (step_num, step_desc) in enumerate(steps):
-                if step_num < 0 or step_number_cutoff is not None and step_num >= step_number_cutoff:
-                    raise ParseError(f"Unknown step ID: step#{step_num}")
-        if len(steps) == 0:
-            no_culprit_issues.add(issue)
-    return all_issues, no_culprit_issues
 
 
 def identify_culprits(
@@ -764,22 +713,21 @@ def repair_or_backtrack(executor: Executor, remedies: dict[Step, list[str]]):
                     try:
                         _t.cast(FixableStep, blamed_step).repair(executor)
                         break
-                    except openai.InternalServerError as ex:
-                        if is_chatgpt_timeout(ex):
-                            executor.logger.log_error(f"Got 504 Time-out error")
-                            if severities.severe_issues > 0 and tries >= max_time_out_retries-1:
-                                raise Backtrack(f"Time-out encountered during repair. {too_hard_msg}",
-                                                blame=blamed_step)
-                            else: # only warning, ignore
-                                break
-                        else:
-                            raise ex
+                    except ThisMaybeTooHardError as ex:
+                        executor.logger.log_error(str(ex))
+                        if severities.severe_issues > 0 and tries >= max_time_out_retries-1:
+                            del remedies[blamed_step]
+                            raise Backtrack(f"Time-out encountered during repair. {too_hard_msg}",
+                                            blame=blamed_step)
+                        else: # only warning, ignore
+                            break
                 n_errors_fixed += severities.severe_issues
                 del remedies[blamed_step]
             elif severities.errors > 0:
                 executor.logger.log(f"Request backtracking due to max-repairs reached.")
                 blames.append(f"We have tried repair a few times. {too_hard_msg}")
                 message = '\n\n'.join(blames)
+                del remedies[blamed_step]
                 raise Backtrack(message, blame=blamed_step)
             else:
                 del remedies[blamed_step]
@@ -897,6 +845,9 @@ class AskQuestionStep(TaoReplyStep):
 
     def __init__(self, *, description: str, role: str, step_name: str|None, **kwargs):
         super().__init__(description=description, role=role, step_name=step_name, **kwargs)
+        self.questions = parse_ordered_list(self.description, at_least_one_list=False)
+        if len(self.questions) == 0:
+            raise ParseError("Must list questions in a ordered bullet list, even if there is only one question.")
         self._answers: list[str]|None = None
         self._need_consolidate = True # always consolidate once
 
@@ -908,27 +859,24 @@ class AskQuestionStep(TaoReplyStep):
             prompts: list[tuple[str, str]] = executor.show_conversation_thread()[:-1]
             self.consolidate_questions(executor, prompts)
         if self._answers is None:
-            questions = parse_ordered_list(self.description, at_least_one_list=False)
-            if len(questions) > 0:
-                answers: dict[str, str] = executor.ask_questions(questions)
-                new_text = ''
-                for q, a in answers.items():
-                    q_lines = q.split('\n')
-                    q_lines = '\n'.join([f"> {line}\n" for line in q_lines])
-                    new_text += q_lines + '\n'
-                    new_text += a.strip() + '\n\n'
-                self.description = new_text
-                self.role = ROLE_USER # because the user answered the questions
-                self._prepend_step_name_header(self.step_name)
-                self._answers = answers
-            else:
-                self._answers = dict()
+            answers: dict[str, str] = executor.ask_questions(self.questions)
+            new_text = ''
+            for q, a in answers.items():
+                q_lines = q.split('\n')
+                q_lines = '\n'.join([f"> {line}\n" for line in q_lines])
+                new_text += q_lines + '\n'
+                new_text += a.strip() + '\n\n'
+            self.description = new_text
+            self.role = ROLE_USER # because the user answered the questions
+            self._prepend_step_name_header(self.step_name)
+            self._answers = answers
             previous = executor.previous_step(self)
             if _utils.safe_is_instance(previous, ExpandableStep):
                 previous = _t.cast(ExpandableStep, previous)
                 assert executor.chain[-1] is self
                 executor.chain.pop(-1)
-                if len(questions) > 0:
+                self.created_by = None # reset this to reflect that it is no long part of the expanded alternative.
+                if len(self.questions) > 0:
                     executor.chain.insert(len(executor.chain)-1, self)
                     previous.reset_choices()
                     if _utils.str_or_blank(self.step_name) != '' and not self.step_name.startswith("ask question"):
@@ -948,8 +896,7 @@ class AskQuestionStep(TaoReplyStep):
         return reply
 
 
-def parse_to_step(response: str, config: Config,
-                  working_on: str = None, init_expansion=False, limit_to: set = None) -> Step:
+def parse_to_step(response: str, working_on: str = None, init_expansion=False, limit_to: set = None) -> Step:
     step_type, step_def = parse_step_type_spec(response)
     if step_type is None:
         headers = (f"`{MY_THOUGHT}`, `{HERE_IS_MY_STEP_BY_STEP_PLAN}`, `{REPORT_ERROR}`, "
@@ -1059,7 +1006,7 @@ class ExpandableStep(Step):
         return ''
 
     def parse_reply(self, plan, executor: Executor) -> Step:
-        choice = parse_to_step(plan, config=executor.config, working_on=self._step_name_for_expanded,
+        choice = parse_to_step(plan, working_on=self._step_name_for_expanded,
                                init_expansion=executor.is_init_solving_expansion())
         choice.created_by = self
         choice.part_of = self.part_of
@@ -1099,7 +1046,8 @@ class ExpandableStep(Step):
         tao_templates = prompt_db.tao_templates_with_next_step if self.declare_next_step \
             else prompt_db.tao_templates_without_next_step
         base_prompts.append((ROLE_ORCHESTRATOR, tao_templates))
-        if initial:
+        question_asked = len(executor.select_steps(AskQuestionStep, stop_at=self)) > 0
+        if initial and not question_asked:
             base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_encourage_question))
             choice_hinted = True
         elif self.declare_next_step:
@@ -1107,7 +1055,7 @@ class ExpandableStep(Step):
             base_prompts.append((ROLE_ORCHESTRATOR, next_step_instr))
         hint = None
         if not choice_hinted:
-            if self._difficulty <= 3:
+            if self._ptr == 0 and self._difficulty <= 3: # only advice on first expansion
                 hint = f"This step looks easy! I think you may want to avoid `{HERE_IS_MY_STEP_BY_STEP_PLAN}` approach."
             elif self._difficulty >= 7:
                 hint = f"This step looks hard! I think you may want to try `{HERE_IS_MY_STEP_BY_STEP_PLAN}`."
@@ -1272,6 +1220,8 @@ class NextStep(Step):
 
     def eval_only(self, executor) -> Step | None:
         parent_plan, plan_id = StepByStepPlan.find_last_step_by_step(executor, before=self)
+        if parent_plan is None:
+            return proceed_next(self, executor, NextStepDesc(None, None, True, "all done", None))
         assert parent_plan is not None
         assert plan_id is not None
         next_step = parent_plan.advance_to_next_step()
@@ -1338,9 +1288,9 @@ class NextStep(Step):
         if decision == NEXT_I_WANT_TO_WORK_AT:
             next_step_spec = _t.cast(NextStepDesc, details)
             validate_next_step_spec(executor, next_step_spec, no_spec_ok=False)
-            return proceed_next(self, executor, next_step_spec, difficulty=5) # don't know exact difficulty
+            return proceed_next(self, executor, next_step_spec, difficulty=next_step_spec.difficulty)
         else:
-            step = parse_to_step(_t.cast(str, details), config=config, working_on=None)
+            step = parse_to_step(_t.cast(str, details), working_on=None)
             step.validate(executor)
             return step
 
@@ -1558,7 +1508,10 @@ class SummarizeStep(SummarizeStepABC):
             result = self.verify_and_fix('Is the solution correct?', executor)
             if result is not None:
                 return result
-        return self.eval_only(executor)
+        next_step = self.eval_only(executor)
+        if next_step is None:
+            next_step = Idle()
+        return next_step
 
     def verify_and_fix(self, intent: str, executor: Executor) -> _t.Self | None:
         if not self._reset_chain_retry_count:
@@ -1674,7 +1627,7 @@ class PresentTaskStep(FixableStep):
         executor.chain.insert(my_index+1, ask_step)
         ask_step.eval_only(executor)
         self._n_tries += int(count_issue_severities(self.criticisms).severe_issues > 0)
-        raise RedoFinalCheck(self)
+        raise RedoFinalCheck(self.step_name)
 
 
 def collect_all_versions(chain: list[Step], file: str) -> list[GeneratedFile]:
@@ -1728,25 +1681,22 @@ full diffs would look confusing); it is possible lines are removed intentionally
         response: str|None = None
         try:
             response = executor.llm.ask(None, prompts, reason='rolling_consolidate')
-        except openai.InternalServerError as ex:
-            if is_chatgpt_timeout(ex):
-                executor.logger.log_error(f"Got 504 Gateway Time-out during file consolidation")
-                merge_file = '/tmp/taogpt_manual_merge.md'
-                with open(merge_file, 'w') as f:
-                    f.write(f"## FILE: {file}\n\n")
-                    for snippet in snippets:
-                        f.write(snippet[0])
-                        f.write('\n\n')
-                    question = (f"Too hard to merge file snippets for `{file}`. Please edit `{merge_file}` to merge. "
-                                f"Reply 'OK' when done or 'cancel' to stop.")
-                    user_answer = executor.ask_questions([question])[question].lower().strip()
-                    if user_answer == 'ok':
-                        with open(merge_file, 'r') as f:
-                            response = f.read()
-                    else:
-                        raise ValueError(f"User gave unexpected answer: {user_answer}")
-            else:
-                raise ex
+        except ThisMaybeTooHardError as ex:
+            executor.logger.log_error(str(ex))
+            merge_file = '/tmp/taogpt_manual_merge.md'
+            with open(merge_file, 'w') as f:
+                f.write(f"## FILE: {file}\n\n")
+                for snippet in snippets:
+                    f.write(snippet[0])
+                    f.write('\n\n')
+                question = (f"Too hard to merge file snippets for `{file}`. Please edit `{merge_file}` to merge. "
+                            f"Reply 'OK' when done or 'cancel' to stop.")
+                user_answer = executor.ask_questions([question])[question].lower().strip()
+                if user_answer == 'ok':
+                    with open(merge_file, 'r') as f:
+                        response = f.read()
+                else:
+                    raise ValueError(f"User gave unexpected answer: {user_answer}")
         sections: dict[str, str] = parse_sections(response)
         extracted_contents = gather_file_contents(sections, pop_file_sections=True)
         files = {

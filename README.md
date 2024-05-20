@@ -9,11 +9,9 @@
 <div style="text-align: center">
 
 
-*In the essence of the Tao, where simplicity reigns and complexity falls away, there lies a path for the solver of 
-problems. He who grasps the Tao seeks not to add but to subtract, to reduce each challenge to its core. With each 
-step taken, the path unfolds; with each error found, wisdom grows. The master problem solver, like water, adapts, flowing around obstacles, finding the way with ease. In the art of the Tao, the solution is not forced but emerges naturally, as if it was always there, waiting to be uncovered by those who understand that to solve is to follow the Tao, effortlessly.*
+*In the way of the Tao, the problem solver moves like water—adapting, flowing, overcoming. Guided by the virtues of flexibility, adaptability, and insight, this solver approaches each challenge with the ease of a river carving its path through stone. Flexibility allows bending without breaking, adapting strategies to the contours of each unique problem. Adaptability, inspired by Wu Wei, embraces effortless action, aligning with the natural order to find solutions that emerge without force. Insight, through simplicity, cuts to the core, revealing solutions that are both effective and elegantly simple. This approach does not force solutions but discovers them, reflecting the deep, flowing wisdom of the Tao. Thus, the Tao problem solver navigates the myriad challenges with grace and effectiveness, embodying the ancient yet timeless virtues of the Tao.*
 
--- [Self-pitch by TaoGPT](/examples/gpt-4-turbo/taogpt_self_pitch-steps.log.md)
+-- [Self-pitch by TaoGPT](/examples/gpt-4-turbo/taogpt_self_pitch.steps.log.md)
 
 </div>
 
@@ -175,201 +173,213 @@ log can be found [here](/examples/gpt-4/travel-planning.log.md).
 
 More examples are in the [examples folder](/examples).
 
-### TaoGPT final trajectory
+<div style="background-color: beige; text-align: center; padding: 5px">
 
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[0] <b>user</b>: </div>
-
-I want to travel to Moscow. I just need a route plan and I will do the booking later.
-
+# Final path history
 
 </div>
 
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[1] <b>Tao</b>: </div>
+<div class="section_header " style="background-color:lightgreen">
+<div class="header">[000] <b>user</b>:  </div>
+<div class="content">
 
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. The task is to create a route plan for a trip to Moscow, which is a feasible and straightforward request.
+I want to travel to Moscow. I just need an itinerary.
+(I don't need the actual schedule. And you don't have access to the internet. No need to book tickets for now.)
 
-The successful completion of this task would be evaluated based on the following criteria:
+</div></div>
 
-1. The route plan should start from the requester's current location.
-2. The route plan should end in Moscow.
-3. The route plan should include all necessary transit points (airports, train stations, etc.).
-4. The route plan should consider the most efficient and practical routes.
-5. The route plan should provide alternatives, if possible, to accommodate any changes or preferences.
-6. The route plan should not include the booking details as per the requester's preference.
+<div class="section_header " style="background-color:lightgreen">
+<div class="header">[001] <b>user</b>:  </div>
+<div class="content">
 
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>user</b>: </div>
-
-> Where is your current location?
+> From which city or country are you starting your journey to Moscow?
 
 Urumuqi.
 
-> What is your preferred mode of transportation (air, rail, road)?
+> Do you have any preferences for the mode of transportation (e.g., plane, train, car)?
 
-'m afraid of flying.
+I'm afraid of flying.
 
-> Do you have any specific transit points or stops you would like to make along the way?
+> Are there any specific dates or time constraints for your travel?
 
-I like to visit Lahsa.
+Around July.
 
-> Do you have any preferences for the route (scenic, fastest, cheapest, etc.)?
+> Do you need information on accommodations or just the travel itinerary?
 
-I like comfort and prefer fewer stopovers.
+No.
 
+> Would you like to include any stops or is it a direct journey to Moscow?
 
+I would like to visit Lahsa as well.
 
-</div>
+</div></div>
 
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>Tao</b>: </div>
+<div class="section_header " style="background-color:lightgreen">
+<div class="header">[002] <b>user</b>:  </div>
+<div class="content">
 
+> Are you open to using multiple modes of transportation, such as trains and buses, given your fear of flying?
 
-1. Identify the major transportation hubs (train stations, bus stations) in Urumuqi, Lahsa, and Moscow
-2. Find the most direct and comfortable routes from Urumuqi to Lahsa
-3. Find the most direct and comfortable routes from Lahsa to Moscow
-4. Combine the best routes from Urumuqi to Lahsa and Lahsa to Moscow to create a complete route plan
+I prefer comfort and fewest changeover or stopover. I'm not hurry.
 
+> Do you have any preferences or restrictions regarding the duration of the travel from Urumuqi to Moscow?
 
-</div>
+I have plenty of time.
 
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[4] <b>Tao</b>: </div>
+> Would you like to spend some time exploring Lhasa, or is it just a brief stopover on your way to Moscow?
 
-The major transportation hubs in Urumuqi, Lahsa, and Moscow are as follows:
+I will determine later. For now, I only need the travel routes.
 
-Urumuqi:
-- Urumqi South Railway Station
-- Urumqi Railway Station
+> Are there any budget constraints for your travel that I should consider while planning your itinerary?
 
-Lahsa:
-- Lhasa Railway Station
+I have a lot of money.
 
-Moscow:
-- Moscow Kazansky Railway Station
-- Moscow Yaroslavsky Railway Station
-- Moscow Kursky Railway Station
+> Do you need assistance with visa or travel document requirements for the countries you will pass through?
 
-These stations have connections to major cities and regions, and they offer various types of trains, from high-speed to regular, to suit different travel preferences.
+No. I'm a Chinese citizen and I have Russian visa.
 
+</div></div>
 
-</div>
+<div class="section_header " style="background-color:lightyellow">
+<div class="header">[003] <b>Tao</b>:  </div>
+<div class="content">
 
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[5] <b>Tao</b>: </div>
+Given the user's preferences and requirements, the following plan outlines the creation of a comfortable, efficient, and enjoyable travel itinerary from Urumqi to Moscow via Lhasa, considering the user's fear of flying and preference for minimal transfers.
 
-The most direct and comfortable route from Urumuqi to Lahsa is by train. The train journey from Urumuqi to Lahsa takes approximately 24 hours. The train departs from Urumqi South Railway Station and arrives at Lhasa Railway Station. The train offers soft sleeper class, which is the most comfortable option. It includes four berths in each compartment with a door, providing a quiet and private space. The train also has a dining car where you can buy meals and drinks.
+1. Research and outline possible ground transportation routes from Urumqi to Lhasa focusing on comfort and minimal transfers
+2. Identify and evaluate the best transportation options from Lhasa to Moscow, prioritizing train travel
+3. Combine the segments from Urumqi to Lhasa and Lhasa to Moscow to form a complete itinerary
+4. Review the overall travel plan for any potential issues or optimizations in terms of travel comfort and efficiency
 
-Please note that the travel time for each leg of the journey is an approximation and may vary depending on the specific train schedules. It is advised to check the actual train schedules when planning the trip.
+</div></div>
 
+<div class="section_header " style="background-color:lightyellow">
+<div class="header">[004] <b>Tao</b>:  </div>
+<div class="content">
 
-</div>
+The proposed travel route from Urumqi to Lhasa focuses on comfort and minimal transfers, adhering to the user's preferences. The primary mode of transportation identified is the direct train service via the Qinghai-Tibet railway. This train offers soft sleeper classes that provide comfortable bedding and privacy, suitable for the long journey. The cabins are pressurized and equipped with an oxygen supply to handle the high altitude, ensuring a comfortable travel experience. The train route is also scenic, offering views of the Qinghai-Tibet plateau, enhancing the travel experience with its natural beauty and unique landscapes. Alternative transportation options such as luxury buses or private car services were evaluated but the train was chosen for its direct route and amenities. The journey starts at Urumqi South Railway Station and concludes at Lhasa Railway Station, providing a straightforward and enjoyable travel experience with minimal transfers.
 
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[6] <b>Tao</b>: </div>
+</div></div>
 
-Based on the information gathered, here is your complete route plan:
+<div class="section_header " style="background-color:lightyellow">
+<div class="header">[005] <b>Tao</b>:  </div>
+<div class="content">
 
-1. Start from Urumuqi. Take a train from Urumuqi South Railway Station to Lhasa Railway Station. The journey takes approximately 24 hours. The train offers soft sleeper class for a comfortable journey.
+Considering the user's preference for comfort and minimal transfers, the journey from Lhasa to Moscow by train involves multiple segments, as there is no direct train service covering this entire route. The most feasible route involves traveling from Lhasa to Beijing by train, then from Beijing to Moscow.
 
-2. From Lahsa, take a train to Beijing. The journey takes approximately 40 hours. The train offers soft sleeper class for a comfortable journey.
+1. **Lhasa to Beijing**: The user can take a train from Lhasa to Beijing. This segment is served by trains such as the Z22, which offers soft sleeper compartments for comfort over the long journey. This train journey provides beautiful scenic views and a comfortable travel experience with amenities suitable for long-distance travel.
 
-3. From Beijing, take a train to Moscow. The journey takes approximately 6 days. The train offers first-class sleeper for a comfortable journey.
+2. **Beijing to Moscow**: From Beijing, the user can board the Trans-Siberian Railway, specifically the train service known as the Trans-Mongolian route (Train K3 from Beijing to Moscow). This train also offers various classes, including soft sleepers for comfort. The journey covers several days and passes through Mongolia, offering a unique travel experience with diverse landscapes and cultural exposure.
 
-Please note that the travel time for each leg of the journey is an approximation and may vary depending on the specific train schedules. It is advised to check the actual train schedules when planning the trip.
+This route has been chosen based on the availability of train services that prioritize comfort and provide a relatively seamless travel experience with minimal transfers, aligning with the user's preferences.
 
+</div></div>
 
-</div>
+<div class="section_header " style="background-color:lightyellow">
+<div class="header">[006] <b>Tao</b>:  </div>
+<div class="content">
 
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[7] <b>Tao</b>: </div>
+The complete itinerary for the journey from Urumqi to Moscow via Lhasa, focusing on comfort and minimal transfers, is as follows:
 
-Here is your complete route plan:
-
-1. Start from Urumuqi South Railway Station and take a train to Lahsa. The journey will take approximately 24 hours. You will be travelling in a soft sleeper class for a comfortable journey.
-
-2. After exploring Lahsa, head to Lhasa Railway Station and take a train to Beijing. This journey will take approximately 40 hours. Again, you will be travelling in a soft sleeper class for a comfortable journey.
-
-3. From Beijing, take a train to Moscow. This journey will take approximately 6 days. You will be travelling in a first-class sleeper for a comfortable journey.
-
-Please note that the actual travel time may vary depending on the specific train schedules.
-
-As for the visa requirements, you will need to apply for a Chinese visa for your stops in Lahsa and Beijing. For your final destination, Moscow, you will need a Russian visa. Please check the specific requirements and application process for each visa at the respective embassies or consulates in your country. Safe travels!
+***Urumqi to Lhasa***
 
 
-</div>
+- **Departure**: Urumqi South Railway Station
+- **Arrival**: Lhasa Railway Station
+- **Transportation**: Direct train service via the Qinghai-Tibet railway
+- **Class**: Soft sleeper for comfort
+- **Duration**: Approximately 48 hours
+- **Scenery**: Offers views of the Qinghai-Tibet plateau
 
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[8] <b>Tao</b>: </div>
-
-Based on your preferences, I have created a route plan for your trip from Urumuqi to Moscow with a stopover in Lahsa. Here is the complete plan:
-
-1. **Urumuqi to Lahsa**: Start from Urumuqi South Railway Station and take a train to Lahsa. The journey will take approximately 24 hours. You will be travelling in a soft sleeper class for a comfortable journey. The train offers four berths in each compartment with a door, providing a quiet and private space. The train also has a dining car where you can buy meals and drinks.
-
-2. **Lahsa to Beijing**: After exploring Lahsa, head to Lhasa Railway Station and take a train to Beijing. This journey will take approximately 40 hours. Again, you will be travelling in a soft sleeper class for a comfortable journey.
-
-3. **Beijing to Moscow**: From Beijing, take a train to Moscow. This journey will take approximately 6 days. You will be travelling in a first-class sleeper for a comfortable journey. The train offers two berths in each compartment with a door, providing a quiet and private space. The train also has a dining car where you can buy meals and drinks.
-
-Please note that the actual travel time may vary depending on the specific train schedules. Also, remember to check the visa requirements for each country you will be passing through. Safe travels!
+***Lhasa to Moscow***
 
 
-</div>
+- **Departure**: Lhasa Railway Station
+- **Arrival**: Moscow Yaroslavsky Railway Station
+- **Transportation**: Train from Lhasa to Beijing (Z22), then Trans-Mongolian Railway from Beijing to Moscow (Train K3)
+- **Class**: Soft sleeper for comfort
+- **Duration**: Lhasa to Beijing approximately 40 hours, Beijing to Moscow approximately 6 days
+- **Scenery**: Diverse landscapes including the Gobi Desert and rural Mongolia
+
+This itinerary provides a seamless travel experience with minimal transfers, utilizing the most comfortable class available on trains. The journey not only ensures comfort but also offers a scenic and culturally enriching travel experience.
+
+</div></div>
+
+<div class="section_header " style="background-color:lightyellow">
+<div class="header">[007] <b>Tao</b>:  </div>
+<div class="content">
+
+Upon reviewing the proposed travel itinerary from Urumqi to Moscow via Lhasa, the plan appears to align well with the user's preferences for comfort and minimal transfers. Here are some considerations and potential optimizations:
+
+1. **Comfort and Duration**: The selected train services (Qinghai-Tibet railway and Trans-Mongolian Railway) are known for their comfort, especially in the soft sleeper classes. However, the total duration of the journey is quite long (approximately 7 days). Given the user's preference for comfort and not being in a hurry, this seems appropriate, but it's important to ensure that the user is prepared for such a long journey.
+
+2. **Scenic Value**: Both segments of the journey offer scenic views which can enhance the travel experience. Ensuring that the user is aware of these aspects might add value to their experience.
+
+3. **Transfers**: The plan involves a transfer in Beijing, which has been minimized to just one transfer for the entire journey from Urumqi to Moscow. This is aligned with the user's preference for minimal transfers. However, ensuring that the transfer in Beijing is smooth and comfortable is crucial, considering the user's fear of flying and general travel anxiety. Providing detailed information about the transfer process in Beijing might be beneficial.
+
+4. **Health Considerations**: The high altitude of the Qinghai-Tibet railway might be a concern for some travelers. Although the trains are equipped with oxygen supply, it might be useful to remind the user to consider any personal health issues related to high altitudes.
+
+5. **Cultural and Language Barriers**: Traveling through different countries, especially in rural areas of Mongolia and Russia, might present language and cultural barriers. Providing the user with basic travel tips, including key phrases in Russian or Mongolian, could be helpful. Additionally, suggesting specific resources or guides for language and cultural etiquette would enhance the user's preparation and comfort.
+
+6. **Emergency Preparedness**: Given the length and nature of the journey, ensuring that the user is prepared for emergencies, including travel insurance and knowledge of embassy locations en route, would be prudent.
+
+Overall, the travel plan seems well-suited to the user's needs, focusing on comfort and minimal hassle. These additional considerations are aimed at enhancing the user's travel experience and preparing them for the journey ahead.
+
+Repair notes:
+* **warning**: Fixed. I have added suggestions for specific resources or guides for language and cultural etiquette to better prepare the user for the cultural and language barriers they might encounter.
+
+</div></div>
+
+<div class="section_header " style="background-color:lightyellow">
+<div class="header">[008] <b>Tao</b>:  </div>
+<div class="content">
+
+***HERE_IS_MY_STEP_BY_STEP_PLAN***
+
+[at step#16: Final travel itinerary presentation]
+
+Here is your complete travel itinerary from Urumqi to Moscow via Lhasa, tailored to your preferences for comfort and minimal transfers:
+
+***Urumqi to Lhasa***
+
+- **Departure**: Urumqi South Railway Station
+- **Arrival**: Lhasa Railway Station
+- **Transportation**: Direct train via the Qinghai-Tibet railway
+- **Class**: Soft sleeper for comfort
+- **Duration**: Approximately 48 hours
+- **Scenery**: Enjoy the stunning views of the Qinghai-Tibet plateau
+
+***Lhasa to Moscow***
+
+- **Departure**: Lhasa Railway Station
+- **Arrival**: Moscow Yaroslavsky Railway Station
+- **Transportation**: Train from Lhasa to Beijing (Z22), then Trans-Mongolian Railway from Beijing to Moscow (Train K3)
+- **Class**: Soft sleeper for comfort
+- **Duration**: Lhasa to Beijing approximately 40 hours, Beijing to Moscow approximately 6 days
+- **Scenery**: Experience diverse landscapes including the Gobi Desert and rural Mongolia
+
+***Key Considerations***
+
+- **Comfort and Duration**: The journey is long but comfortable, suitable for your preference to not rush and enjoy the journey.
+- **Transfers**: Minimal transfers, with only one major transfer in Beijing, ensuring a smooth travel experience.
+- **Health and Safety**: Be prepared for high altitudes on the Qinghai-Tibet railway with onboard oxygen supply. Consider travel insurance and familiarize yourself with emergency contacts.
+- **Cultural Preparedness**: Given the diverse cultures and languages you will encounter, especially in Mongolia and Russia, consider carrying a travel guide or language phrasebook to enhance your interaction and experience.
+
+This itinerary provides a seamless and comfortable journey, allowing you to enjoy the scenic beauty and cultural richness of the regions you will travel through. Safe travels!
+
+</div></div>
+
+**total tokens**: 57186
 
 ---
 
-In [the detailed long log](examples/gpt-4/travel_advice-questions_steps.log.md), we can see that TaoGPT found 
-multiple issues in the passes and fixed the issues (without backtracking since they are non-fatal for this task.)
+In [the detailed long log](examples/gpt-4/travel_advice-questions_steps.log.md), TaoGPT walked through the problem 
+solving process, identified and fixed issues (without backtracking since they are non-fatal for this task.)
 
 ### Comparing to GPT-4-turbo answer using system default prompt
 
-(See [this example](examples/gpt-4-turbo/travel_advice.default.md))
-
-**user:**
-
-I want to travel to Moscow. I just need a detailed route plan.
-(I don't need the actual schedule. And you don't have access to the internet.)
-
-**assistant:**
-
-Creating a detailed route plan to Moscow without access to the internet for real-time information is challenging, but I can provide you with a general outline of how you might plan your trip. The specifics, such as transportation schedules and availability, will need to be confirmed with the relevant providers or through research on your part.
-
-**Step 1: Determine Your Starting Location**
-The route to Moscow will vary greatly depending on your starting point. For this example, let's assume you are starting from New York City, USA.
-
-**Step 2: Travel to the Airport**
-- From within New York City, you can take a taxi, rideshare, or public transportation to John F. Kennedy International Airport (JFK), which is a major international airport with flights to Moscow.
-
-**Step 3: Book a Flight to Moscow**
-- You will need to book a flight from JFK to one of Moscow's international airports. The main airport is Sheremetyevo International Airport (SVO), but there are also flights to Domodedovo International Airport (DME) and Vnukovo International Airport (VKO).
-- Direct flights are available, but depending on the airline and time of year, you may have to book a connecting flight.
-
-**Step 4: Arrive in Moscow**
-- Upon arrival in Moscow, you will go through customs and immigration. Make sure you have all the necessary visas and documentation required for entry into Russia.
-
-**Step 5: Travel from the Airport to Your Accommodation**
-- From the airport, you can take a taxi, airport express train, or bus to get to your accommodation in Moscow. The Aeroexpress train is a popular option for travel from SVO to the city center.
-
-**Step 6: Getting Around Moscow**
-- Moscow has an extensive and efficient metro system that can take you to most tourist destinations.
-- You can also use buses, trams, taxis, or rideshare services to get around the city.
-
-**Step 7: Sightseeing in Moscow**
-- Plan your sightseeing itinerary. Some must-see attractions include the Kremlin, Red Square, St. Basil's Cathedral, the Bolshoi Theatre, and the Tretyakov Gallery.
-
-**Step 8: Departure**
-- When your visit is over, you will need to reverse your route to return to the airport and fly back to your starting location.
-
-**Additional Tips:**
-- Always check the visa requirements for Russia well in advance of your trip.
-- Consider travel insurance for your journey.
-- Learn some basic Russian phrases, as English is not widely spoken outside of tourist areas and hotels.
-- Keep an eye on travel advisories and local news for any changes that might affect your travel plans.
-
-Remember, this is a very general guide and you will need to fill in the details based on your specific circumstances and preferences. It's important to check the latest information on flights, local transportation, and entry requirements before you travel.
+[GPT with default system prompt](examples/gpt-4-turbo/travel_advice.default.md) usually provides either a touring 
+plan in the city rather than how to get there or an air travel plan from an arbitrary city.
 
 # Installation
 

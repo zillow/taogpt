@@ -5,6 +5,9 @@ import typing as _t
 import time as _time
 import math as _math
 import re as _re
+import logging as _logging
+
+import openai
 import tiktoken as _tiktoken
 from langchain_openai import ChatOpenAI as _ChatOpenAI
 # subclassing ChatOpenAI, see https://github.com/langchain-ai/langchain/discussions/18561
@@ -14,14 +17,15 @@ from langchain_core.runnables.config import ensure_config
 from langchain_core.runnables import RunnableConfig
 from langchain_core.outputs import ChatGeneration
 
+import taogpt
 from taogpt import md_logging
-from taogpt import Pause
 from .constants import ROLE_USER, ROLE_ORCHESTRATOR, ROLE_TAO, ROLE_SYSTEM, ROLE_SAGE, ROLE_GENIE
 import taogpt.utils as _utils
 from . import LLM
-from taogpt.parsing import check_and_fix_fenced_blocks, ParseError, \
-    annotate_fenced_block_backtick_quotes, fix_nested_markdown_blocks_by_report
+from taogpt.parsing import check_and_fix_fenced_blocks, annotate_fenced_block_backtick_quotes, fix_nested_markdown_blocks_by_report
+from taogpt import exceptions as _exceptions
 
+_dev_logger = _logging.getLogger(__file__)
 _last_conversation: _t.List|None = None
 
 
@@ -150,6 +154,7 @@ class LangChainLLM(LLM):
             messages.append(SystemMessage(content=system_prompt))
 
         for i, (role, message) in enumerate(conversation):
+            message = _utils.str_or_blank(message)
             if message == '':
                 continue
             effective_role = LangChainLLM.APP_ROLE_TO_OPENAI_ROLE[role]
@@ -198,8 +203,12 @@ class LangChainLLM(LLM):
                                  f"subtotal: {token_count}{eff_tokens}. cumulative total: {self.total_tokens}\n")
                 self._logger.close_message_section()
             return reply_content
+        except openai.InternalServerError as e:
+            if is_chatgpt_timeout(e):
+                _time.sleep(5)
+                raise _exceptions.ThisMaybeTooHardError("time-out")
+            raise
         except Exception as e:
-            _time.sleep(1)
             raise e
 
     def invoke_llm(self, llm: _ChatOpenAI, messages: list[BaseMessage],
@@ -224,7 +233,7 @@ class LangChainLLM(LLM):
             while True:
                 # will fail when reaching max
                 if self._total_tokens >= self.max_token_usage:
-                    raise Pause(f"Cumulative token usage is {self._total_tokens}, "
+                    raise taogpt.Pause(f"Cumulative token usage is {self._total_tokens}, "
                                 f"exceeding max limit {self.max_token_usage}", cause=None)
                 reply_with_gi = llm.invoke_with_gen_info(to_be_sent, max_tokens=max_tokens)
                 this_content = reply_with_gi.message.content
@@ -252,7 +261,10 @@ class LangChainLLM(LLM):
         if self._approx_token_factor is not None:
             return int(_math.ceil(len(text) * self._approx_token_factor))
         if _utils.safe_is_instance(self.llm, _ChatOpenAI):
-            enc = _tiktoken.encoding_for_model(self.llm.model_name)
+            try:
+                enc = _tiktoken.encoding_for_model(self.llm.model_name)
+            except KeyError:
+                enc = _tiktoken.encoding_for_model('gpt-4')
         else:
             enc = _tiktoken.encoding_for_model('gpt-4')
         tokens = enc.encode(text)
@@ -278,7 +290,7 @@ def fix_nested_markdown_backticks(llm: ChatOpenAIWithGenInfo, original_content: 
     try:
         fixed, _ = check_and_fix_fenced_blocks(original_content)
         return fixed
-    except ParseError as e:
+    except _exceptions.ParseError as e:
         pass
 
     content = annotate_fenced_block_backtick_quotes(original_content)
@@ -303,13 +315,22 @@ format:
 ```
 """.format(content=content)
 
-    invoke_with_gen_info = llm.invoke_with_gen_info(task, temperature=0.)
-    reply = invoke_with_gen_info.message.content
-    json_match = _re.match(r".*`{3,}json\n([^`]+)`{3,}", reply, flags=_re.DOTALL|_re.MULTILINE)
-    if json_match is None:
-        return original_content
-    report = json.loads(json_match.group(1))
-    return fix_nested_markdown_blocks_by_report(content, report)
+    n_retries, ex = 0, None
+    task_to_be_sent = task
+    while n_retries < 3:
+        try:
+            invoke_with_gen_info = llm.invoke_with_gen_info(task_to_be_sent, temperature=0.)
+            reply = invoke_with_gen_info.message.content
+            json_match = _re.match(r".*`{3,}json\n([^`]+)`{3,}", reply, flags=_re.DOTALL|_re.MULTILINE)
+            if json_match is None:
+                return original_content
+            report = json.loads(json_match.group(1))
+            return fix_nested_markdown_blocks_by_report(content, report)
+        except json.JSONDecodeError as ex:
+            n_retries += 1
+            task_to_be_sent = task + f"\n\nParse error: {ex}\nPlease fix the error and repeat the full correct answer"
+    if ex is not None:
+        raise ex
 
 
 GPT_MODEL_ALIAS = {
@@ -319,8 +340,7 @@ GPT_MODEL_ALIAS = {
 GPT_LONG_CONTEXT_MODEL_MAP = {
     'gpt-3.5-turbo': 'gpt-3.5-turbo-16k',
     'gpt-4': 'gpt-4-32k',
-    'gpt-4-1106-preview': 'gpt-4-1106-preview',
-    'gpt-4-turbo-2024-04-09': 'gpt-4-turbo-2024-04-09',
+    # no need to specify for the gpt-4-turbo or gpt-4o
 }
 GPT_OUTPUT_TOKEN_LIMITS = {
     # negative number means the max token limit is `abs(limit) - n_context_tokens`
@@ -329,6 +349,7 @@ GPT_OUTPUT_TOKEN_LIMITS = {
     'gpt-4-32k': -32 * 1024,
     'gpt-4-1106-preview': 4096,
     'gpt-4-turbo-2024-04-09': 4096,
+    'gpt-4o': 4096,
 }
 
 CONTINUATION_PROMPT = ("You reached output token limit in the last reply. "

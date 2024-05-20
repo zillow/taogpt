@@ -18,7 +18,10 @@ parser.add_argument('paths', type=str, nargs='+', default=None, help='One or mor
 
 def main():
     args = parser.parse_args()
-    enc = _tiktoken.encoding_for_model(args.llm)
+    try:
+        enc = _tiktoken.encoding_for_model(args.llm)
+    except KeyError:
+        enc = _tiktoken.encoding_for_model('gpt-4')
     tokens: dict[_pl.Path, int] = dict()
     total_tokens = 0
     for p in args.paths:

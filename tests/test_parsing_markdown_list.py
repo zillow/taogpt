@@ -1,5 +1,6 @@
 import re
 
+import taogpt.exceptions
 from taogpt import parsing
 
 
@@ -58,7 +59,7 @@ I will now perform this step.
     try:
         parsing.parse_ordered_list(text)
         assert False, "expecting ParseError"
-    except parsing.ParseError as e:
+    except taogpt.exceptions.ParseError as e:
         pass
 
 def test_list_bullet_contiguous():
@@ -71,7 +72,7 @@ def test_list_bullet_contiguous():
     try:
         parsing.parse_ordered_list(text)
         assert False, "expecting ParseError"
-    except parsing.ParseError as e:
+    except taogpt.exceptions.ParseError as e:
         pass
 
 def test_must_have_one_bullet_list():
@@ -83,7 +84,7 @@ Multiply the quotient by y.
     try:
         parsing.parse_ordered_list(text)
         assert False, "expecting ParseError"
-    except parsing.ParseError as e:
+    except taogpt.exceptions.ParseError as e:
         pass
 
 def test_parse_indented_bullet_list():

@@ -1,7 +1,8 @@
 from mocks import MockLLM, create_orchestrator, logger
 import typing as _t
 from taogpt.program import *
-from taogpt.parsing import ParseError, parse_verification_response
+from taogpt.parsing import parse_verification_response
+from taogpt.exceptions import ParseError
 
 EXAMPLE_STEP_BY_STEP_PLAN = """This is my plan:
 ```json
@@ -129,7 +130,7 @@ def test_need_full_expansion_at_first_expandable_step_followed_by_ask_step(logge
     orchestrator.chain.append(step)
     step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR, step_name='start')
     orchestrator.chain.append(step)
-    step = AskQuestionStep(description="I have a question", role=ROLE_TAO, step_name='ask')
+    step = AskQuestionStep(description="1. How are you?", role=ROLE_TAO, step_name='ask')
     orchestrator.chain.append(step)
     step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR, step_name='next step')
     orchestrator.chain.append(step)
@@ -145,7 +146,7 @@ def test_no_full_expansion_at_subsequent_expandable_steps(logger):
     orchestrator.chain.append(step)
     step = StepByStepPlan(description=EXAMPLE_STEP_BY_STEP_PLAN, role=ROLE_TAO, step_name='plan')
     orchestrator.chain.append(step)
-    step = AskQuestionStep(description="I have a question", role=ROLE_TAO, step_name='ask')
+    step = AskQuestionStep(description="1. How are you?", role=ROLE_TAO, step_name='ask')
     orchestrator.chain.append(step)
     step = ProceedStep(description="Proceed to solve", role=ROLE_ORCHESTRATOR, step_name='next')
     orchestrator.chain.append(step)
@@ -198,7 +199,7 @@ So, the first row becomes: 4 3 2 1
 }
 ```
 """
-    step = parse_to_step(text, config=Config())
+    step = parse_to_step(text)
     assert isinstance(step, DirectAnswerStep), str(type(step))
     assert not step.is_final_step
     assert step.next_step.next_step_desc == 'Fill in the second row'
@@ -222,7 +223,7 @@ def test_parse_sequential_step_by_step_and_stepping():
 ```
 This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must contain all of the numbers from 1 to 4 exactly once. We will fill in the rows one by one, making sure that each number appears exactly once in each row and column, and in each 2x2 square. This is a recursive, top-down approach to solving the puzzle.
 """
-    step = parse_to_step(text, config=Config())
+    step = parse_to_step(text)
     assert isinstance(step, StepByStepPlan)
     next_step = step.advance_to_next_step()
     assert next_step[0] == 1
@@ -252,7 +253,7 @@ def test_parse_looping_step_by_step_and_stepping():
 ```
 This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must contain all of the numbers from 1 to 4 exactly once. We will fill in the rows one by one, making sure that each number appears exactly once in each row and column, and in each 2x2 square. This is a recursive, top-down approach to solving the puzzle.
 """
-    step = parse_to_step(text, config=Config())
+    step = parse_to_step(text)
     assert isinstance(step, StepByStepPlan)
     next_step = step.advance_to_next_step()
     assert next_step[0] == 1

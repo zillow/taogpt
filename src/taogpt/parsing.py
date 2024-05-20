@@ -15,6 +15,7 @@ from taogpt.constants import (
     PRIOR_PROPOSAL,
     REPORT_ERROR
 )
+from taogpt.exceptions import ParseError, UnbalancedBlockParseError
 
 _logger = _logging.getLogger(__file__)
 
@@ -54,19 +55,6 @@ def parse_step_name(text: str|None) -> tuple[str|None, str|None]:
         return None, None
     match = step_name_re.search(text)
     return (match.group(2), match.group(4)) if match is not None else (None, None)
-
-
-class ParseError(ValueError):
-    def __init__(self, message: str, original:str=None, *args):
-        super().__init__(message, *args)
-        self._original = original
-        # we want to inspect all of these
-        log_text = f"\n{original}" if original is not None else ""
-        _logger.warning(f"{self.__class__}: {message}{log_text}")
-
-    @property
-    def original_text(self) -> str|None:
-        return self._original
 
 
 def parse_step_type_spec(text: str) -> tuple[str|None, str|None]|None:
@@ -159,6 +147,7 @@ class NextStepDesc:
     target_plan_done: bool
     next_step_desc: str|None
     plan_of_next_step: str|None
+    difficulty: int=5
 
     @property
     def is_final_step(self):
@@ -209,8 +198,9 @@ def parse_next_step_spec(text: str) -> NextStepDesc:
         raise ParseError(f'No next step specified. Set next step description to the `next_step` key.')
     elif next_step not in ('all done', 'done'):
         _, next_step = parse_step_id_and_name(next_step, ok_without_step_id=True)
+    difficulty = next_step_response.get('difficulty', 5)
     return NextStepDesc(target_plan_id=target_plan_id, target_plan_tag=target_plan_tag, target_plan_done=target_done,
-                        next_step_desc=next_step, plan_of_next_step=plan_of_next_step)
+                        next_step_desc=next_step, plan_of_next_step=plan_of_next_step, difficulty=difficulty)
 
 
 def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tuple[int, str]]|None]], dict]:
@@ -220,9 +210,11 @@ def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tu
         raise ParseError("The response must be a JSON hash of hashes")
     concerns: dict[str, tuple[str, tuple[int, str]|None]] = dict()
     overall_correctness: bool = True
+    fixed_concerns = set()
     for concern, judgement in judgements.items():
         fixed = judgement.get("fixed_in_subsequent_step", False)
         if fixed: # GPT seems not understanding an issues already fixed subsequently are OK
+            fixed_concerns.add(concern)
             continue
         has_ok = 'ok' in judgement
         has_warning = 'warning' in judgement
@@ -244,7 +236,7 @@ def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tu
         if has_error:
             issue = judgement['error']
             concerns[issue] = ('error', blame_steps)
-            if affecting is not None:
+            if affecting is not None and len(affecting) > 0:
                 affected_by = ', '.join(f"step#{b[0]}" for b in blame_steps)
                 affected_by = f"prior {affected_by} has been changed due to {issue}"
                 affecting_steps: list[tuple[int, str]]|None
@@ -254,7 +246,26 @@ def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tu
                 concerns[affected_by] = ('affected', affecting_steps)
         if has_fatal:
             concerns[judgement['fatal']] = ('fatal', blame_steps)
+    for concern in fixed_concerns:
+        judgements.pop(concern)
     return concerns, judgements
+
+
+def parse_issue_report(response, step_number_cutoff: int=None) \
+        -> tuple[dict[str, _t.Tuple[str, list[tuple[int, str]]|None]], set[str]]:
+    all_issues, _ = parse_verification_response(response)
+    no_culprit_issues = set()
+    for issue, (level, steps) in all_issues.items():
+        if level in ('error', 'fatal'):
+            if steps is None or len(steps) == 0:
+                raise ParseError(f'Error "{issue}" has missing culprit. '
+                                 f'Please add the "blame" attribute to assign the culprit step.')
+            for si, (step_num, step_desc) in enumerate(steps):
+                if step_num < 0 or step_number_cutoff is not None and step_num >= step_number_cutoff:
+                    raise ParseError(f"Unknown step ID: step#{step_num}")
+        if len(steps) == 0:
+            no_culprit_issues.add(issue)
+    return all_issues, no_culprit_issues
 
 
 def parse_give_up_response(description: str) -> dict[str, tuple[str, list[tuple[int, str]]]]:
@@ -493,7 +504,7 @@ def gather_file_contents(sections: dict[str, str], pop_file_sections=False) \
         file_sections.add(section)
         collapsed, blocks = check_and_fix_fenced_blocks(markdown_full_content, collapse_blocks=True)
         if len(blocks) != 1:
-            raise ParseError(f"File section {section} must have exactly one markdown block.")
+            raise ParseError(f"File content in section `{section}` must be in one Markdown fenced block.")
         digest, (snippet, content_type, line_number) = next(iter(blocks.items()))
         if snippet is None:
             raise ParseError(f"No content (in markdown fenced block) for section '{section}'")
@@ -516,10 +527,6 @@ def match_step_name(actual: str, expected_step_num: int, expected_step_name: str
 
 
 _fenced_block_quote_re = _re.compile(r"^(\s*)(`{3,})(\S*)\s*$")
-
-
-class UnbalancedBlockParseError(ParseError):
-    pass
 
 
 def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \

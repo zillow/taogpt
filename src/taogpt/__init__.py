@@ -46,9 +46,8 @@ class LLM:
     def count_tokens(self, text: str) -> int:
         pass
 
-    def deduplicate_for_logging(self, message, role: str, always_log_first=True):
+    def deduplicate_for_logging(self, message, role: str, always_log_first=False):
         content = _utils.str_or_blank(message)
-        tokens = self.count_tokens(content)
         normalized = content.lower()
         deduped = LLM.collapsed_contents.get(normalized, None)
         if deduped is not None:
@@ -142,7 +141,7 @@ class Executor(_abc.ABC):
     @property
     def total_tokens(self) -> int:
         tokens = self.llm.total_tokens
-        if self.sage_llm is not None:
+        if self.sage_llm is not None and self.sage_llm is not self.llm:
             tokens += self.sage_llm.total_tokens
         return tokens
 
@@ -179,6 +178,12 @@ class Executor(_abc.ABC):
 
     @_abc.abstractmethod
     def step_id(self, step):
+        pass
+
+    @_abc.abstractmethod
+    def select_steps(self, selector: _t.Callable[[int, StepABC], bool]|_t.Type,
+                     except_step: StepABC=None, stop_at: StepABC=None) \
+            -> list[StepABC]:
         pass
 
     @_abc.abstractmethod

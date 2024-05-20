@@ -4,9 +4,11 @@ import typing as _t
 import datetime as _datetime
 import json as _json
 import re as _re
+import inspect as _inspect
 
 import taogpt.md_logging
-from . import UnsolvableError, MarkdownLogger, TokenUsageError
+from . import MarkdownLogger, TokenUsageError
+from .exceptions import UnsolvableError
 from .llm_model import *
 from .program import *
 import taogpt.utils as _utils
@@ -174,12 +176,13 @@ class Orchestrator(Executor):
                 except Pause as paused:
                     self.logger.log(f'Pause requested: {paused}\n')
                     raise paused
+                except UnsolvableError:
+                    raise
                 except Exception as e:
                     self.logger.log_error(repr(e))
                     raise e
-
         except UnsolvableError as e:
-            self.chain.append(SummarizeStep(description=str(e), role=ROLE_TAO))
+            self.logger.log_error(str(e))
 
     def backtrack_to(self, step_number: int):
         if step_number < 0 or step_number >= len(self.chain):
@@ -204,8 +207,7 @@ class Orchestrator(Executor):
                 i -= 1
 
         if backtrack_to is None:
-            self.logger.log_debug(f"Cannot find culprit step: {backtrack.blame}")
-            return
+            raise UnsolvableError(f"Sorry, I can't solve this problem or perform this task.")
         elif _utils.safe_is_instance(backtrack_to, ExpandableStep):
             choices = _t.cast(ExpandableStep, backtrack_to).choices
             if (len(choices) > 0 and
@@ -233,13 +235,15 @@ class Orchestrator(Executor):
                 reason = self.pending_pause
                 self.request_pause(None)
                 raise Pause(reason, self.chain[-1])
-            self.check_token_usages()
             last_step = self.chain[-1]
+            if _utils.safe_is_instance(last_step, Idle):
+                break
             if (_utils.safe_is_instance(last_step, DirectAnswerStep)
                     and _t.cast(DirectAnswerStep, last_step).is_final_step):
                 self.summarize_final_answer()
                 self._dequeue_waiting_step()
                 continue
+            self.check_token_usages()
             new_step = last_step.eval(self)
             if _utils.safe_is_instance(last_step, SummarizeStep) and new_step is None: # and successfully eval&checked
                 self.logger.log(f"Completed final summarization. Taking care of {len(self._waiting)} clean-up chores")
@@ -279,6 +283,24 @@ class Orchestrator(Executor):
             if elem is step:
                 return i
         return None
+
+    def select_steps(self, selector: _t.Callable[[int, StepABC], bool]|_t.Type,
+                     except_step: StepABC=None, stop_at: StepABC=None) \
+            -> list[StepABC]:
+        steps: list[StepABC] = []
+        for i, step in enumerate(self.chain):
+            if not step.visible_in_chain and i < len(self.chain) - 1:
+                continue # skip the expandable step except the last one
+            if step is except_step:
+                if step is stop_at:
+                    break
+                continue
+            if (_inspect.isclass(selector) and _utils.safe_is_instance(step, selector)
+                    or not _inspect.isclass(selector) and callable(selector) and selector(i, step)):
+                steps.append(step)
+            if step is stop_at:
+                break
+        return steps
 
     def show_conversation_thread(self, with_header=True, with_extras=False,
                                  selector: _t.Callable[[int, StepABC], bool] | None=None,

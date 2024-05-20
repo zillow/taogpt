@@ -142,11 +142,13 @@ class MarkdownLogger:
         self._log.write(f'<div class="section_header {collapsible_cls}" style="background-color:{color}">\n'
                         f'<div class="header">{step_index} <b>{role}</b>: {tokens} {collapsible_marker}</div>\n')
         self._log.write('<div class="content">\n\n')
+        self._log.flush()
         if self._console_out is not None:
-            print(f"--- {step_index} {role.strip()} ---", file=self._console_out)
+            self._console_out.write(f"\n--- {step_index} {role.strip()} ---\n", file=self._console_out)
 
     def close_message_section(self):
         self._log.write('\n</div></div>\n\n') # close: content section_header
+        self._log.flush()
         if self._console_out is not None:
             self._console_out.write('\n')
             self._console_out.flush()
