@@ -82,9 +82,10 @@ class Config:
     max_repairs: int = 4
     votes: int = 2
     verification_votes: int = 2
+    n_final_checks: int = 3
 
     # behavioral
-    n_final_checks: int = 3
+    optimized_sequential_next_step: bool = True
 
     # token usage controls
     max_tokens: int = 10000

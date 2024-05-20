@@ -1043,14 +1043,15 @@ class ExpandableStep(Step):
                 choice_hinted = True
             base_prompts.append((ROLE_ORCHESTRATOR, work_prompt))
 
-        tao_templates = prompt_db.tao_templates_with_next_step if self.declare_next_step \
+        ask_next_step = self.declare_next_step or not config.optimized_sequential_next_step
+        tao_templates = prompt_db.tao_templates_with_next_step if ask_next_step \
             else prompt_db.tao_templates_without_next_step
         base_prompts.append((ROLE_ORCHESTRATOR, tao_templates))
         question_asked = len(executor.select_steps(AskQuestionStep, stop_at=self)) > 0
         if initial and not question_asked:
             base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_encourage_question))
             choice_hinted = True
-        elif self.declare_next_step:
+        elif ask_next_step:
             next_step_instr = prompt_db.snippet_next_step.format(step=current_plan)
             base_prompts.append((ROLE_ORCHESTRATOR, next_step_instr))
         hint = None
@@ -1218,7 +1219,7 @@ class NextStep(Step):
     def step_title(self) -> str:
         return ""
 
-    def eval_only(self, executor) -> Step | None:
+    def direct_advance(self, executor) -> Step | None:
         parent_plan, plan_id = StepByStepPlan.find_last_step_by_step(executor, before=self)
         if parent_plan is None:
             return proceed_next(self, executor, NextStepDesc(None, None, True, "all done", None))
@@ -1250,12 +1251,21 @@ class NextStep(Step):
                     plan_of_next_step=gp.step_name_tag(gp_id) if gp is not None else None)
                 return proceed_next(self, executor, next_step_spec, difficulty)
             # else we need to ask
+        return None
+
+    def eval_only(self, executor) -> Step | None:
+        if executor.config.optimized_sequential_next_step:
+            next_step = self.direct_advance(executor)
+            if next_step is not None:
+                return next_step
 
         prompt_db = executor.prompts
         system_prompt = prompt_db.tao_intro
         prompts = executor.show_conversation_thread(with_header=True, with_extras=True)
         last_step = _t.cast(Step, executor.chain[-2])
         last_step_tag = last_step.step_name_tag(executor.step_id(last_step))
+        parent_plan, plan_id = StepByStepPlan.find_last_step_by_step(executor, before=self)
+        assert parent_plan is not None
         snippet_next_step = prompt_db.snippet_next_step.format(step=parent_plan.step_name_tag(plan_id))
         tao_next_step = prompt_db.tao_next_step.format(
             last_step=last_step_tag, at_plan=parent_plan.step_name_tag(plan_id),

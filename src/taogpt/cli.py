@@ -28,10 +28,13 @@ parser.add_argument('-m', '--max-search-expansion', type=int, default=4, help='M
 parser.add_argument('-R', '--max-repairs', type=int, default=4, help='Maximum repairs attempted')
 parser.add_argument('-v', '--votes', type=int, default=1, help='Number of votes')
 parser.add_argument('-V', '--verification-votes', type=int, default=3, help='Number of votes')
+parser.add_argument('-c', '--n-final-checks', type=int, default=3,
+                    action=argparse.BooleanOptionalAction, help='Number of final verifications')
 
 # behavioral
-parser.add_argument('-c', '--check-final', type=bool, default=True,
-                    action=argparse.BooleanOptionalAction, help='Check final')
+parser.add_argument('-N', '--optimized-sequential-next-step', type=bool, default=True,
+                    action=argparse.BooleanOptionalAction,
+                    help='Directly advance to next step for sequential plan (without needing LLM to decide.)')
 
 # token usage controls
 parser.add_argument('-t', '--max-tokens', type=int, default=10000, help='Maximum number of tokens')
