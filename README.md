@@ -17,7 +17,7 @@
 
 ## Introduction
 
-(*This section [is written by TaoGPT](examples/gpt-4-turbo/taogpt_self_description-direct.log.md) with illustration by the authors.*)
+(*This section [is written by TaoGPT](examples/gpt-4-turbo/taogpt_self_description.direct.log) with illustration by the authors.*)
 
 ![TaoGPT High-level design](assets/high_level_design.png)
 
