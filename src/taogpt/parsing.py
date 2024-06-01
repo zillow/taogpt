@@ -41,6 +41,13 @@ def sanitize_step_name(step_name: str) -> str:
     return _re.sub(r"\s+", " ", _re.sub(r"[\"'`\n\[\]]", " ", step_name)).strip()
 
 
+def get_longest_backticks(content: str) -> int:
+    if content is None:
+        return 0
+    backticks = [len(b) for b in _re.findall(r"`+", content)]
+    return max(backticks) if len(backticks) > 0 else 0
+
+
 def fix_fenced_block_backticks(original: str|None) -> str|None:
     """
     Deprecated
@@ -212,10 +219,15 @@ def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tu
     overall_correctness: bool = True
     fixed_concerns = set()
     for concern, judgement in judgements.items():
+        blame = judgement.get('blame', None)
         fixed = judgement.get("fixed_in_subsequent_step", False)
         if fixed: # GPT seems not understanding an issues already fixed subsequently are OK
             fixed_concerns.add(concern)
             continue
+        should_be_fixed_by = _utils.str_or_blank(judgement.get("should_be_fixed_by", ''))
+        if should_be_fixed_by != '' and should_be_fixed_by != blame:
+            # GPT may blame the wrong issue
+            blame = should_be_fixed_by
         has_ok = 'ok' in judgement
         has_warning = 'warning' in judgement
         has_error = 'error' in judgement
@@ -224,7 +236,6 @@ def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tu
         if total != 1:
             raise ParseError(f"{concern} must have exactly one of 'ok', 'warning',or 'error' field.")
         overall_correctness = (overall_correctness and not has_error and not has_fatal)
-        blame = judgement.get('blame', None)
         blame_steps: list[tuple[int, str]]|None = None
         if blame is not None:
             if isinstance(blame, str):
@@ -242,7 +253,8 @@ def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tu
                 affecting_steps: list[tuple[int, str]]|None
                 affecting_steps = [parse_step_id_and_name(b) for b in affecting if len(_utils.str_or_blank(b)) > 0]
                 blamed_step_ids = set(s[0] for s in blame_steps)
-                affecting_steps = [s for s in affecting_steps if s[0] not in blamed_step_ids]
+                last_blamed_step = max(blamed_step_ids)
+                affecting_steps = [s for s in affecting_steps if s[0] not in blamed_step_ids and s[0] > last_blamed_step]
                 concerns[affected_by] = ('affected', affecting_steps)
         if has_fatal:
             concerns[judgement['fatal']] = ('fatal', blame_steps)
@@ -299,8 +311,6 @@ class StepDescriptor:
     description: str
     why: str|None
     sub_steps: dict[str, _t.Any]|None = None
-    is_final_verification: bool = False
-    is_final_summary: bool = False
     difficulty: int = 5
 
 
@@ -320,7 +330,6 @@ def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> tuple[dict[int, StepD
     has_branching = plan.pop('has_branching', plan.pop('has_branch', False))
     has_loop = plan.pop('has_loop', plan.pop('looping', False))
     last_index = -1
-    last_summary_verification: int|None = None
     for i, item in plan.items():
         if not _re.match(r"^\d+$", i):
             raise ParseError(f"JSON hash key '{i}' is not an integer")
@@ -333,13 +342,7 @@ def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> tuple[dict[int, StepD
             raise ParseError(f'Missing description for step {key}')
 
         descriptor = StepDescriptor(item['description'], item.get('why', None), item.get('sub_steps', None),
-                                    is_final_verification=item.get('is_final_verification', False),
-                                    is_final_summary=item.get('is_final_summary', False),
                                     difficulty=item.get('difficulty', 5))
-        if descriptor.is_final_summary or descriptor.is_final_verification:
-            last_summary_verification = key
-        elif last_summary_verification is not None:
-            raise ParseError(f"Step#{key} {descriptor.description} is after final verification or summary step.")
         results[len(results) + 1] = descriptor
     if len(results) == 0:
         raise ParseError("Should have at least 2 steps in the plan. If only one step, answer directly")
@@ -490,7 +493,7 @@ def restore_fenced_block(text: str, fenced_blocks: dict[str, str]):
 file_section_re = _re.compile(r"FILE[\s:]+[\s\"\'`]*([^\s\"\'`]+)?[\s\"\'`]*")
 
 
-def gather_file_contents(sections: dict[str, str], pop_file_sections=False) \
+def gather_file_contents(sections: dict[str, str], pop_file_sections=False, unique=True) \
         -> dict[str, tuple[str, str, str, str]]:
     file_sections = set()
     results: dict[str, tuple[str, str, str, str]] = dict()
@@ -501,6 +504,9 @@ def gather_file_contents(sections: dict[str, str], pop_file_sections=False) \
         file_path = match.group(1)
         if file_path is None or file_path.strip() == '':
             raise ParseError(f"No file path for file section '{section}'")
+        if unique and file_path in results:
+            raise ParseError(f"Can only write a file once in the response. {file_path} has been written already; "
+                             f"please merge the edits into one file update.")
         file_sections.add(section)
         collapsed, blocks = check_and_fix_fenced_blocks(markdown_full_content, collapse_blocks=True)
         if len(blocks) != 1:

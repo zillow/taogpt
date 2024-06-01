@@ -32,6 +32,10 @@ class ParseError(ValueError):
         return self._original
 
 
+class ReplyHeaderParseError(ParseError):
+    pass
+
+
 class UnbalancedBlockParseError(ParseError):
     pass
 

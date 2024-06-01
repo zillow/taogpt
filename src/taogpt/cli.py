@@ -35,6 +35,9 @@ parser.add_argument('-c', '--n-final-checks', type=int, default=3,
 parser.add_argument('-N', '--optimized-sequential-next-step', type=bool, default=True,
                     action=argparse.BooleanOptionalAction,
                     help='Directly advance to next step for sequential plan (without needing LLM to decide.)')
+parser.add_argument('-S', '--summarize', type=bool, default=True,
+                    action=argparse.BooleanOptionalAction,
+                    help='Do summarize')
 
 # token usage controls
 parser.add_argument('-t', '--max-tokens', type=int, default=10000, help='Maximum number of tokens')
@@ -44,7 +47,7 @@ parser.add_argument('-s', '--use-sage-llm-for-initial-expansion', type=bool, def
                     action=argparse.BooleanOptionalAction, help='Use sage LLM for initial expansion')
 
 # user interactions
-parser.add_argument('-S', '--silence', type=int, default=0,
+parser.add_argument('--silence', type=int, default=0,
                     help='Level of console printouts: 0: print conversation; 1: do not print conversation.')
 parser.add_argument('-Q', '--ask-user-questions-in-one-prompt', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Ask user questions in one prompt')

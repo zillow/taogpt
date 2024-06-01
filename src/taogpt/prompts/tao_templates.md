@@ -63,8 +63,6 @@ Follow this markdown template:
         }}
        }},
   // ...
-  "<n-1>": {{"description": "<high-level description without details>", "difficulty": 1 to 10, "is_final_verification": true or false}}, // of this plan
-  "<n>": {{"description": "<high-level description without details>", "difficulty": 1 to 10, "is_final_summary": true of false}}, // of this plan
   "has_branching": true or false, // does this plan has any conditional branching or early stopping/breaking step?
   "has_loop": true or false // does this plan has any looping step?
 }}
@@ -86,6 +84,7 @@ Follow this template:
 
 ### FILE: <path_to_be_create>/<file_name>
 <file content section only in need of writing a file>
+
 {snippet_direct_answer_next_step}
 `````
 

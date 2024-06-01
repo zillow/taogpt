@@ -86,6 +86,7 @@ class Config:
 
     # behavioral
     optimized_sequential_next_step: bool = True
+    summarize: bool = True
 
     # token usage controls
     max_tokens: int = 10000
@@ -98,6 +99,7 @@ class Config:
     ask_user_before_execute_codes: bool = True
     pause_after_initial_solving_expansion: bool = True
     pause_on_backtrack: bool = True
+    review_file_merges: bool = False
     # logging
     collapse_long_prompts: bool = True
 
@@ -278,11 +280,10 @@ class UnsolvableError(RuntimeError):
     def __init__(self, reason: str):
         super().__init__(reason)
 
-@_dc.dataclass
+@_dc.dataclass(eq=False)
 class GeneratedFile:
     content_type: str
     content: str
-    markdown_snippet: str
     description: str
 
     @staticmethod
@@ -294,3 +295,24 @@ class GeneratedFile:
             for path, file in step.collected_files.items():
                 files[path] = file # override previous ones
         return files
+
+    def __post_init__(self):
+        if self.content is None:
+            raise ValueError("Markdown content is None")
+        if self.content_type is None:
+            self.content_type = ''
+
+    def __eq__(self, other):
+        if other is None:
+            return False
+        if self is other:
+            return True
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        other: GeneratedFile
+        return self.content_type == other.content_type and self.content == other.content
+
+    @property
+    def markdown_snippet(self) -> str:
+        backticks = "`" * max(3, _parsing.get_longest_backticks(self.content) + 1)
+        return f"{backticks}{self.content_type}\n{self.content}\n{backticks}"

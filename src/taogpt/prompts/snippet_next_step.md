@@ -1,4 +1,4 @@
-Next step direction must be in a JSON fenced block with format:
+Template for `NEXT_I_WANT_TO_WORK_AT`: Next step direction must be in a JSON fenced block with format:
 
 ```json
 {{

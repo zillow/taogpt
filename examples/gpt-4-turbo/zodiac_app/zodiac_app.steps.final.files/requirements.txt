@@ -1,0 +1,4 @@
+Flask==2.0.1
+lunar_cal==1.0.0
+gunicorn==20.0.4
+Flask-WTF==0.14.3

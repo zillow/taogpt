@@ -2,7 +2,7 @@ If the task want a file as the deliverable, add a Markdown `### FILE:` section f
 in a block. Example:
 
 ````markdown
-### FILE: path/to/file
+### FILE: <file_path_name>
 <short description of this file>
 
 ```python
@@ -16,7 +16,7 @@ def foo():
 ````
 
 Note:
-* Must have a file path name.
+* Must have a file path name relative to current directory following the Unix convention.
 * When updating a file, OK to omit existing contents with notes.
 * There is no need to create directories; if a file name has a parent directory, it will be created by the Orchestrator.
-* Orchestrator has no way to move or delete files.
+* Orchestrator has no way to move or delete files, so name your files carefully.

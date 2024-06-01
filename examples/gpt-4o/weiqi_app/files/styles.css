@@ -1,0 +1,98 @@
+body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f0d9b5; /* Traditional board color */
+    margin: 0;
+}
+
+#board-container {
+    display: grid;
+    grid-template-columns: repeat(19, 100px); /* Assuming a 19x19 board */
+    grid-template-rows: repeat(19, 100px);
+    gap: 0;
+    border: 2px solid #000;
+}
+
+.grid-point {
+    width: 100px;
+    height: 100px;
+    background-size: cover;
+    position: relative; /* Ensure proper alignment of stones */
+}
+
+.grid-point.mid {
+    background-image: url('assets/grid_point_mid.png');
+}
+
+.grid-point.north {
+    background-image: url('assets/grid_point_north.png');
+}
+
+.grid-point.south {
+    background-image: url('assets/grid_point_south.png');
+}
+
+.grid-point.east {
+    background-image: url('assets/grid_point_east.png');
+}
+
+.grid-point.west {
+    background-image: url('assets/grid_point_west.png');
+}
+
+.grid-point.north-east {
+    background-image: url('assets/grid_point_north_east.png');
+}
+
+.grid-point.north-west {
+    background-image: url('assets/grid_point_north_west.png');
+}
+
+.grid-point.south-east {
+    background-image: url('assets/grid_point_south_east.png');
+}
+
+.grid-point.south-west {
+    background-image: url('assets/grid_point_south_west.png');
+}
+
+.stone {
+    width: 100px;
+    height: 100px;
+    background-size: cover;
+    position: relative; /* Ensure proper alignment within grid points */
+}
+
+.stone.black {
+    background-image: url('assets/black_stone.png');
+}
+
+.stone.white {
+    background-image: url('assets/white_stone.png');
+}
+
+#end-game-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+}
+
+#score-display {
+    margin-top: 20px;
+    font-size: 18px;
+}
+
+#score-container {
+    margin-top: 20px;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+#message-display {
+    margin-top: 10px;
+    font-size: 18px;
+    color: red;
+}

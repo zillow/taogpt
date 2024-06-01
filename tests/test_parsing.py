@@ -5,6 +5,7 @@ from taogpt.constants import *
 from taogpt.prompts import PromptDb
 from taogpt.utils import eval_and_collect
 from taogpt.parsing import extract_fenced_blocks, restore_fenced_block
+from taogpt import GeneratedFile
 
 _REGULAR_RANKINGS = """This is what I think:
 ```json
@@ -302,23 +303,6 @@ def test_parse_step_by_step_plan_raise_on_invalid_ordering():
         assert "Element keys should be a contiguous natural number sequence starting at 1" in str(e)
 
 
-def test_parse_step_by_step_plan_raise_final_steps_not_last():
-    text = f"""# HERE_IS_MY_STEP_BY_STP_PLAN
-```json
-{{
-    "1": {{"description": "do A"}},
-    "2": {{"description": "check everything", "is_final_verification": true}},
-    "3": {{"description": "do B"}}
-}}
-```
-"""
-    try:
-        parsing.parse_step_by_step_plan(text)
-        assert False, "Expecting ParseError but not raised"
-    except taogpt.exceptions.ParseError as e:
-        assert "is after final verification or summary step" in str(e)
-
-
 def test_parse_step_by_step_plan():
     steps = ["step 1", "step 2", "final check"]
     reasons = ["reason 1"]
@@ -327,7 +311,7 @@ def test_parse_step_by_step_plan():
 {{
     "1": {{"description": "{steps[0]}", "why": "{reasons[0]}"}},
     "2": {{"description": "{steps[1]}"}},
-    "3": {{"description": "{steps[2]}", "is_final_verification": true}},
+    "3": {{"description": "{steps[2]}"}},
     "has_loop": true
 }}
 ```
@@ -339,7 +323,6 @@ def test_parse_step_by_step_plan():
     assert results[2].description == steps[1]
     assert results[2].why is None
     assert results[3].description == steps[2]
-    assert results[3].is_final_verification
     assert not has_branching
     assert has_loop
 
@@ -739,3 +722,29 @@ def test_parse_issue_report():
     assert  blames[0][0] == 10
     assert blames[0][1] == blamed_desc
     assert len(no_culprit_issues) == 0
+
+
+def test_file_comparison():
+    f1 = GeneratedFile("text", """
+Line 1
+```json
+{}
+```
+""", "desc")
+    f2 = GeneratedFile("text", """
+Line 1
+```json
+{}
+```
+""", "desc2")
+    assert f1 == f2
+    assert not f1 != f2
+    f3 = GeneratedFile("text", """
+Line 1
+```json
+123
+```
+""", "desc")
+    assert not f1 == f3
+    assert f1 != f3
+
