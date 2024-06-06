@@ -235,7 +235,7 @@ class Executor(_abc.ABC):
 class StepABC(_abc.ABC):
 
     def __init__(self, *, description: str, role: str, step_name: str|None):
-        self.description = _parsing.at_step_re.sub('', description).strip()
+        self.description = _parsing.at_step_re.sub('', description, 1).strip()
         self.role = role
         self._step_name = _parsing.sanitize_step_name(_utils.str_or_blank(step_name))
         self._visible = True

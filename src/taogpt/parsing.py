@@ -226,8 +226,7 @@ def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tu
             continue
         should_be_fixed_by = _utils.str_or_blank(judgement.get("should_be_fixed_by", ''))
         if should_be_fixed_by != '' and should_be_fixed_by != blame:
-            # GPT may blame the wrong issue
-            blame = should_be_fixed_by
+            raise ParseError(f"Blaming {blame} but think it should be fixed at {should_be_fixed_by}. Skip.")
         has_ok = 'ok' in judgement
         has_warning = 'warning' in judgement
         has_error = 'error' in judgement
@@ -316,8 +315,9 @@ class StepDescriptor:
 
 def parse_step_by_step_plan(text: str) -> tuple[dict[int, StepDescriptor], bool, bool]:
     try:
-        plan = parse_json_hash(text, nested_hashes=True,
-                               except_keys={'has_branching', 'has_branch', 'has_loop', 'looping'})
+        plan = parse_json_hash(
+            text, nested_hashes=True,
+            except_keys={'has_branching', 'branching_among_steps', 'has_loop', 'looping_among_steps'})
     except ParseError as ex:
         if not 'no JSON hash found' in str(ex):
             raise ex
@@ -327,8 +327,8 @@ def parse_step_by_step_plan(text: str) -> tuple[dict[int, StepDescriptor], bool,
 
 def validate_step_by_step_plan(plan: dict[str, _t.Any]) -> tuple[dict[int, StepDescriptor], bool, bool]:
     results: dict[int, StepDescriptor] = dict()
-    has_branching = plan.pop('has_branching', plan.pop('has_branch', False))
-    has_loop = plan.pop('has_loop', plan.pop('looping', False))
+    has_branching = plan.pop('has_branching', plan.pop('branching_among_steps', False))
+    has_loop = plan.pop('has_loop', plan.pop('looping_among_steps', False))
     last_index = -1
     for i, item in plan.items():
         if not _re.match(r"^\d+$", i):
@@ -516,8 +516,8 @@ def gather_file_contents(sections: dict[str, str], pop_file_sections=False, uniq
             raise ParseError(f"No content (in markdown fenced block) for section '{section}'")
         block_lines = snippet.split('\n')
         content = '\n'.join(block_lines[1:-1])
-        desc = collapsed.replace(digest + '\n', '')
-        desc = desc.replace(digest, '') # to be safe
+        desc = collapsed.replace(digest + '\n', '').strip()
+        desc = desc.replace(digest, '').strip() # to be safe
         results[file_path] = (content_type, content, snippet, desc)
     if pop_file_sections:
         for section in file_sections:
@@ -638,7 +638,7 @@ def annotate_fenced_block_backtick_quotes(content):
 
 
 def fix_nested_markdown_blocks_by_report(content: str, report: list[dict[str, str|int|None]]):
-    max_level = max(item['level'] for item in report if item['close'] is not None)
+    max_level = max(item['level'] for item in report if item['close'] is not None) if len(report) > 0 else 3
     report_sorted = sorted(report, key=lambda x: x['level'], reverse=True)
     for item in report_sorted:
         open_tag = item['open']

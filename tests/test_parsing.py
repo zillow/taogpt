@@ -473,7 +473,7 @@ The HTML template for the main page.
     assert content == """<!DOCTYPE html>
 <html lang="en">
 </html>"""
-    assert markdown_full_content == "The HTML template for the main page.\n\n"
+    assert markdown_full_content == "The HTML template for the main page."
 
 
 def test_gather_multi_file_sections():
@@ -505,7 +505,7 @@ The HTML template for the main page.
     assert content == """<!DOCTYPE html>
 <html lang="en">
 </html>"""
-    assert markdown_full_content == "The HTML template for the main page.\n\n"
+    assert markdown_full_content == "The HTML template for the main page."
     assert 'doc.md' in results
     content_type, content, snippet, markdown_full_content = results['doc.md']
     assert content_type == 'markdown'

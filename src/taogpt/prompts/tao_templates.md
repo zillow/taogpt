@@ -47,7 +47,7 @@ Follow this markdown template:
 
 `````markdown
 # HERE_IS_MY_STEP_BY_STEP_PLAN
-<belief analysis for this task/step>
+<belief analysis for this task/step (without listing the steps here)>
 
 ```json
 {{
@@ -63,8 +63,8 @@ Follow this markdown template:
         }}
        }},
   // ...
-  "has_branching": true or false, // does this plan has any conditional branching or early stopping/breaking step?
-  "has_loop": true or false // does this plan has any looping step?
+  "branching_among_steps": true or false, // does this plan contain any conditional branching or early stopping/breaking AMONG its peer steps?
+  "looping_among_steps": true or false // does this plan contain any loop AMONG its peer steps?
 }}
 ```
 `````

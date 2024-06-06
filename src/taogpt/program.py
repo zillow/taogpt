@@ -196,7 +196,6 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         return DirectAnswerStep.TYPE_SPEC
 
     def __init__(self, *, description: str, role: str, step_name: str, is_final_step=False, **kwargs):
-        description = at_step_re.sub('', description, count=1).strip()
         super().__init__(description=description, role=role, step_name=step_name, **kwargs)
         self.is_final_step = is_final_step
         self._n_tries = 1 # already evaluated once since the description is the result
@@ -221,8 +220,10 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
             self.next_step = next_step
         if self.is_final_step:
             self.next_step = NextStepDesc(None, None, True, "all done", None)
-        reconstructed = [f"# {heading}\n{content}" for heading, content in sections.items()]
-        self.description = '\n\n'.join(reconstructed)
+        self.description = at_step_re.sub('', sections.pop(FREE_TEXT, '')).strip()
+        # todo: more flexible section level supports
+        reconstructed = [f"## {heading}\n{content}" for heading, content in sections.items()]
+        self.description += '\n\n'.join(reconstructed)
         self.description = _re.sub(rf"# {FREE_TEXT}\n+", "", self.description, flags=_re.IGNORECASE)
 
     def validate(self, executor: Executor):
@@ -319,9 +320,6 @@ class ConsolidateFileStep(DirectAnswerStep):
     def evaluated(self, evaluated: bool):
         self._evaluated = evaluated
 
-    def retryable(self, config: Config):
-        return True # always retryable
-
     def eval_only(self, executor) -> Step | None:
         if self.evaluated:
             return None
@@ -342,13 +340,14 @@ class ConsolidateFileStep(DirectAnswerStep):
         prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_notes_for_files))
         prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_ensure_updated_file_integrity.format(
             file_name=self._file_name, between=between)))
+        critic_text = ''
         if len(self.criticisms) > 0:
             critic_text = self.format_critic_text()
             step_id = executor.step_id(self)
             instr = prompt_db.tao_fix_issues.format(step_id=step_id, step=self.step_name, critic_text=critic_text)
             prompts.append((ROLE_ORCHESTRATOR, instr))
 
-        all_versions = collect_all_versions(self.between_steps, self._file_name)
+        all_versions: list[GeneratedFile] = collect_all_versions(self.between_steps, self._file_name)
         if len(all_versions) == 0:
             raise ValueError(f"No file snippet found for {self._file_name} in the chain")
         if len(all_versions) == 1:
@@ -361,7 +360,7 @@ class ConsolidateFileStep(DirectAnswerStep):
         file_sizes = [len(version.content) for version in all_versions]
         if max(file_sizes) > 1024 or sum(file_sizes) > 2048: # maybe too hard
             self.collected_files[self._file_name] = rolling_diff_file_consolidate(
-                executor, self._file_name, chain=self.between_steps)
+                executor, self._file_name, chain=self.between_steps, critic_text=critic_text)
             self.finish_consolidation(last_version)
             return None
 
@@ -383,7 +382,7 @@ class ConsolidateFileStep(DirectAnswerStep):
             except ThisMaybeTooHardError as ex:
                 executor.logger.log_error(str(ex))
                 self.collected_files[self._file_name] = rolling_diff_file_consolidate(
-                    executor, self._file_name, chain=self.between_steps)
+                    executor, self._file_name, chain=self.between_steps, critic_text=critic_text)
                 self.finish_consolidation(last_version)
                 return None
             except ParseError as ex:
@@ -467,6 +466,9 @@ class StepByStepPlan(TaoReplyStep):
         super().__init__(description=description, role=role, step_name=step_name, **kwargs)
         self._realized_steps: list[Step] = list()
         free_text, blocks = check_and_fix_fenced_blocks(self.description, collapse_blocks=True)
+        ordered_list = parse_ordered_list(free_text, at_least_one_list=False)
+        if len(ordered_list) > 0:
+            raise ParseError("Steps must be in JSON. Standalone Markdown list is not allowed.")
         json_block = None
         for key, (block_content, content_type, _) in blocks.items():
             free_text = free_text.replace(key, '')
@@ -1052,23 +1054,17 @@ class ExpandableStep(Step):
 
         config = executor.config
         step_by_step = self.part_of
-        n_step_by_step_plans = 0
-        choice_hinted = False
         if step_by_step is not None:
             plan_id = executor.step_id(step_by_step)
             current_plan = step_by_step.step_name_tag(plan_id)
-            for i in range(plan_id, -1, -1):
-                if _utils.safe_is_instance(executor.chain[i], StepByStepPlan):
-                    n_step_by_step_plans += 1
         else:
             current_plan = '[not sure which plan, go figure out]'
         if not initial:
             tokens, budget = executor.total_tokens, config.max_tokens
             work_prompt = prompt_db.tao_proceed_to_step.format(plan=current_plan, step=self._step_name_for_expanded)
-            if n_step_by_step_plans >= 3:
-                frac = tokens / budget
+            frac = tokens / budget
+            if frac >= 0.8:
                 work_prompt += f"\n\n You've spent {frac:0.0%} of your LLM token budget; be mindful of cost."
-                choice_hinted = True
             base_prompts.append((ROLE_ORCHESTRATOR, work_prompt))
 
         ask_next_step = self.declare_next_step or not config.optimized_sequential_next_step
@@ -1076,16 +1072,15 @@ class ExpandableStep(Step):
             else prompt_db.tao_templates_without_next_step
         base_prompts.append((ROLE_ORCHESTRATOR, tao_templates))
         question_asked = len(executor.select_steps(AskQuestionStep, stop_at=self)) > 0
+        hint = None
         if initial and not question_asked:
-            base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_encourage_question))
-            choice_hinted = True
+            hint = prompt_db.tao_encourage_question
         elif ask_next_step:
             next_step_instr = prompt_db.snippet_next_step.format(step=current_plan)
             base_prompts.append((ROLE_ORCHESTRATOR, next_step_instr))
-        hint = None
-        if not choice_hinted:
+        if hint is None:
             if self._ptr == 0 and self._difficulty <= 3: # only advice on first expansion
-                hint = f"This step looks easy! I think you may want to avoid `{HERE_IS_MY_STEP_BY_STEP_PLAN}` approach."
+                    hint = f"This step looks easy! I think you may want to avoid `{HERE_IS_MY_STEP_BY_STEP_PLAN}` approach."
             elif self._difficulty >= 7:
                 hint = f"This step looks hard! I think you may want to try `{HERE_IS_MY_STEP_BY_STEP_PLAN}`."
         if hint is not None:
@@ -1318,7 +1313,6 @@ class NextStep(Step):
         return None # unreachable
 
     def parse_reply(self, plan: str, executor: Executor) -> Step:
-        prompt_db, config = executor.prompts, executor.config
         decision, details = parse_next_step_reply(plan)
         assert decision is not None
         assert details is not None
@@ -1496,9 +1490,11 @@ class SummarizePartialStep(SummarizeStepABC):
 
     def eval(self, executor: Executor) -> Step | None:
         if self._n_verifications > 0:
-            result = self.verify_and_fix(
-                "Is everything correct between these steps? "
-                "(Note: don't need to the whole or solve other parts of the problem.)", executor)
+            visible_steps = [step for step in self._shadowing if step.visible_in_chain]
+            from_step_tag = visible_steps[0].step_name_tag(executor.step_id(visible_steps[0]))
+            to_step_tag = visible_steps[-1].step_name_tag(executor.step_id(self._shadowing[-1]))
+            result = self.verify_and_fix("Is everything correct between {from_step_tag} and {to_step_tag}?".format(
+                from_step_tag=from_step_tag, to_step_tag=to_step_tag), executor)
             if result is not None:
                 return result
         self._n_verifications = 0
@@ -1591,7 +1587,7 @@ def proceed_next(current_step: Step, executor: Executor, next_step_spec: NextSte
     current_index = executor.step_id(current_step)
     assert current_index == len(executor.chain)-1
     matched_plan, _ = StepByStepPlan.find_last_step_by_step(executor, before=current_index)
-    if executor.config.optimized_sequential_next_step:
+    if matched_plan.sequential and executor.config.optimized_sequential_next_step:
         next_step = matched_plan.advance_to_next_step()
         if next_step is not None:
             return ProceedStep.create_proceed_step(executor, next_step[1], matched_plan, difficulty)
@@ -1718,12 +1714,15 @@ def rolling_diff_file_consolidate(executor: Executor, file: str,
             f.write("\n\n")
             version_count += 1
 
+    failed = False
     actual_merges = 0
     prompt_db = executor.prompts
     while len(snippets) > 1:
         collecting = snippets[:2] # 2 snippets at a time
         snippets = snippets[2:]
         if collecting[0][0].content == collecting[-1][0].content:
+            with open(merge_file, 'a') as f:
+                f.write("\nThe next edit is identical to the last result. skipping.\n")
             executor.logger.log("The next edit is identical to the last result. skipping.")
             snippets.insert(0, collecting[-1])
             continue
@@ -1753,52 +1752,62 @@ full diffs would look confusing); it is possible lines are removed intentionally
         prompts.append((ROLE_ORCHESTRATOR, snippet_text))
         if critic_text is not None and len(critic_text) > 0:
             prompts.append((ROLE_ORCHESTRATOR, f"Prior issues trying this:\n\n{critic_text}"))
-        try:
-            response = executor.llm.ask(None, prompts, reason='rolling_consolidate')
-        except ThisMaybeTooHardError as ex:
-            executor.logger.log_error(str(ex))
-            with open(merge_file, 'a') as f:
-                for edit, step in snippets: # ensured all versions written
-                    f.write(f"### update#{version_count} {step.step_name}\n")
-                    f.write(f"{step.description}\n\n")
-                    f.write(edit.markdown_snippet)
+        for n_try in range(2):
+            try:
+                response = executor.llm.ask(
+                    prompt_db.tao_intro,
+                    prompts,
+                    reason='rolling_file_consolidate',
+                    step_id=f"{file}/{actual_merges}")
+                sections: dict[str, str] = parse_sections(response)
+                extracted_contents = gather_file_contents(sections, pop_file_sections=True, unique=True)
+                files = {
+                    file_path: GeneratedFile(content_type, content, desc)
+                    for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
+                }
+                if len(files) != 1:
+                    raise ParseError(f"Expecting one Markdown fenced block holding contents for file `{file}`. Found "
+                                     f"{len(files)}")
+                merged_file_name, updated = next(iter(files.items()))
+                if file != merged_file_name:
+                    executor.logger.log(f"Incorrect file name `{merged_file_name}`, changed to `{file}`")
+                snippets.insert(0, (updated, collecting[-1][1]))
+                actual_merges += 1
+                with open(merge_file, 'a') as f:
+                    f.write(f"**diffs**:\n")
+                    f.write(f"""
+        `````
+        {diffs}
+        `````
+        
+        """)
+                    f.write(f"### merged:\n")
+                    f.write(snippets[0][0].markdown_snippet)
                     f.write("\n\n")
-                    version_count += 1
+                    if len(snippets) > 1:
+                        f.write(f"### update#{version_count} {snippets[1][1].step_name}\n")
+                        f.write(snippets[1][1].description)
+                        f.write("\n\n")
+                        f.write(snippets[1][0].markdown_snippet)
+                        f.write("\n\n")
+                        version_count += 1
+                failed = False
+                break
+            except ThisMaybeTooHardError as ex:
+                executor.logger.log_error(str(ex))
+                if n_try > 0:
+                    with open(merge_file, 'a') as f:
+                        for edit, step in snippets: # ensured all versions written
+                            f.write(f"### update#{version_count} {step.step_name}\n")
+                            f.write(f"{step.description}\n\n")
+                            f.write(edit.markdown_snippet)
+                            f.write("\n\n")
+                            version_count += 1
+                failed = True
+        if failed:
             break
-        sections: dict[str, str] = parse_sections(response)
-        extracted_contents = gather_file_contents(sections, pop_file_sections=True, unique=True)
-        files = {
-            file_path: GeneratedFile(content_type, content, desc)
-            for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
-        }
-        if len(files) != 1:
-            raise ParseError(f"Expecting one Markdown fenced block holding contents for file `{file}`. Found "
-                             f"{len(files)}")
-        merged_file_name, updated = next(iter(files.items()))
-        if file != merged_file_name:
-            executor.logger.log(f"Incorrect file name `{merged_file_name}`, changed to `{file}`")
-        snippets.insert(0, (updated, collecting[-1][1]))
-        actual_merges += 1
-        with open(merge_file, 'a') as f:
-            f.write(f"**diffs**:\n")
-            f.write(f"""
-`````
-{diffs}
-`````
 
-""")
-            f.write(f"### merged:\n")
-            f.write(snippets[0][0].markdown_snippet)
-            f.write("\n\n")
-            if len(snippets) > 1:
-                f.write(f"### update#{version_count} {snippets[1][1].step_name}\n")
-                f.write(snippets[1][1].description)
-                f.write("\n\n")
-                f.write(snippets[1][0].markdown_snippet)
-                f.write("\n\n")
-                version_count += 1
-
-    if actual_merges == 0 or not executor.config.review_file_merges:
+    if (actual_merges == 0 or not executor.config.review_file_merges) and not failed and len(snippets) > 0:
         return snippets[-1][0]
     with open(merge_file, 'a') as f:
         f.write(f"**NOTE:**: Merge all into one markdown fenced block and nothing else.\n")
