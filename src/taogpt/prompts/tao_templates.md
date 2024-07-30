@@ -31,15 +31,10 @@ Deliberate on this task step, outline a sequence of high-level, action-oriented 
 
 * Outcome-oriented! Pay attention to the intention of the task problem. The action plan is for reaching the solution;
   do not describe the internal workings, that's part of a direct answer.
-* Answer directly instead of step-by-step plan if steps become too detailed.
-* Think abstract. Come up with high-level and backtrackable plan. Avoid detailed, specific, fixed-value, and 
-  low-level ones. Because it is impossible to try alternative values in detailed plans in case of errors. Likewise, 
-  choose linear, decomposable steps over looping. For example, choose "Find and set missing elements to fill-in 
-  values" instead of "Set 2nd and 5th elements to 22".
-* Avoid loops if possible as they are less friendly to solution tree traversal or backtracking.
+* Think abstract and high-level. Avoid detailed, specific, fixed-value, and low-level ones, because it is impossible 
+  to try alternative values in detailed plans in case of errors. For example, choose "Find and set missing elements 
+  to fill-in values" instead of "Set 2nd and 5th elements to 22".
 * Worship Occam's razor. If the task asks for skipping something, try to obey it.
-* Don't jump ahead. Plan **only for this step** and not something else from the higher plans.
-* If it has final verification/summary steps at the end, indicate them.
 
 Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
 
@@ -58,8 +53,7 @@ Follow this markdown template:
   "2": {{
         "description": "<high-level description without details>", "difficulty": 1 to 10,
         "sub_steps": {{
-            "1": {{"description": "<high-level description without details>", "difficulty": 1 to 10}},
-            "2": {{"description": "<high-level description without details>", "difficulty": 1 to 10}}
+            // ... nested sub-tasks ...
         }}
        }},
   // ...
