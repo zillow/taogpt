@@ -85,6 +85,9 @@ class Config:
     n_final_checks: int = 3
 
     # behavioral
+    ask_questions: bool=True
+    ask_genie: bool=True
+    file_support: bool=True
     optimized_sequential_next_step: bool = True
     summarize: bool = True
 
@@ -247,6 +250,10 @@ class StepABC(_abc.ABC):
     @property
     def visible_in_chain(self) -> bool:
         return self._visible
+
+    @property
+    def visible_in_summarization(self) -> bool:
+        return self.visible_in_chain
 
     def set_visible_in_chain(self, visible: bool):
         self._visible = visible

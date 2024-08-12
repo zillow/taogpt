@@ -8,7 +8,6 @@ responsible in the following format:
 {
   "<what to verify>": {
     "error": "<something incorrect, subsequent steps not impacted or fixable>", 
-    "content": "<content snippet related to the issue",
     "blame": "step#<ID>: <step description>",
     "affecting": ["step#<ID>: <step description>", "step#<ID>: <step description>", ...]
   },

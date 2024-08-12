@@ -1,4 +1,4 @@
-These are prior issues found at step#{step_id} {step}:
+These are prior issues found at [step#{step_id}: {step}]:
 
 {critic_text}
 

@@ -181,21 +181,11 @@ no_such_var * 123
 def test_parse_direct_answer_and_next_step():
     text = """# MY_THOUGHT
 
-
-
-To fill in the first row, we need to find the numbers that are not already present. The numbers in the first row are 3 and 1. So, the missing numbers are 2 and 4.
-
-We can't put 2 in the first cell because the number 2 is already present in the first column. So, the first cell must be 4. 
-
-Then, the third cell must be 2 because it's the only number left.
-
 So, the first row becomes: 4 3 2 1
 
-### NEXT_I_WANT_TO_WORK_AT:
 ```json
 {
-    "done with [step#2: sub-plan]": true,
-    "next_step": "Fill in the second row"
+    "next_to_work_at": {"done with [step#2: sub-plan]": true, "next_step": "Fill in the second row"}
 }
 ```
 """

@@ -58,27 +58,42 @@ def test_step_types():
     assert isinstance(step, ExpandableStep)
 
 
-def test_final_direct_answer_with_nonstandard_heading():
+def test_final_direct_answer_with_next_step():
     content = f"""22
 
-### FILE: dir/foo.py
-```python
-# return constant
-1234
-```"""
+"""
     text = f"""# {MY_THOUGHT}
 {content}
 
-# {NEXT_I_WANT_TO_WORK_AT}
 ```json
 {{
-    "next_step": "all done"
+    "next_to_work_at": {{ "next_step": "all done" }}
 }}
 ```
 """
     step = _t.cast(DirectAnswerStep, parse_to_step(text))
     assert step.description == '22'
     assert step.next_step.is_final_step
+
+
+def test_step_by_step_with_next_step():
+    text = f"""# {HERE_IS_MY_STEP_BY_STEP_PLAN}
+```json
+{{
+  "1": {{"description": "<high-level description without details>step 1", "difficulty": 1}},
+  "2": {{"description": "step 2", "difficulty": 10}}
+}}
+```
+
+```json
+{{
+    "next_to_work_at": {{ "next_step": "all done" }}
+}}
+```
+"""
+    step = _t.cast(StepByStepPlan, parse_to_step(text))
+    assert len(step.steps) == 2
+    assert step._next_step is None
 
 
 def test_parse_error_report_with_blame_string(logger):
@@ -92,3 +107,60 @@ def test_parse_error_report_with_blame_string(logger):
     step = GiveUpStep(description=report_json, role='tao')
 
     assert step.description.strip() == report_json.strip()
+
+
+def test_next_step():
+    dn = DirectAnswerStep(description="""
+some text
+
+```json
+{
+    "next_to_work_at": {
+        "done with [at step#12: this plan]": true,
+        "plan_of_next_step": "step#10: parent plan",
+        "next_step": "next thing to do",
+        "difficulty": 4,
+        "next_step_seq": 2
+    }
+}
+```
+""", role="Tao", step_name="test")
+    assert dn.next_step.target_plan_done
+    assert dn.next_step.target_plan_id == 12
+    assert dn.next_step.next_step_desc == 'next thing to do'
+    assert dn.next_step.difficulty == 4
+
+
+def test_convert_direct_answer_with_file_to_write_file():
+    step = parse_to_step(f"""# {MY_THOUGHT}
+
+some explanation
+
+### FILE: foo.txt
+
+```text
+some contents
+```
+""")
+    assert isinstance(step, WriteFileStep)
+
+
+def test_raise_on_non_direct_answer_with_file_content():
+    try:
+        parse_to_step(f"""# {WILL_ASK_GENIE}
+    
+some explanation
+
+```python
+assert True
+```
+
+### FILE: foo.txt
+
+```text
+some contents
+```
+    """)
+        assert False, f'Expecting {ReplyHeaderParseError.__name__} error not raised'
+    except ReplyHeaderParseError as e:
+        assert '`FILE:` section presents in non-write file response' in str(e)

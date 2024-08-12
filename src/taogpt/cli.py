@@ -12,7 +12,6 @@ from taogpt.runner import solve_problem, load_and_resume_problem
 from taogpt.utils import set_openai_credentials
 
 # The skeleton is created by the GPT-4
-# todo: replace the Config class with ArgParser
 parser = argparse.ArgumentParser(
     prog='taogpt',
     description='command-line tool to ask Tao to solve a task',
@@ -32,6 +31,15 @@ parser.add_argument('-c', '--n-final-checks', type=int, default=3,
                     action=argparse.BooleanOptionalAction, help='Number of final verifications')
 
 # behavioral
+parser.add_argument('-Q', '--ask-questions', type=bool, default=True,
+                    action=argparse.BooleanOptionalAction,
+                    help='Enable proactive clarification questioning')
+parser.add_argument('-E', '--ask-genie', type=bool, default=True,
+                    action=argparse.BooleanOptionalAction,
+                    help='Enable code execution (in a runtime environment, i.e. Python)')
+parser.add_argument('-F', '--file-support', type=bool, default=True,
+                    action=argparse.BooleanOptionalAction,
+                    help='Enable `FILE:` support')
 parser.add_argument('-N', '--optimized-sequential-next-step', type=bool, default=True,
                     action=argparse.BooleanOptionalAction,
                     help='Directly advance to next step for sequential plan (without needing LLM to decide.)')
@@ -42,25 +50,25 @@ parser.add_argument('-S', '--summarize', type=bool, default=True,
 # token usage controls
 parser.add_argument('-t', '--max-tokens', type=int, default=10000, help='Maximum number of tokens')
 parser.add_argument('--max-tokens-for-sage-llm', type=int, default=None, help='Maximum tokens for sage LLM')
-parser.add_argument('-r', '--max-retries', type=int, default=3, help='Maximum number of retries')
-parser.add_argument('-s', '--use-sage-llm-for-initial-expansion', type=bool, default=True,
+parser.add_argument('--max-retries', type=int, default=3, help='Maximum number of retries')
+parser.add_argument('--use-sage-llm-for-initial-expansion', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Use sage LLM for initial expansion')
 
 # user interactions
 parser.add_argument('--silence', type=int, default=0,
                     help='Level of console printouts: 0: print conversation; 1: do not print conversation.')
-parser.add_argument('-Q', '--ask-user-questions-in-one-prompt', type=bool, default=False,
+parser.add_argument('--ask-user-questions-in-one-prompt', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Ask user questions in one prompt')
-parser.add_argument('-E', '--ask-user-before-execute-codes', type=bool, default=True,
+parser.add_argument('--ask-user-before-execute-codes', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Ask user before execute codes')
-parser.add_argument('-P', '--pause-after-initial-solving-expansion', type=bool, default=True,
+parser.add_argument('--pause-after-initial-solving-expansion', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Pause after initial solving expansion')
-parser.add_argument('-B', '--pause-on-backtrack', type=bool, default=True,
+parser.add_argument('--pause-on-backtrack', type=bool, default=True,
                     action=argparse.BooleanOptionalAction, help='Pause when a backtrack is requested')
 
-# separate settings
+# runtime settings
 parser.add_argument('-p', '--path', type=str, required=True, help='Directory path for log and outputs')
-parser.add_argument('-llm', '--llm', type=str, default='gpt-4-turbo',
+parser.add_argument('-L', '--llm', type=str, default='gpt-4-turbo',
                     help='Default LLM model name')
 parser.add_argument('--sage-llm', type=str, default=None,
                     help='Sage LLM model name')
@@ -75,9 +83,9 @@ parser.add_argument('-C', '--openai-credential', type=str, default=None,
                     help='Path of .ini or .json file containing key-value pair for `OPENAI_API_KEY`, '
                          '`OPENAI_API_BASE`, etc. (under the `DEFAULT` section for `.ini` file),'
                          'corresponding to the same OpenAI credential environment variables respectively')
-parser.add_argument('-D', '--debug', type=bool, default=False,
+parser.add_argument('--debug', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Enable debugging')
-parser.add_argument('-L', '--load-chain', type=bool, default=False,
+parser.add_argument('--load-chain', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='The task is the pickle file containing the state of '
                                                                 'a previous problem solving session.')
 

@@ -110,7 +110,8 @@ class Orchestrator(Executor):
                              f"or a PresentTaskStep object, got {type(task)}")
         self.reset()
         self.chain.append(root_step)
-        work_next_step = ProceedStep(description=self.prompts.tao_proceed,
+        step_id = f"[step#{self.step_id(root_step)}: task statement]"
+        work_next_step = ProceedStep(description=self.prompts.tao_proceed_to_step.format(plan="root", step=step_id),
                                      role=ROLE_ORCHESTRATOR,
                                      first_expansion=self.config.initial_expansion,
                                      max_expansion=self.config.max_search_expansion,
@@ -396,7 +397,9 @@ class Orchestrator(Executor):
                            retry_prompt: str):
         if n_retries >= self.config.max_retries:
             raise e
-        if _utils.safe_is_instance(e, ParseError) and len(prompts_to_be_sent) <= len(prompts):
+        if _utils.safe_is_instance(e, ParseError):
+            prompts_to_be_sent.clear()
+            prompts_to_be_sent.extend(prompts)
             prompts_to_be_sent.append((ROLE_TAO, response))
             message = retry_prompt.format(error=str(e))
             prompts_to_be_sent.append((ROLE_ORCHESTRATOR, message))

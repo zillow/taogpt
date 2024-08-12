@@ -10,17 +10,22 @@ def _read(path) -> str:
 
 
 class PromptDb:
-    def __init__(self, path=_template_dir):
+    def __init__(self, path=_template_dir, ask_questions=True, ask_genie=True, file_support=True):
+        self._ask_questions = ask_questions
+        self._ask_genie = ask_genie
+        self._file_support = file_support
         self.tao_intro=_read(path / 'tao.md')
+
         self._tao_templates=_read(path / 'tao_templates.md')
-        self.snippet_direct_answer_next_step =_read(path / 'snippet_direct_answer_next_step.md')
+        self.snippet_op_files =_read(path / 'snippet_op_files.md')
+        self.snippet_op_ask_questions =_read(path / 'snippet_op_ask_questions.md')
+        self.snippet_op_ask_genie =_read(path / 'snippet_op_ask_genie.md')
+
         self.snippet_next_step=_read(path / 'snippet_next_step.md')
         self.snippet_notes_for_files=_read(path / 'snippet_notes_for_files.md')
         self.sage_rank_choices=_read(path / 'sage_rank_choices.md')
         self.sage_rank_instructions=_read(path / 'sage_rank_instructions.md')
         self.tao_next_step=_read(path / 'tao_next_step.md')
-        self.tao_proceed=_read(path / 'tao_proceed.md')
-        self.tao_proceed_intuitively=_read(path / 'tao_proceed_intuitively.md')
         self.tao_proceed_to_step=_read(path / 'tao_proceed_to_step.md')
         self.orchestrator_parse_error=_read(path / 'orchestrator_parse_error.md')
         self.tao_prior_approaches=_read(path / 'tao_prior_approaches.md')
@@ -36,23 +41,20 @@ class PromptDb:
         self.tao_encourage_question=_read(path / 'tao_encourage_question.md')
         self.orchestrator_note_past_criticisms =_read(path / 'orchestrator_note_past_criticisms.md')
 
-        decl_next_step = self.snippet_direct_answer_next_step
-        self.tao_templates_with_next_step = self._tao_templates.format(
+        self.tao_template = self._tao_templates.format(
+            snippet_op_ask_genie=self.snippet_op_ask_genie if self._ask_genie else '',
+            snippet_op_ask_questions=self.snippet_op_ask_questions if self._ask_questions else '',
             snippet_report_errors=self.snippet_report_errors,
-            snippet_direct_answer_next_step=decl_next_step,
-            snippet_notes_for_files=self.snippet_notes_for_files)
-        self.tao_templates_without_next_step = self._tao_templates.format(
-            snippet_report_errors=self.snippet_report_errors,
-            snippet_direct_answer_next_step='',
-            snippet_notes_for_files=self.snippet_notes_for_files)
+            snippet_op_files=self.snippet_op_files if self._file_support else '')
 
     def reload(self, path: _path.Path=_template_dir) -> PromptDb:
-        self.__init__(path)
+        self.__init__(
+            path, ask_questions=self._ask_questions, ask_genie=self._ask_genie, file_support=self._file_support)
         return self
 
     def to_dict(self) -> dict[str, str]:
-        return vars(self)
+        return {k: v for k, v in vars(self).items() if isinstance(v, str)}
 
     @staticmethod
-    def load_defaults():
-        return PromptDb()
+    def load_defaults(ask_questions=True, ask_genie=True, file_support=True):
+        return PromptDb(ask_questions=ask_questions, ask_genie=ask_genie, file_support=file_support)

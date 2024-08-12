@@ -113,7 +113,8 @@ def create_orchestrator(
     sage_llm = fix_model_name(sage_llm, default_to=llm)
     long_llm = fix_model_name(get_long_model(long_llm), default_to=llm)
     long_sage_llm = fix_model_name(get_long_model(long_sage_llm), default_to=sage_llm)
-    prompts = PromptDb.load_defaults()
+    prompts = PromptDb.load_defaults(ask_questions=config.ask_questions, ask_genie=config.ask_genie,
+                                     file_support=config.file_support)
     logger = MarkdownLogger(_p.Path(log_path) / 'taogpt_log.md', log_debug=debug, console_out=log_to_stdout)
     long_ctx_llm = _ChatOpenAI(model_name=long_llm) if long_llm is not None and long_llm != llm else None
     primary_model = LangChainLLM(_ChatOpenAI(model_name=llm), logger=logger, max_token_usage=config.max_tokens * 2,

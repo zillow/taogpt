@@ -144,22 +144,6 @@ def test_parse_next_step_done2():
     assert answer == f"# {REPORT_ERROR}\n{answer_details}".strip()
 
 
-def test_parse_next_step_next_missing_next_work_at():
-    next_plan = """# HERE_IS_MY_STEP_BY_STEP_PLAN
-1. step A
-2. step B
-"""
-    text = f"""I want to work on: the_next_step
-
-{next_plan}
-    """
-    try:
-        parsing.parse_next_step_reply(text)
-        assert False, "Expecting ParseError not raised"
-    except taogpt.exceptions.ParseError:
-        pass
-
-
 def test_parse_next_step_reply_example():
     details = """```python
 # Python code with comment
@@ -178,12 +162,12 @@ a + b
 
 The end"""
     text = f"""
-# NEXT_I_WANT_TO_WORK_AT
-
 ```json
 {{
-    "next_step": "setup",
-    "done with [step#22: check arithmetics]": true
+    "next_to_work_at": {{
+        "next_step": "setup",
+        "done with [step#22: check arithmetics]": true
+    }}
 }}
 ```
 
@@ -362,24 +346,26 @@ def test_parse_sections_with_colons():
 document.getElementById('log-display').style.overflow = 'auto';
 ```
 
-# NEXT_I_WANT_TO_WORK_AT:: 
-Implement the client-side logic for handling user inputs and actions"""
+# SECTION_2::
+content for this section"""
     sections = parsing.parse_sections(text, section_level='#')
     assert len(sections) == 2
-    assert NEXT_I_WANT_TO_WORK_AT in sections
+    assert "SECTION_2" in sections
 
 
 def test_parse_next_step():
     text = """
     ```json
     {
-        "done with [step#1: top-level plan]": true,
-        "next_step": "all done",
-        "difficulty": 8
+        "next_to_work_at": {
+            "done with [step#1: top-level plan]": true,
+            "next_step": "all done",
+            "difficulty": 8
+        }
     }
     ```
     """
-    next_step = parsing.parse_next_step_spec(text)
+    next_step, _ = parsing.parse_next_step_spec(text)
     assert next_step.next_step_desc == "all done"
     assert next_step.target_plan_id == 1
     assert next_step.target_plan_tag == "step#1: top-level plan"
@@ -389,19 +375,9 @@ def test_parse_next_step():
 
 def test_parse_next_step_invalid():
     text = """
-    "done with [step#1: top-level plan]": true,
-    "next_step": "all done"
-    """
-    try:
-        parsing.parse_next_step_spec(text)
-        assert False, "Expecting ParseError not raised"
-    except taogpt.exceptions.ParseError as e:
-        pass
-    text = """
     ```json
     {
-        "done with [top-level plan]": true,
-        "next_step": "all done"
+        "next_to_work_at": {"done with [top-level plan]": true, "next_step": "all done"}
     }
     ```
     """

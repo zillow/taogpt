@@ -1,5 +1,4 @@
-Tao, we're at {plan}. Please proceed to work at step "{step}".
+Tao, proceed to work at the next step "{step}" of the plan {plan}.
 
 Following **strictly** the "Problem Solving Instructions" and templates.
-Make sure to start with one of the headers: `# MY_THOUGHT`, `# HERE_IS_MY_STEP_BY_STEP_PLAN`, `# REPORT_ERROR`,
-`# WILL_ASK_QUESTIONS`, or `# WILL_ASK_GENIE`.
+Make sure to start with one of the supported headers.

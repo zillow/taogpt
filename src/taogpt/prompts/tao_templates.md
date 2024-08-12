@@ -9,34 +9,10 @@ Given problem solving session so far, choose one of the following actions:
 Error report is only for previous executed steps. Do NOT errors in other proposals. If you found issues in other 
 proposals, you should come up with a new proposal avoiding those issues.
 
-## Ask questions
-
-Many problems requires clarifications. Ask questions to clarify, but avoid obvious, trivial, 
-redundant, useless questions, or questions which you should be answering. You should try to ask all questions you 
-need up front. You must follow the following template **strictly** so the orchestrator can parse it and show the 
-questions to the user. Nobody would answer if you try to ask questions using other actions or format.
-
-```markdown
-# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED
-<optional introductory and analysis>
-
-1. <question>
-2. <question>
-...
-```
-
 ## Make a step-by-step plan
 
-Deliberate on this task step, outline a sequence of high-level, action-oriented plan.
-
-* Outcome-oriented! Pay attention to the intention of the task problem. The action plan is for reaching the solution;
-  do not describe the internal workings, that's part of a direct answer.
-* Think abstract and high-level. Avoid detailed, specific, fixed-value, and low-level ones, because it is impossible 
-  to try alternative values in detailed plans in case of errors. For example, choose "Find and set missing elements 
-  to fill-in values" instead of "Set 2nd and 5th elements to 22".
-* Worship Occam's razor. If the task asks for skipping something, try to obey it.
-
-Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
+Deliberate on this task step, outline a sequence of sub-tasks.
+Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each sub-task later.
 
 Follow this markdown template:
 
@@ -48,14 +24,13 @@ Follow this markdown template:
 {{
   "1": {{
     "description": "<high-level description without details>", 
-    "difficulty": 1 to 10 // level of difficulty; 10 is most difficult
+    "recursive": true or false, // is this sub-step recursive of the parent
+    "difficulty": 1 to 10, // level of difficulty; 10 is most difficult
+    "sub_steps": {{
+        // ... nested sub-tasks ...
+    }}
   }},
-  "2": {{
-        "description": "<high-level description without details>", "difficulty": 1 to 10,
-        "sub_steps": {{
-            // ... nested sub-tasks ...
-        }}
-       }},
+  "2": {{ ... }},
   // ...
   "branching_among_steps": true or false, // does this plan contain any conditional branching or early stopping/breaking AMONG its peer steps?
   "looping_among_steps": true or false // does this plan contain any loop AMONG its peer steps?
@@ -63,8 +38,7 @@ Follow this markdown template:
 ```
 `````
 
-The Orchestrator requires that final verification steps only check the answers and summarization steps only 
-summarize verbally what have been done, neither without making any real changes.
+No need to declare the next step for this choice because the next step is the first in the plan.
 
 ## Answer directly
 
@@ -76,44 +50,11 @@ Follow this template:
 # MY_THOUGHT
 <answer and explanation>
 
-### FILE: <path_to_be_create>/<file_name>
-<file content section only in need of writing a file>
-
-{snippet_direct_answer_next_step}
+<declare the next step to work at; see the notes below.>
 `````
 
-{snippet_notes_for_files}
+{snippet_op_files}
 
-## Ask the Python Genie
+{snippet_op_ask_questions}
 
-The Python Genie is a sandboxed Python interpreter with standard library and numpy. It is a useful tool to help Tao 
-solve problems. It's stateful and previously defined globals can be used without redefining.
-
-Follow the good example below to ask Genie:
-`````markdown
-# LET_ME_ASK_THE_PYTHON_GENIE
-<brief explanation of what the code snippet is for>
-
-```python
-def fib(n):
-    return fib(n-1) + f(n-2) if n > 1 else 1
-print(f"Tao sucks at math but he's a superb Python programmer! Here is the answer {{fib(22)}}")
-```
-`````
-
-Bad example:
-`````markdown
-# LET_ME_ASK_THE_PYTHON_GENIE
-Here is the `fib.py` Python file you want:
-```python
-def fib(n): # method fib(n)
-return fib(n-1) + f(n-2) if n > 1 else 1
-```
-`````
-Issues with this example:
-1. The task asks for a file but Tao attempts to execute codes; should respond using direct file section answer.
-2. Not paying attention to Python indentation.
-3. The code comment is redundant; avoid useless comments
-
-Important notes:
-* Respect the original task problem! Do NOT alter inadvertently.
+{snippet_op_ask_genie}

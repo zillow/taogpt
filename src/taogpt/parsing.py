@@ -9,24 +9,23 @@ import re as _re
 import typing as _t
 import dataclasses as _dc
 import taogpt.utils as _utils
-from taogpt.constants import (
-    FREE_TEXT,
-    NEXT_I_WANT_TO_WORK_AT,
-    PRIOR_PROPOSAL,
-    REPORT_ERROR
-)
+from taogpt.constants import *
 from taogpt.exceptions import ParseError, UnbalancedBlockParseError
 
 _logger = _logging.getLogger(__file__)
 
-step_type_re = _re.compile(
-    r"(^|\n)#{1,2}\s*(MY_THOUGHT"
-    r"|LET_ME_ASK_THE_PYTHON_GENIE"
-    r"|I_FOUND_ERRORS"
-    r"|FINAL_ANSWER"
-    r"|I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED"
-    r"|HERE_IS_MY_STEP_BY_STEP_PLAN).*\n((.|\n)+)"
-)
+_dash_or_slash = r'[_\-]'
+
+_action_re = (rf"{MY_THOUGHT.replace('_', _dash_or_slash)}"
+    rf"|{WILL_ASK_GENIE.replace('_', _dash_or_slash)}"
+    rf"|{WRITE_FILE.replace('_', _dash_or_slash)}"
+    rf"|{REPORT_ERROR.replace('_', _dash_or_slash)}"
+    rf"|{WILL_ASK_QUESTIONS.replace('_', _dash_or_slash)}"
+    rf"|{HERE_IS_MY_STEP_BY_STEP_PLAN.replace('_', _dash_or_slash)}")
+
+step_type_re = _re.compile(r"(^|\n)#{1,2}\s*(" + _action_re + r").*\n((.|\n)+)")
+action_type_re = _re.compile(r"#{1,2}\s*(" + _action_re + r")")
+
 _true_false_answer_re = _re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
                                    flags=_re.MULTILINE|_re.DOTALL|_re.IGNORECASE)
 _whitespace_re = _re.compile(r"\s+", flags=_re.DOTALL)
@@ -64,16 +63,24 @@ def parse_step_name(text: str|None) -> tuple[str|None, str|None]:
     return (match.group(2), match.group(4)) if match is not None else (None, None)
 
 
-def parse_step_type_spec(text: str) -> tuple[str|None, str|None]|None:
+def parse_step_type_spec(text: str, working_on:str=None) -> tuple[str|None, str|None]|None:
     text = _utils.str_or_blank(text)
     if text == '':
         return None, None
+    n_actions = len(action_type_re.findall(text))
+    if n_actions > 1:
+        msg = f"Expecting 1 action heading but found {n_actions}."
+        if _utils.str_or_blank(working_on) != '':
+            msg += f" Please respond with one action for the step '{working_on}' only."
+        raise ParseError(msg)
     match: _re.Match = step_type_re.search(text)
     if match is None:
         return None, None
+    step_type: str
     step_type, definition = match.group(2), _utils.str_or_blank(match.group(3))
     if definition == '':
         return None, None
+    step_type = step_type.replace('-', '_')
     return step_type, definition
 
 
@@ -179,25 +186,27 @@ class NextStepDesc:
         return next_step_dict
 
 
-def parse_next_step_spec(text: str) -> NextStepDesc:
-    next_step_response: dict[str, str|bool] = parse_json_hash(text)
+def parse_next_step_spec(text: str, required=False) -> tuple[NextStepDesc|None, str]:
+    text, fenced_blocks = check_and_fix_fenced_blocks(text, collapse_blocks=True)
+    next_step_response: dict[str, _t.Any]|None = None
+    for block_key, (fenced_block, content_type, backticks, block_content) in fenced_blocks.items():
+        try:
+            payload = json.loads(block_content)
+            if isinstance(payload, dict) and 'next_to_work_at' in payload:
+                next_step_response = payload['next_to_work_at']
+                text = text.replace(block_key, '')
+                continue
+        except json.JSONDecodeError:
+            pass
+        text = text.replace(block_key, fenced_block)
+    if next_step_response is None:
+        if required:
+            raise ParseError("Expecting a fenced block of JSON type with key `next_to_work_at`, but not found")
+        return None, text
     target_plan_id: int|None = None
     target_plan_desc: str|None = None
     target_plan_tag: str|None = None
     target_done: bool|None = None
-    for key, value in next_step_response.items():
-        matched = _re.match(r"^\s*done\s+with\s+\[*([^]]+)", key)
-        if matched:
-            target_plan_id, target_plan_desc = parse_step_id_and_name(matched.group(1), key=key)
-            target_plan_tag = f"step#{target_plan_id}: {target_plan_desc}"
-            target_done = value
-            break
-    plan_of_next_step = next_step_response.get('plan_of_next_step', None)
-    if target_done:
-        if plan_of_next_step is not None:
-            next_plan_id, next_plan_desc = parse_step_id_and_name(plan_of_next_step, ok_without_step_id=True)
-            if target_plan_id == next_plan_id or target_plan_desc == next_plan_desc:
-                target_plan_id, target_plan_tag, target_done = None, None, False
     next_step = next_step_response.get('step', next_step_response.get('next_step', None))
     if not isinstance(next_step, str):
         raise ParseError(f"The key `next_step` must have a string value indicating the next step.")
@@ -205,9 +214,24 @@ def parse_next_step_spec(text: str) -> NextStepDesc:
         raise ParseError(f'No next step specified. Set next step description to the `next_step` key.')
     elif next_step not in ('all done', 'done'):
         _, next_step = parse_step_id_and_name(next_step, ok_without_step_id=True)
+
+    for key, value in next_step_response.items():
+        matched = _re.match(r"^\s*done\s+with\s+\[*([^]]+)", key)
+        if matched:
+            target_plan_id, target_plan_desc = parse_step_id_and_name(matched.group(1), key=key)
+            target_plan_tag = f"step#{target_plan_id}: {target_plan_desc}"
+            target_done = value
+            break
+    plan_of_next_step: str|None = next_step_response.get('plan_of_next_step', None)
+    if target_done:
+        if plan_of_next_step is not None:
+            next_plan_id, next_plan_desc = parse_step_id_and_name(plan_of_next_step, ok_without_step_id=True)
+            if target_plan_id == next_plan_id or target_plan_desc == next_plan_desc:
+                target_plan_id, target_plan_tag, target_done = None, None, False
     difficulty = next_step_response.get('difficulty', 5)
-    return NextStepDesc(target_plan_id=target_plan_id, target_plan_tag=target_plan_tag, target_plan_done=target_done,
-                        next_step_desc=next_step, plan_of_next_step=plan_of_next_step, difficulty=difficulty)
+    return (NextStepDesc(target_plan_id=target_plan_id, target_plan_tag=target_plan_tag, target_plan_done=target_done,
+                        next_step_desc=next_step, plan_of_next_step=plan_of_next_step, difficulty=difficulty),
+            text.strip())
 
 
 def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tuple[int, str]]|None]], dict]:
@@ -305,12 +329,19 @@ def parse_give_up_response(description: str) -> dict[str, tuple[str, list[tuple[
     return issues
 
 
-@_dc.dataclass
+@_dc.dataclass(eq=False)
 class StepDescriptor:
     description: str
     why: str|None
     sub_steps: dict[str, _t.Any]|None = None
     difficulty: int = 5
+
+    def __eq__(self, __value):
+        if self is __value:
+            return True
+        if not isinstance(__value, self.__class__):
+            return False
+        return self.description == __value.description
 
 
 def parse_step_by_step_plan(text: str) -> tuple[dict[int, StepDescriptor], bool, bool]:
@@ -441,10 +472,7 @@ def parse_next_step_reply(text: str) -> tuple[str, NextStepDesc|str]:
         if section in sections:
             remaining = sections.pop(section)
             return section, f"# {section}\n{remaining}"
-    if NEXT_I_WANT_TO_WORK_AT not in sections:
-        raise ParseError(f"No section header `# {NEXT_I_WANT_TO_WORK_AT}`")
-    next_step_desc = sections.pop(NEXT_I_WANT_TO_WORK_AT).strip()
-    next_step = parse_next_step_spec(next_step_desc)
+    next_step, _ = parse_next_step_spec(text, required=False)
     return NEXT_I_WANT_TO_WORK_AT, next_step
 
 
@@ -511,7 +539,7 @@ def gather_file_contents(sections: dict[str, str], pop_file_sections=False, uniq
         collapsed, blocks = check_and_fix_fenced_blocks(markdown_full_content, collapse_blocks=True)
         if len(blocks) != 1:
             raise ParseError(f"File content in section `{section}` must be in one Markdown fenced block.")
-        digest, (snippet, content_type, line_number) = next(iter(blocks.items()))
+        digest, (snippet, content_type, line_number, _) = next(iter(blocks.items()))
         if snippet is None:
             raise ParseError(f"No content (in markdown fenced block) for section '{section}'")
         block_lines = snippet.split('\n')
@@ -536,10 +564,10 @@ _fenced_block_quote_re = _re.compile(r"^(\s*)(`{3,})(\S*)\s*$")
 
 
 def check_and_fix_fenced_blocks(markdown_text: str, collapse_blocks=False) \
-        -> tuple[str, dict[str, tuple[str, str, int]]]:
+        -> tuple[str, dict[str, tuple[str, str, int, str]]]:
     stack = []
     top_level_blocks: dict[int, list[str]] = dict()
-    blocks_by_hash: dict[str, tuple[str, str, int]] = dict()
+    blocks_by_hash: dict[str, tuple[str, str, int, str]] = dict()
 
     lines = markdown_text.split('\n')
     result = []
@@ -596,12 +624,11 @@ An outer fenced block's backtick quote
                 if current_top_level_block_lines is not None:
                     current_top_level_block_lines.append(normalized_backticks)
                 if len(stack) == 0:
-                    block_content = '\n'.join(current_top_level_block_lines)
-                    if "# NEXT_I_WANT_TO_WORK_AT" in block_content:
-                        raise ParseError("There is a heading line `NEXT_I_WANT_TO_WORK_AT` in the fenced block. "
-                                         "Looks like the block is not closed properly.", original=markdown_text)
-                    digest = _hashlib.sha256(block_content.encode('UTF-8')).hexdigest()
-                    blocks_by_hash[digest] = (block_content, open_fence[2], open_line)
+                    markdown_block = '\n'.join(current_top_level_block_lines)
+                    digest = _hashlib.sha256(markdown_block.encode('UTF-8')).hexdigest()
+                    block_content = '\n'.join(current_top_level_block_lines[1:])
+                    block_content = block_content.replace(open_fence[1], '')
+                    blocks_by_hash[digest] = (markdown_block, open_fence[2], open_line, block_content)
                     if collapse_blocks:
                         result.append(digest)
                     current_top_level_block_lines = None
