@@ -106,6 +106,9 @@ class Config:
     # logging
     collapse_long_prompts: bool = True
 
+    def get_temperature(self, nth_try: int):
+        return self.first_try_temperature if nth_try == 0 else self.alternative_temperature
+
 
 class Executor(_abc.ABC):
 

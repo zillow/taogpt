@@ -19,51 +19,68 @@ parser = argparse.ArgumentParser(
 )
 
 # hyperparameters
-parser.add_argument('-i', '--initial-expansion', type=int, default=3, help='Initial expansion factor')
-parser.add_argument('-f', '--first-expansion', type=int, default=1, help='First expansion factor')
-parser.add_argument('-T0', '--first-try-temperature', type=float, default=0.0, help='First try temperature')
-parser.add_argument('-T1', '--alternative-temperature', type=float, default=0.7, help='Alternative temperature')
-parser.add_argument('-m', '--max-search-expansion', type=int, default=4, help='Maximum search expansion')
-parser.add_argument('-R', '--max-repairs', type=int, default=4, help='Maximum repairs attempted')
-parser.add_argument('-v', '--votes', type=int, default=1, help='Number of votes')
-parser.add_argument('-V', '--verification-votes', type=int, default=3, help='Number of votes')
-parser.add_argument('-c', '--n-final-checks', type=int, default=3,
+_proto_config = Config()
+parser.add_argument('-i', '--initial-expansion', type=int,
+                    default=_proto_config.initial_expansion, help='Initial expansion factor')
+parser.add_argument('-f', '--first-expansion', type=int,
+                    default=_proto_config.first_expansion, help='First expansion factor')
+parser.add_argument('-T0', '--first-try-temperature', type=float,
+                    default=_proto_config.first_try_temperature, help='First try temperature')
+parser.add_argument('-T1', '--alternative-temperature', type=float,
+                    default=_proto_config.alternative_temperature, help='Alternative temperature')
+parser.add_argument('-m', '--max-search-expansion', type=int,
+                    default=_proto_config.max_search_expansion, help='Maximum search expansion')
+parser.add_argument('-R', '--max-repairs', type=int,
+                    default=_proto_config.max_repairs, help='Maximum repairs attempted')
+parser.add_argument('-v', '--votes', type=int,
+                    default=_proto_config.votes, help='Number of votes')
+parser.add_argument('-V', '--verification-votes', type=int,
+                    default=_proto_config.verification_votes, help='Number of votes')
+parser.add_argument('-c', '--n-final-checks', type=int,
+                    default=_proto_config.n_final_checks,
                     action=argparse.BooleanOptionalAction, help='Number of final verifications')
 
 # behavioral
-parser.add_argument('-Q', '--ask-questions', type=bool, default=True,
+parser.add_argument('-Q', '--ask-questions', type=bool, default=_proto_config.ask_questions,
                     action=argparse.BooleanOptionalAction,
                     help='Enable proactive clarification questioning')
-parser.add_argument('-E', '--ask-genie', type=bool, default=True,
+parser.add_argument('-E', '--ask-genie', type=bool, default=_proto_config.ask_genie,
                     action=argparse.BooleanOptionalAction,
                     help='Enable code execution (in a runtime environment, i.e. Python)')
-parser.add_argument('-F', '--file-support', type=bool, default=True,
+parser.add_argument('-F', '--file-support', type=bool, default=_proto_config.file_support,
                     action=argparse.BooleanOptionalAction,
                     help='Enable `FILE:` support')
-parser.add_argument('-N', '--optimized-sequential-next-step', type=bool, default=True,
+parser.add_argument('-N', '--optimized-sequential-next-step', type=bool,
+                    default=_proto_config.optimized_sequential_next_step,
                     action=argparse.BooleanOptionalAction,
                     help='Directly advance to next step for sequential plan (without needing LLM to decide.)')
-parser.add_argument('-S', '--summarize', type=bool, default=True,
+parser.add_argument('-S', '--summarize', type=bool, default=_proto_config.summarize,
                     action=argparse.BooleanOptionalAction,
                     help='Do summarize')
 
 # token usage controls
-parser.add_argument('-t', '--max-tokens', type=int, default=10000, help='Maximum number of tokens')
-parser.add_argument('--max-tokens-for-sage-llm', type=int, default=None, help='Maximum tokens for sage LLM')
-parser.add_argument('--max-retries', type=int, default=3, help='Maximum number of retries')
-parser.add_argument('--use-sage-llm-for-initial-expansion', type=bool, default=True,
+parser.add_argument('-t', '--max-tokens', type=int,
+                    default=_proto_config.max_tokens, help='Maximum number of tokens')
+parser.add_argument('--max-tokens-for-sage-llm', type=int,
+                    default=_proto_config.max_tokens_for_sage_llm, help='Maximum tokens for sage LLM')
+parser.add_argument('--max-retries', type=int,
+                    default=_proto_config.max_retries, help='Maximum number of retries')
+parser.add_argument('--use-sage-llm-for-initial-expansion', type=bool,
+                    default=_proto_config.use_sage_llm_for_initial_expansion,
                     action=argparse.BooleanOptionalAction, help='Use sage LLM for initial expansion')
 
 # user interactions
-parser.add_argument('--silence', type=int, default=0,
-                    help='Level of console printouts: 0: print conversation; 1: do not print conversation.')
-parser.add_argument('--ask-user-questions-in-one-prompt', type=bool, default=False,
+parser.add_argument('--ask-user-questions-in-one-prompt', type=bool,
+                    default=_proto_config.ask_user_questions_in_one_prompt,
                     action=argparse.BooleanOptionalAction, help='Ask user questions in one prompt')
-parser.add_argument('--ask-user-before-execute-codes', type=bool, default=True,
+parser.add_argument('--ask-user-before-execute-codes', type=bool,
+                    default=_proto_config.ask_user_before_execute_codes,
                     action=argparse.BooleanOptionalAction, help='Ask user before execute codes')
-parser.add_argument('--pause-after-initial-solving-expansion', type=bool, default=True,
+parser.add_argument('--pause-after-initial-solving-expansion', type=bool,
+                    default=_proto_config.pause_after_initial_solving_expansion,
                     action=argparse.BooleanOptionalAction, help='Pause after initial solving expansion')
-parser.add_argument('--pause-on-backtrack', type=bool, default=True,
+parser.add_argument('--pause-on-backtrack', type=bool,
+                    default=_proto_config.pause_on_backtrack,
                     action=argparse.BooleanOptionalAction, help='Pause when a backtrack is requested')
 
 # runtime settings
@@ -86,8 +103,8 @@ parser.add_argument('-C', '--openai-credential', type=str, default=None,
 parser.add_argument('--debug', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Enable debugging')
 parser.add_argument('--load-chain', type=bool, default=False,
-                    action=argparse.BooleanOptionalAction, help='The task is the pickle file containing the state of '
-                                                                'a previous problem solving session.')
+                    action=argparse.BooleanOptionalAction,
+                    help='The task is the pickle file containing the state of a previous problem solving session.')
 
 # last positional argument as the string of task
 parser.add_argument('user_task', type=str, nargs='?', default=None,

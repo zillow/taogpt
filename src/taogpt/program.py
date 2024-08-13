@@ -270,7 +270,7 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
                 response = executor.llm.ask(
                     executor.prompts.tao_intro,
                     to_be_sent,
-                    temperature=0.0 if n_retries == 0.0 else config.alternative_temperature,
+                    temperature=config.get_temperature(len(self._criticisms) + n_retries),
                     reason=f"fix",
                     step_id=f"{executor.step_id(self)}/{len(self._criticisms)}#{n_retries}")
                 response = _utils.str_or_blank(response)
@@ -381,7 +381,7 @@ class ConsolidateFileStep(WriteFileStep):
                     system_prompt, to_be_sent,
                     reason=self.TYPE_SPEC,
                     step_id=f"{executor.step_id(self)}#{n_retries}",
-                    temperature=0.0 if n_retries == 0 else executor.config.alternative_temperature)
+                    temperature=executor.config.get_temperature(n_retries))
                 if len(self.collected_files) != 1 or self._file_name not in self.collected_files:
                     raise ParseError(f"You should respond (only) with the complete content of file {self._file_name}")
                 self.finish_consolidation(last_version)
@@ -621,7 +621,7 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
                     prompts_to_be_sent,
                     reason=reason,
                     step_id=f"{step_id}/{i}#{n_retries}",
-                    temperature=0.0)
+                    temperature=config.get_temperature(i + n_retries))
                 issues, full_json = parse_verification_response(response)
                 matched_step_by_steps: set[int] = set()
                 for severity, blames in issues.values():
@@ -852,7 +852,7 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
                 response = executor.llm.ask(
                     executor.prompts.tao_intro,
                     to_be_sent,
-                    temperature=0.0 if n_retries == 0.0 else executor.config.alternative_temperature,
+                    temperature=executor.config.get_temperature(self.n_tries + n_retries),
                     reason="repair",
                     step_id=f"{self.n_tries}#{n_retries}")
                 response = _utils.str_or_blank(response)
@@ -1041,8 +1041,7 @@ class ExpandableStep(Step):
             plan: str|None = None
             while n_retries < config.max_retries:
                 try:
-                    temperature = config.first_try_temperature if len(self.choices) == 0 \
-                        else config.alternative_temperature
+                    temperature = config.get_temperature(len(self.choices) + n_retries)
                     plan = llm.ask(
                         system_prompt, prompts_to_be_sent,
                         reason=self._expansion_reason,
@@ -1158,7 +1157,7 @@ class ExpandableStep(Step):
                         system_prompt, prompts_to_be_sent,
                         reason='rank_choices',
                         step_id=f"{executor.step_id(self)}/{n_success}#{n_retries}",
-                        temperature=config.first_try_temperature if n_success == 0 else config.alternative_temperature)
+                        temperature=config.get_temperature(n_success) + n_retries)
                     scores, dupes = parse_ranking_response(response, len(self.choices))
                     for plan, score in scores.items():
                         rankings_one_based[plan] += score
@@ -1342,7 +1341,7 @@ class NextStep(Step):
                     system_prompt, to_be_sent,
                     reason='next_step',
                     step_id=f"{executor.step_id(self)}#{n_retries}",
-                    temperature=0.0 if n_retries == 0 else executor.config.alternative_temperature)
+                    temperature=executor.config.get_temperature(n_retries))
                 proceed_step = self.parse_reply(response, executor)
                 self.set_visible_in_chain(False)
                 return proceed_step

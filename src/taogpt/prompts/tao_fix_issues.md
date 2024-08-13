@@ -13,3 +13,4 @@ Please fix the issues and rewrite the **full** answer adding brief notes of what
    issues. 
 4. If you disagree with the reported issue or find no need to change anything, then respond with `No change because of <explanation>`.
 5. Do not add any phatic expressions.
+6. Do NOT update other steps, as we've already fixed them. Update only [step#{step_id}: {step}].
