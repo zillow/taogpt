@@ -1324,11 +1324,14 @@ class NextStep(Step):
         last_step = _t.cast(Step, executor.chain[-2])
         last_step_tag = last_step.step_name_tag(executor.step_id(last_step))
         parent_plan, plan_id = StepByStepPlan.find_last_step_by_step(executor, before=self)
-        assert parent_plan is not None
-        snippet_next_step = prompt_db.snippet_next_step.format(step=parent_plan.step_name_tag(plan_id))
+        if parent_plan is None:
+            parent_plan = executor.select_steps(PresentTaskStep)[-1]
+            plan_id = executor.step_id(parent_plan)
+        parent_tag = parent_plan.step_name_tag(plan_id)
+        snippet_next_step = prompt_db.snippet_next_step.format(step=parent_tag)
         tao_next_step = prompt_db.tao_next_step.format(
             last_step=last_step_tag,
-            at_plan=parent_plan.step_name_tag(plan_id),
+            at_plan=parent_tag,
             snippet_next_step=snippet_next_step,
             snippet_report_errors=prompt_db.snippet_report_errors)
         prompts.append((ROLE_ORCHESTRATOR, tao_next_step))
@@ -1618,26 +1621,23 @@ class SummarizeStep(SummarizeStepABC):
 def proceed_next(current_step: Step, executor: Executor, next_step_spec: NextStepDesc, difficulty: int=5) -> Step:
     current_index = executor.step_id(current_step)
     assert current_index == len(executor.chain)-1
+
+    if next_step_spec.is_final_step:
+        return _t.cast(Step, executor.summarize_final_answer())
+    if next_step_spec.target_plan_id is not None and next_step_spec.target_plan_done:
+        finished_plan = _t.cast(Step, executor.chain[next_step_spec.target_plan_id])
+        partial = _t.cast(list[Step], executor.chain[next_step_spec.target_plan_id:current_index + 1])
+        summarize = SummarizePartialStep(step_name=finished_plan.step_name, shadowing=partial)
+        if _utils.safe_is_instance(finished_plan.created_by, ExpandableStep):
+            _t.cast(ExpandableStep, finished_plan.created_by).insert_choice(summarize, increase_max=True)
+        return summarize
+
     matched_plan, _ = StepByStepPlan.find_last_step_by_step(executor, before=current_index)
     if matched_plan.sequential and executor.config.optimized_sequential_next_step:
         next_step = matched_plan.advance_to_next_step()
         if next_step is not None:
             return ProceedStep.create_proceed_step(executor, next_step[1], matched_plan, difficulty)
         # unknown or beyond plan
-
-    if next_step_spec.target_plan_id is not None and next_step_spec.target_plan_done:
-        finished_plan = _t.cast(Step, executor.chain[next_step_spec.target_plan_id])
-
-        root_step_by_step = StepByStepPlan.find_first_step_by_step(executor)
-        if finished_plan is root_step_by_step:
-            return _t.cast(Step, executor.summarize_final_answer())
-        partial = _t.cast(list[Step], executor.chain[next_step_spec.target_plan_id:current_index + 1])
-
-        summarize = SummarizePartialStep(step_name=finished_plan.step_name, shadowing=partial)
-        if _utils.safe_is_instance(finished_plan.created_by, ExpandableStep):
-            _t.cast(ExpandableStep, finished_plan.created_by).insert_choice(summarize, increase_max=True)
-        return summarize
-
     return ProceedStep.create_proceed_step(executor, next_step_spec.next_step_desc, matched_plan, difficulty)
 
 

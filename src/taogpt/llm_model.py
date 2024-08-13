@@ -188,7 +188,7 @@ class LangChainLLM(LLM):
                 payload = json.loads(reply_content_logged)
                 reply_content_logged = json.dumps(payload, indent=2)
                 reply_content_logged = f"```json\n{reply_content_logged}\n```\n"
-                is_json = 'JSON '
+                reply_content = reply_content_logged
             except json.JSONDecodeError:
                 pass
             reply_tokens = self.count_tokens(reply_content)

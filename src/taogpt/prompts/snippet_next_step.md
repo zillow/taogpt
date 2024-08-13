@@ -1,5 +1,6 @@
-To declare the next step to work at, use the following JSON template:
+To declare the next step to work at, add a Markdown fenced block of type JSON:
 
+````markdown
 ```json
 {{
     "next_to_work_at": {{
@@ -11,3 +12,4 @@ To declare the next step to work at, use the following JSON template:
     }}
 }}
 ```
+````

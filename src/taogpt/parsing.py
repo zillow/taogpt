@@ -214,6 +214,8 @@ def parse_next_step_spec(text: str, required=False) -> tuple[NextStepDesc|None, 
         raise ParseError(f'No next step specified. Set next step description to the `next_step` key.')
     elif next_step not in ('all done', 'done'):
         _, next_step = parse_step_id_and_name(next_step, ok_without_step_id=True)
+    else:
+        return NextStepDesc(None, None, True, "all done", None), text.strip()
 
     for key, value in next_step_response.items():
         matched = _re.match(r"^\s*done\s+with\s+\[*([^]]+)", key)
