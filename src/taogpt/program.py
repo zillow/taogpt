@@ -208,12 +208,16 @@ class FixableStep(Step):
 class TaoReplyStep(Step):
 
     def __init__(self, *, description: str, role: str, step_name: str|None, **kwargs):
-        next_step, description = parse_next_step_spec(description, required=False)
+        try:
+            next_step, description = parse_next_step_spec(description, required=False)
+        except ParseError:
+            next_step = None
+            pass
         super().__init__(description=description, role=role, step_name=step_name, **kwargs)
         self._next_step = next_step
-        self._extract_next_step()
+        self._process_next_step()
 
-    def _extract_next_step(self):
+    def _process_next_step(self):
         pass
 
     def validate(self, executor: Executor):
@@ -437,8 +441,8 @@ class GiveUpStep(TaoReplyStep):
         issues, _ = parse_issue_report(error_report, None)
         self.issues = issues
 
-    def _extract_next_step(self):
-        super()._extract_next_step()
+    def _process_next_step(self):
+        super()._process_next_step()
         self._next_step = None
 
     def eval_only(self, executor):
@@ -496,8 +500,8 @@ class StepByStepPlan(TaoReplyStep):
 {step_desc}
 ```\n"""
 
-    def _extract_next_step(self):
-        super()._extract_next_step()
+    def _process_next_step(self):
+        super()._process_next_step()
         self._next_step = None # always go to the first step in the plan
 
     @property
@@ -1431,8 +1435,8 @@ class SummarizeStepABC(DirectAnswerStep, metaclass=ABCMeta):
         self._pending_culprits: dict[Step, list[str]]|None = None
         self._pending_error_count: int = 0
 
-    def _extract_next_step(self):
-        super()._extract_next_step()
+    def _process_next_step(self):
+        super()._process_next_step()
         self._next_step = None
 
     @abstractmethod
