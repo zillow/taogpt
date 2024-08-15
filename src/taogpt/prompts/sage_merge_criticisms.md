@@ -1,19 +1,21 @@
-Please review the validity and severity of each criticism received for the proposed solution. An issue is mentioned 
-does not necessary mean it is real or still applicable to the final answer.
-
-* Simply drop/discard inapplicable issues or wrong criticisms without mentioning again.
-* For the remaining issues, consolidate/merge similar ones.
-* If there is no more issue left, response with empty JSON hash.
-
-Respond according to the following format:
+Review criticisms received and summarize into a JSON fenced block:
 
 ```json
 {
   "<what to verify>": {
-    "error": "<something incorrect, subsequent steps not impacted or fixable>", 
-    "blame": ["step#<ID>: <step description>", ...],
-    "affecting": ["step#<ID>: <step description>", ...]
+    "error": "<issue with reason; and any recommendation>",
+    "blame": "step#<ID>: <step description>",
+    "fixed_in_subsequent_step": true or false,
+    "affecting": ["step#<ID>: <step description>", "step#<ID>: <step description>", ...]
   },
+  "<what to verify>": {
+    "warning": "<something can be improved with reasoning and recommendation>",
+    "blame": "step#<ID>: <step description>",
+    "fixed_in_subsequent_step": true or false
+  },
+  "<what to verify>": {"ok": "<this looks good>"},
   // ...
 }
 ```
+
+Ignore issues that are fixed in subsequent steps. If everything is OK, return empty JSON hash.

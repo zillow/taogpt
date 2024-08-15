@@ -201,8 +201,12 @@ So, the first row becomes: 4 3 2 1
 def test_parse_sequential_step_by_step_and_stepping():
     text = """# HERE_IS_MY_STEP_BY_STEP_PLAN
 
-
-
+1. Fill in the first row. difficulty": 1
+2. Fill in the second row
+"""
+    step = parse_to_step(text)
+    assert isinstance(step, StepByStepPlan)
+    step.parse_and_set_step_plan("""
 ```json
 {
   "1": {"description": "Fill in the first row", "difficulty": 1},
@@ -211,10 +215,7 @@ def test_parse_sequential_step_by_step_and_stepping():
   "has_loop": false
 }
 ```
-This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must contain all of the numbers from 1 to 4 exactly once. We will fill in the rows one by one, making sure that each number appears exactly once in each row and column, and in each 2x2 square. This is a recursive, top-down approach to solving the puzzle.
-"""
-    step = parse_to_step(text)
-    assert isinstance(step, StepByStepPlan)
+""")
     next_step = step.advance_to_next_step()
     assert next_step[0] == 1
     assert next_step[1] == 'Fill in the first row'
@@ -233,6 +234,12 @@ This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must
 def test_parse_looping_step_by_step_and_stepping():
     text = """# HERE_IS_MY_STEP_BY_STEP_PLAN
 
+1. Fill in the first row.
+2. Repeat step 1.
+"""
+    step = parse_to_step(text)
+    assert isinstance(step, StepByStepPlan)
+    step.parse_and_set_step_plan("""
 ```json
 {
   "1": {"description": "Fill in the first row"},
@@ -241,10 +248,7 @@ def test_parse_looping_step_by_step_and_stepping():
   "has_loop": true
 }
 ```
-This plan is based on the rules of Sudoku. Each row, column, and 2x2 square must contain all of the numbers from 1 to 4 exactly once. We will fill in the rows one by one, making sure that each number appears exactly once in each row and column, and in each 2x2 square. This is a recursive, top-down approach to solving the puzzle.
-"""
-    step = parse_to_step(text)
-    assert isinstance(step, StepByStepPlan)
+""")
     next_step = step.advance_to_next_step()
     assert next_step[0] == 1
     assert next_step[1] == 'Fill in the first row'
@@ -280,21 +284,25 @@ def test_validate_next_step_spec(logger):
     orchestrator = create_orchestrator(llm, logger)
     step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
-    step_by_step = StepByStepPlan(description="""
+    step_by_step = StepByStepPlan(description="1. some steps", role=ROLE_TAO, step_name='start')
+    step_by_step.parse_and_set_step_plan("""
 ```json
 {
   "1": {"description": "Fill in the first row"},
   "2": {"description": "Fill in the second row"}
 }
-```""", role=ROLE_TAO, step_name='start')
+```
+""")
     orchestrator.chain.append(step_by_step)
-    step_by_step2 = StepByStepPlan(description="""
+    step_by_step2 = StepByStepPlan(description="1. some steps", role=ROLE_TAO, step_name='Fill in the first row')
+    step_by_step2.parse_and_set_step_plan("""
 ```json
 {
   "1": {"description": "Find unfilled slots"},
   "2": {"description": "Fill slots"}
 }
-```""", role=ROLE_TAO, step_name='Fill in the first row')
+```
+""")
     orchestrator.chain.append(step_by_step2)
     grandchild = DirectAnswerStep(description="Slot 2 and 3",
                                   role=ROLE_TAO, step_name='Find unfilled slots')

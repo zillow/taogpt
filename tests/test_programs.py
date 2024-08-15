@@ -78,12 +78,9 @@ def test_final_direct_answer_with_next_step():
 
 def test_step_by_step_with_next_step():
     text = f"""# {HERE_IS_MY_STEP_BY_STEP_PLAN}
-```json
-{{
-  "1": {{"description": "<high-level description without details>step 1", "difficulty": 1}},
-  "2": {{"description": "step 2", "difficulty": 10}}
-}}
-```
+
+1. step 1
+2. step 2
 
 ```json
 {{
@@ -92,6 +89,14 @@ def test_step_by_step_with_next_step():
 ```
 """
     step = _t.cast(StepByStepPlan, parse_to_step(text))
+    step.parse_and_set_step_plan("""
+```json
+{
+  "1": {"description": "<high-level description without details>step 1", "difficulty": 1},
+  "2": {"description": "step 2", "difficulty": 10}
+}
+```
+""")
     assert len(step.steps) == 2
     assert step._next_step is None
 
@@ -104,7 +109,7 @@ def test_parse_error_report_with_blame_string(logger):
       "blame": "step#4: response to Fill in the missing numbers in the first row"
     }
 }"""
-    step = GiveUpStep(description=report_json, role='tao')
+    step = ReportErrorStep(description=report_json, role='tao')
 
     assert step.description.strip() == report_json.strip()
 

@@ -14,7 +14,7 @@ from taogpt.exceptions import ParseError, UnbalancedBlockParseError
 
 _logger = _logging.getLogger(__file__)
 
-_dash_or_slash = r'[_\-]'
+_dash_or_slash = r'[_ \-]'
 
 _action_re = (rf"{MY_THOUGHT.replace('_', _dash_or_slash)}"
     rf"|{WILL_ASK_GENIE.replace('_', _dash_or_slash)}"
@@ -67,11 +67,21 @@ def parse_step_type_spec(text: str, working_on:str=None) -> tuple[str|None, str|
     text = _utils.str_or_blank(text)
     if text == '':
         return None, None
-    n_actions = len(action_type_re.findall(text))
-    if n_actions > 1:
-        msg = f"Expecting 1 action heading but found {n_actions}."
+    actions = action_type_re.findall(text)
+    if len(actions) > 1:
+        msg = f"Expecting 1 action heading but found {len(actions)}."
         if _utils.str_or_blank(working_on) != '':
             msg += f" Please respond with one action for the step '{working_on}' only."
+        msg += f"""
+Like:
+
+```markdown
+{actions[0]}
+
+... <response content> ...
+<end of response>
+```
+"""
         raise ParseError(msg)
     match: _re.Match = step_type_re.search(text)
     if match is None:

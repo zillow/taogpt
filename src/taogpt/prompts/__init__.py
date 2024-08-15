@@ -17,6 +17,7 @@ class PromptDb:
         self.tao_intro=_read(path / 'tao.md')
 
         self._tao_templates=_read(path / 'tao_templates.md')
+        self.tao_step_by_step_format=_read(path / 'tao_step_by_step_format.md')
         self.snippet_op_files =_read(path / 'snippet_op_files.md')
         self.snippet_op_ask_questions =_read(path / 'snippet_op_ask_questions.md')
         self.snippet_op_ask_genie =_read(path / 'snippet_op_ask_genie.md')

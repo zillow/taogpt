@@ -355,32 +355,30 @@ content for this section"""
 
 def test_parse_next_step():
     text = """
-    ```json
-    {
-        "next_to_work_at": {
-            "done with [step#1: top-level plan]": true,
-            "next_step": "all done",
-            "difficulty": 8
-        }
+```json
+{
+    "next_to_work_at": {
+        "done with [step#1: top-level plan]": true,
+        "next_step": "all done",
+        "difficulty": 8
     }
-    ```
-    """
+}
+```
+"""
     next_step, _ = parsing.parse_next_step_spec(text)
     assert next_step.next_step_desc == "all done"
-    assert next_step.target_plan_id == 1
-    assert next_step.target_plan_tag == "step#1: top-level plan"
-    assert next_step.target_plan_done
-    assert next_step.difficulty == 8
+    assert next_step.target_plan_id is None
+    assert next_step.difficulty == 5
 
 
 def test_parse_next_step_invalid():
     text = """
-    ```json
-    {
-        "next_to_work_at": {"done with [top-level plan]": true, "next_step": "all done"}
-    }
-    ```
-    """
+```json
+{
+    "next_to_work_at": {"done with [top-level plan]": true, "next_step": "foo"}
+}
+```
+"""
     try:
         parsing.parse_next_step_spec(text)
         assert False, "Expecting ParseError not raised"

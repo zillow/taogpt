@@ -422,24 +422,21 @@ class ConsolidateFileStep(WriteFileStep):
         self.clear_criticisms()
 
 
-class GiveUpStep(TaoReplyStep):
+class ReportErrorStep(TaoReplyStep):
     TYPE_SPEC = REPORT_ERROR
 
     @property
     def step_title(self) -> str:
-        return GiveUpStep.TYPE_SPEC
+        return ReportErrorStep.TYPE_SPEC
 
     def __init__(self, *, description: str, role: str, step_name:str=None, **kwargs):
         super().__init__(description=description, role=role, step_name=None, **kwargs)
         _ = step_name
-        sections: dict[str, str] = parse_sections(self.description)
-        error_report = _utils.str_or_blank(sections.pop(FREE_TEXT, None))
-        if error_report == '':
-            raise ParseError(f"Must have a `# {REPORT_ERROR}` section with an error report")
+        self.issues: dict[str, _t.Tuple[str, list[tuple[int, str]] | None]] = dict()
 
-        # issue: (level, [step desc])
-        issues, _ = parse_issue_report(error_report, None)
-        self.issues = issues
+    def validate(self, executor: Executor):
+        super().validate(executor)
+        self.issues = format_error_reports([self.description], executor.step_id(self), executor)
 
     def _process_next_step(self):
         super()._process_next_step()
@@ -477,28 +474,10 @@ class StepByStepPlan(TaoReplyStep):
     def __init__(self, *, description: str, role: str, step_name: str|None, **kwargs):
         super().__init__(description=description, role=role, step_name=step_name, **kwargs)
         self._realized_steps: list[Step] = list()
-        free_text, blocks = check_and_fix_fenced_blocks(self.description, collapse_blocks=True)
-        json_block = None
-        for key, (block_content, content_type, _, _) in blocks.items():
-            free_text = free_text.replace(key, '')
-            if content_type == 'json':
-                if json_block is None:
-                    json_block = block_content
-                else:
-                    raise ParseError(f"Expect only one JSON block, but found multiple. Please merge into one")
-        if json_block is None:
-            raise ParseError(f"Expecting step-by-step plan in a JSON fenced block, found none.")
-        steps, self._has_branching, self._has_loop = parse_step_by_step_plan(json_block)
-        self._steps = {i+1: step for i, step in enumerate(step for step in steps.values())}
-        # erase sub_steps
-        step_desc = _json.dumps({i: {'description': step.description, 'difficulty': step.difficulty}
-                                 for i, step in steps.items()}, indent=2)
-
         self._next_step_i = 1 # 1-base
-        self._free_text = free_text.strip()
-        self.description = f"""{self._free_text}\n\n```json
-{step_desc}
-```\n"""
+        self._free_text = self.description
+        self._has_branching, self._has_loop = False, False
+        self._steps: dict[int, StepDescriptor] = dict()
 
     def _process_next_step(self):
         super()._process_next_step()
@@ -510,6 +489,32 @@ class StepByStepPlan(TaoReplyStep):
 
     def validate(self, executor: Executor):
         super().validate(executor)
+        step_id = executor.step_id(self)
+        n_retries = 0
+        prompts = [
+            (ROLE_TAO, self.description),
+            (ROLE_ORCHESTRATOR, executor.prompts.tao_step_by_step_format)
+        ]
+        prompts_to_be_sent = prompts.copy()
+
+        response: str = ''
+        while n_retries < executor.config.max_retries:
+            try:
+                response = executor.sage_llm.ask(
+                    None,
+                    prompts_to_be_sent,
+                    reason="format-plan",
+                    step_id=f"{step_id}#{n_retries}",
+                    temperature=executor.config.get_temperature(n_retries))
+                self.parse_and_set_step_plan(response)
+                break
+            except ParseError as e:
+                n_retries += 1
+                executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
+                                            executor.prompts.orchestrator_parse_error)
+        self.check_duplicated_plan(executor)
+
+    def check_duplicated_plan(self, executor):
         ancestor_plans = executor.select_steps(StepByStepPlan, except_step=self, stop_at=self)
         for ancestor in ancestor_plans:
             ancestor = _t.cast(StepByStepPlan, ancestor)
@@ -522,6 +527,21 @@ class StepByStepPlan(TaoReplyStep):
                     plan=ancestor.step_name_tag(executor.step_id(ancestor)),
                     this_step=self.step_name_tag(step_id)))
                 raise ParseError(msg)
+
+    def parse_and_set_step_plan(self, json_payload):
+        _, blocks = check_and_fix_fenced_blocks(json_payload, collapse_blocks=True)
+        json_key, json_block = None, None
+        for key, (_, content_type, _, block_content) in blocks.items():
+            if content_type == 'json':
+                if json_key is None:
+                    json_block = block_content
+                else:
+                    raise ParseError(f"Expect only one JSON block, but found multiple. Please merge into one")
+        if json_block is None:
+            raise ParseError(f"Expecting step-by-step plan in a JSON fenced block, found none.")
+        parsed_plan = parse_step_by_step_plan(json_block)
+        steps, self._has_branching, self._has_loop = parsed_plan
+        self._steps = {i + 1: step for i, step in enumerate(step for step in steps.values())}
 
     def advance_to_next_step(self, trial=False) -> tuple[int, str, int]|None:
         if (self._next_step_i == 1 or self.sequential) and 0 < self._next_step_i <= len(self._steps): # 1-based
@@ -605,16 +625,11 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
     system_prompt = executor.prompts.sage_intro
 
     # issue: (level, [step desc])
-    all_issues: dict[str, _t.Tuple[str, list[tuple[int, str]]|None]] = dict()
-    number_of_issues = 0
-    issues_by_critic: list[dict] = []
     verify_prompt = executor.prompts.sage_check_answer.format(intent=intent)
     prompts = executor.show_conversation_thread(with_extras=True)
     prompts.append((ROLE_ORCHESTRATOR, verify_prompt))
+    reports = []
     for i in range(votes):
-        step_by_step_ids = {i for i in range(len(executor.chain))
-                            if _utils.safe_is_instance(executor.chain[i], StepByStepPlan)}
-        visible_step_ids = {i for i in range(len(executor.chain)) if executor.chain[i].visible_in_chain}
         n_retries = 0
         prompts_to_be_sent = prompts.copy()
         response: str = ''
@@ -626,45 +641,26 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
                     reason=reason,
                     step_id=f"{step_id}/{i}#{n_retries}",
                     temperature=config.get_temperature(i + n_retries))
-                issues, full_json = parse_verification_response(response)
-                matched_step_by_steps: set[int] = set()
-                for severity, blames in issues.values():
-                    blames = [blame for blame in (blames if blames is not None else [])
-                              if blame[0] in visible_step_ids]
-                    if len(blames) == 0:
-                        continue
-                    if severity in ('warning', 'error', 'fatal'):
-                        number_of_issues += 1
-                    if severity in ('error', 'fatal'):
-                        matched_step_by_steps.update(blame[0] for blame in blames if blame[0] in step_by_step_ids)
-                notes = ''
-                if len(matched_step_by_steps) > 0:
-                    if len(matched_step_by_steps) > 1:
-                        step_list = ', '.join(f"step#{i}" for i in matched_step_by_steps)
-                        step_list = f"{step_list} are step-by-step plans"
-                    else:
-                        step_list = f"step#{next(iter(matched_step_by_steps))} is a step-by-step plan"
-                    notes += (f"Double-check your response: {step_list}. "
-                              f"Errors in them are often caused by one of sub-steps. ")
-                if notes != '':
-                    step_by_step_ids.clear()
-                    raise ParseError(notes)
-                issues_by_critic.append(full_json)
-                if len(issues) > 0:
-                    all_issues.update(issues)
+                reports.append(response)
                 break
             except Exception as e:
                 n_retries += 1
                 executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent, response,
                                             executor.prompts.orchestrator_parse_error)
-    if number_of_issues > 0 and len(issues_by_critic) > 1:
+    return format_error_reports(reports, step_id, executor)
+
+
+def format_error_reports(reports, step_id, executor) -> dict[str, _t.Tuple[str, list[tuple[int, str]] | None]]:
+    config = executor.config
+    visible_step_ids = {i for i in range(len(executor.chain)) if executor.chain[i].visible_in_chain}
+    all_issues: dict[str, tuple[str, list[tuple[int, str]] | None]] = dict()
+    if len(reports) > 0:
+        all_issues: dict[str, tuple[str, list[tuple[int, str]] | None]] = dict()
         critic_text = "\n\n".join([
-            f"Critic {i+1}:\n```json\n{_json.dumps(report, indent=2)}\n```"
-            for i, report in enumerate(issues_by_critic)
+            f"**Critic {i + 1}**:\n{report}\n"
+            for i, report in enumerate(reports)
         ])
-        system_prompt = executor.prompts.sage_intro
-        prompts = executor.show_conversation_thread(with_extras=True)
-        prompts.append((ROLE_ORCHESTRATOR, verify_prompt))
+        prompts = []
         prompts.append((ROLE_ORCHESTRATOR, critic_text))
         prompts.append((ROLE_ORCHESTRATOR, executor.prompts.sage_merge_criticisms))
         prompts_to_be_sent = prompts.copy()
@@ -673,7 +669,7 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
         while n_retries < config.max_retries:
             try:
                 response = executor.sage_llm.ask(
-                    system_prompt,
+                    None,
                     prompts_to_be_sent,
                     reason='merge_criticisms',
                     step_id=f"{step_id}#{n_retries}",
@@ -682,6 +678,11 @@ def verify(intent: str, executor: Executor, step_id: int|str, votes: int=None, r
                 for issue in no_culprit_issues:
                     executor.logger.log(f"removing report {issue} due to no more culprit.")
                     del all_issues[issue]
+                for severity, blames in all_issues.values():
+                    blames = [blame for blame in (blames if blames is not None else [])
+                              if blame[0] in visible_step_ids]
+                    if len(blames) == 0:
+                        continue
                 break
             except Exception as e:
                 n_retries += 1
@@ -818,7 +819,8 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
         logger = executor.logger
         try:
             results = executor.ask_genie(self._code_snippets, self)
-            result_markdown = '\n\n'.join(f"""```text\n{r}\n```""" for r in results)
+            block_quote = '`' * 11
+            result_markdown = '\n\n'.join(f"""{block_quote}\n{r}\n{block_quote}""" for r in results)
             logger.new_message_section(ROLE_GENIE, executor.step_id(self), collapsible=len(result_markdown) > 1000)
             logger.log(result_markdown)
             logger.close_message_section()
@@ -959,8 +961,8 @@ def parse_to_step(response: str, working_on: str = None, init_expansion=False,
         step_class = AskQuestionStep
     elif step_type == AskPythonGenieStep.TYPE_SPEC:
         step_class = AskPythonGenieStep
-    elif step_type == GiveUpStep.TYPE_SPEC:
-        step_class = GiveUpStep
+    elif step_type == ReportErrorStep.TYPE_SPEC:
+        step_class = ReportErrorStep
     elif step_type == WriteFileStep.TYPE_SPEC:
         step_class = WriteFileStep
     else:
@@ -1370,7 +1372,7 @@ class NextStep(Step):
             step = parse_to_step(_t.cast(str, details), working_on=None,
                                  supported_headers=supported_ops(executor.config),
                                  default_header=REPORT_ERROR)
-            if not _utils.safe_is_instance(step, GiveUpStep):
+            if not _utils.safe_is_instance(step, ReportErrorStep):
                 raise ParseError(f"Expecting either next step declaration or error report with `# {REPORT_ERROR}`")
             step.validate(executor)
             return step
