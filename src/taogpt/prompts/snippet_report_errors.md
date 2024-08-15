@@ -2,7 +2,7 @@ If you see any errors or inconsistencies in the step executed so far, response w
 responsible in the following format:
 
 ````markdown
- # I_FOUND_ERRORS
+I_FOUND_ERRORS:
 
 At step#<ID>: <step description>: <issue found and reason>. Severity: `error` or `warning`. 
     Already fixed in subsequentstep: yes/no;

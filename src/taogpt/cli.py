@@ -49,7 +49,7 @@ parser.add_argument('-E', '--ask-genie', type=bool, default=_proto_config.ask_ge
                     help='Enable code execution (in a runtime environment, i.e. Python)')
 parser.add_argument('-F', '--file-support', type=bool, default=_proto_config.file_support,
                     action=argparse.BooleanOptionalAction,
-                    help='Enable `FILE:` support')
+                    help='Enable file support')
 parser.add_argument('-N', '--optimized-sequential-next-step', type=bool,
                     default=_proto_config.optimized_sequential_next_step,
                     action=argparse.BooleanOptionalAction,

@@ -12,7 +12,7 @@ current step, higher is better. Note: choices not directly providing the answer 
 * `I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED` choices seek clarifications from the user and should be scored
   according to the usefulness of the questions to the solving the problem. This action is the only way to ask 
   questions.
-* `LET_ME_ASK_THE_PYTHON_GENIE` choices try to execute a Python code snippet to provide the answer and should be
+* `RUN_CODE_SNIPPET` choices try to execute a Python code snippet to provide the answer and should be
   scored according to the usefulness, correctness, and efficiency of the code snippet. Coding style here is not an
   issue.
 

@@ -23,7 +23,6 @@ class PromptDb:
         self.snippet_op_ask_genie =_read(path / 'snippet_op_ask_genie.md')
 
         self.snippet_next_step=_read(path / 'snippet_next_step.md')
-        self.snippet_notes_for_files=_read(path / 'snippet_notes_for_files.md')
         self.sage_rank_choices=_read(path / 'sage_rank_choices.md')
         self.sage_rank_instructions=_read(path / 'sage_rank_instructions.md')
         self.tao_next_step=_read(path / 'tao_next_step.md')

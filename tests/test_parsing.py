@@ -55,19 +55,15 @@ other times OK
 def test_parse_step_type_spec():
     reply_detail = """This is an answer.
 
-### NEXT_I_WANT_TO_WORK_AT:
-"1: Initialize the Sudoku grid with the given numbers."
-""".strip()
-    text = f"""
 ```json
 {{
- "Plan completeness": {{"ok": true, "reason": "A"}},
- "Plan correctness": {{"ok": true, "reason": "B"}},
- "Plan efficiency": {{"ok": true, "reason": "C"}}
+    "next_to_work_at": {{
+        "next_step": "setup",
+        "done with [step#22: check arithmetics]": true
+    }}
 }}
-```
-
-# {MY_THOUGHT}
+```"""
+    text = f"""{MY_THOUGHT}:
 {reply_detail}
 """
     reply_type, step_def = parsing.parse_step_type_spec(text)
@@ -136,12 +132,12 @@ def test_parsing_rankings_with_dupes():
 
 def test_parse_next_step_done2():
     answer_details = """I give up."""
-    final_answer = f"""## I_FOUND_ERRORS
+    final_answer = f"""I_FOUND_ERRORS:
 {answer_details}
 """
     decision, answer = parsing.parse_next_step_reply(final_answer)
     assert decision == REPORT_ERROR
-    assert answer == f"# {REPORT_ERROR}\n{answer_details}".strip()
+    assert answer == f"{REPORT_ERROR}:\n{answer_details}".strip()
 
 
 def test_parse_next_step_reply_example():
@@ -161,7 +157,10 @@ a + b
 `````
 
 The end"""
-    text = f"""
+    text = f"""RUN_CODE_SNIPPET:
+
+{details}
+
 ```json
 {{
     "next_to_work_at": {{
@@ -170,10 +169,6 @@ The end"""
     }}
 }}
 ```
-
-## LET_ME_ASK_THE_PYTHON_GENIE
-
-{details}
 """
     decision, answer = parsing.parse_next_step_reply(text)
     assert decision == NEXT_I_WANT_TO_WORK_AT
@@ -339,20 +334,6 @@ Let's backtrack and correct this error.
     assert restored == text
 
 
-def test_parse_sections_with_colons():
-    text = """[at step: a step]
-
-```javascript
-document.getElementById('log-display').style.overflow = 'auto';
-```
-
-# SECTION_2::
-content for this section"""
-    sections = parsing.parse_sections(text, section_level='#')
-    assert len(sections) == 2
-    assert "SECTION_2" in sections
-
-
 def test_parse_next_step():
     text = """
 ```json
@@ -409,29 +390,9 @@ def test_prior_proposal_in_step_id_name():
         assert "You tried to report error in other proposals" in str(e)
 
 
-def test_gather_file_sections_missing_path():
-    text = """Here is your file.
-    
-### FILE: 
-`templates/index.html` - The HTML template for the main page with a form to input the date.
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-</html>
-```"""
-    try:
-        sessions = parsing.parse_sections(text)
-        parsing.gather_file_contents(sessions)
-        assert False, "Expecting ParseError not raised"
-    except taogpt.exceptions.ParseError:
-        pass
-
-
 def test_gather_file_sections():
     text = """Here is your file.
     
-### FILE: `templates/index.html` 
 The HTML template for the main page.
 
 ```html
@@ -439,30 +400,23 @@ The HTML template for the main page.
 <html lang="en">
 </html>
 ```"""
-    sessions = parsing.parse_sections(text)
-    results = parsing.gather_file_contents(sessions)
-    assert 'templates/index.html' in results
-    content_type, content, snippet, markdown_full_content = results['templates/index.html']
+    content_type, content, _, _ = parsing.gather_file_contents(text)
     assert content_type == 'html'
     assert content == """<!DOCTYPE html>
 <html lang="en">
 </html>"""
-    assert markdown_full_content == "The HTML template for the main page."
 
 
 def test_gather_multi_file_sections():
     text = """Here is your file.
     
-### FILE: `templates/index.html` 
-The HTML template for the main page.
-
 ```html
 <!DOCTYPE html>
 <html lang="en">
 </html>
 ```
 
-### FILE: doc.md
+another
 
 ````markdown
   some markdown text
@@ -471,23 +425,11 @@ The HTML template for the main page.
 ```
 ````
 """
-    sessions = parsing.parse_sections(text)
-    results = parsing.gather_file_contents(sessions)
-    assert 'templates/index.html' in results
-    content_type, content, snippet, markdown_full_content = results['templates/index.html']
-    assert content_type == 'html'
-    assert content == """<!DOCTYPE html>
-<html lang="en">
-</html>"""
-    assert markdown_full_content == "The HTML template for the main page."
-    assert 'doc.md' in results
-    content_type, content, snippet, markdown_full_content = results['doc.md']
-    assert content_type == 'markdown'
-    # ensure preservation of spaces
-    assert content == """  some markdown text
-```
-  nested block
-```"""
+    try:
+        parsing.gather_file_contents(text)
+        assert False, "Expecting parse error not raised"
+    except parsing.ParseError as e:
+        assert 'Need exactly one file content fenced block' in str(e)
 
 
 def test_check_and_fix_fenced_block_extraction():
@@ -625,12 +567,11 @@ def test_sanitize_step_name():
 
 
 def test_fix_nested_fenced_blocks():
-    original = """# MY_THOUGHT
+    original = """MY_THOUGHT:
 [at step#14: Set up a basic README file in the root directory]
 
 To provide basic guidance on setting up and running the application, we will create a README file in the root directory of the project. This file will include instructions on how to install dependencies, set up the virtual environment, and run the Flask application.
 
-### FILE: ChineseZodiacApp/README.md
 ```markdown
 1. Clone the repository to your local machine.
 2. Navigate to the project directory.
@@ -640,18 +581,16 @@ To provide basic guidance on setting up and running the application, we will cre
    ```
 ```
 
-### NEXT_I_WANT_TO_WORK_AT:
 ```json
 {
     "done with [at step#4: Set up the project structure including necessary directories and files for a Python Flask web application]": true
 }
 ```"""
-    expected_annotated = """# MY_THOUGHT
+    expected_annotated = """MY_THOUGHT:
 [at step#14: Set up a basic README file in the root directory]
 
 To provide basic guidance on setting up and running the application, we will create a README file in the root directory of the project. This file will include instructions on how to install dependencies, set up the virtual environment, and run the Flask application.
 
-### FILE: ChineseZodiacApp/README.md
 ```markdown # BACKTICK1
 1. Clone the repository to your local machine.
 2. Navigate to the project directory.
@@ -661,7 +600,6 @@ To provide basic guidance on setting up and running the application, we will cre
    ``` # BACKTICK3
 ``` # BACKTICK4
 
-### NEXT_I_WANT_TO_WORK_AT:
 ```json # BACKTICK5
 {
     "done with [at step#4: Set up the project structure including necessary directories and files for a Python Flask web application]": true

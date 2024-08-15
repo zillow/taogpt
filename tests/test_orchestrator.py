@@ -179,7 +179,7 @@ no_such_var * 123
 
 
 def test_parse_direct_answer_and_next_step():
-    text = """# MY_THOUGHT
+    text = """MY_THOUGHT:
 
 So, the first row becomes: 4 3 2 1
 
@@ -199,7 +199,7 @@ So, the first row becomes: 4 3 2 1
 
 
 def test_parse_sequential_step_by_step_and_stepping():
-    text = """# HERE_IS_MY_STEP_BY_STEP_PLAN
+    text = """HERE_IS_MY_STEP_BY_STEP_PLAN:
 
 1. Fill in the first row. difficulty": 1
 2. Fill in the second row
@@ -232,7 +232,7 @@ def test_parse_sequential_step_by_step_and_stepping():
 
 
 def test_parse_looping_step_by_step_and_stepping():
-    text = """# HERE_IS_MY_STEP_BY_STEP_PLAN
+    text = """HERE_IS_MY_STEP_BY_STEP_PLAN:
 
 1. Fill in the first row.
 2. Repeat step 1.

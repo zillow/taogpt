@@ -62,8 +62,8 @@ def test_final_direct_answer_with_next_step():
     content = f"""22
 
 """
-    text = f"""# {MY_THOUGHT}
-{content}
+    text = f"""{MY_THOUGHT}:
+{content}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
 
 ```json
 {{
@@ -77,7 +77,7 @@ def test_final_direct_answer_with_next_step():
 
 
 def test_step_by_step_with_next_step():
-    text = f"""# {HERE_IS_MY_STEP_BY_STEP_PLAN}
+    text = f"""{HERE_IS_MY_STEP_BY_STEP_PLAN}:
 
 1. step 1
 2. step 2
@@ -134,38 +134,3 @@ some text
     assert dn.next_step.target_plan_id == 12
     assert dn.next_step.next_step_desc == 'next thing to do'
     assert dn.next_step.difficulty == 4
-
-
-def test_convert_direct_answer_with_file_to_write_file():
-    step = parse_to_step(f"""# {MY_THOUGHT}
-
-some explanation
-
-### FILE: foo.txt
-
-```text
-some contents
-```
-""")
-    assert isinstance(step, WriteFileStep)
-
-
-def test_raise_on_non_direct_answer_with_file_content():
-    try:
-        parse_to_step(f"""# {WILL_ASK_GENIE}
-    
-some explanation
-
-```python
-assert True
-```
-
-### FILE: foo.txt
-
-```text
-some contents
-```
-    """)
-        assert False, f'Expecting {ReplyHeaderParseError.__name__} error not raised'
-    except ReplyHeaderParseError as e:
-        assert '`FILE:` section presents in non-write file response' in str(e)

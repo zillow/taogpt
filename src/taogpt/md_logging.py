@@ -136,15 +136,14 @@ class MarkdownLogger:
         color = role_color_map.get(role, 'white')
         if role == 'debug':
             color = 'aliceblue'
-        step_index = f"[{step_index:03d}]" if step_index is not None else ''
         collapsible_cls = 'collapsible' if collapsible else ''
         collapsible_marker = '+' if collapsible else ''
         self._log.write(f'<div class="section_header {collapsible_cls}" style="background-color:{color}">\n'
-                        f'<div class="header">{step_index} <b>{role}</b>: {tokens} {collapsible_marker}</div>\n')
+                        f'<div class="header"><b>{role}</b>: {tokens} {collapsible_marker}</div>\n')
         self._log.write('<div class="content">\n\n')
         self._log.flush()
         if self._console_out is not None:
-            self._console_out.write(f"\n--- {step_index} {role.strip()} ---\n", file=self._console_out)
+            self._console_out.write(f"\n--- {role.strip()} ---\n", file=self._console_out)
 
     def close_message_section(self):
         self._log.write('\n</div></div>\n\n') # close: content section_header

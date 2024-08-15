@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json as _json
 import math as _math
 import typing as _t
 from _collections import defaultdict as _defaultdict
@@ -12,7 +11,6 @@ import taogpt.llm_model
 import taogpt.utils as _utils
 from taogpt.prompts import PromptDb
 from . import StepABC, Backtrack, Executor, Config, GeneratedFile, Pause
-from .constants import *
 from .exceptions import *
 from .parsing import *
 from .parsing import parse_issue_report
@@ -49,7 +47,7 @@ def supported_ops(config: Config) -> str:
         ops.append(WILL_ASK_GENIE)
     if config.file_support:
         ops.append(WRITE_FILE)
-    return ','.join([f"`# {op}`" for op in ops])
+    return ','.join([f"`{op}:`" for op in ops])
 
 
 class Step(StepABC):
@@ -94,6 +92,11 @@ class Step(StepABC):
         return ''
 
     @property
+    def step_header(self):
+        title = self.step_title.strip()
+        return f"{title}:" if len(title) > 0 else ''
+
+    @property
     def part_of(self) -> StepByStepPlan|None:
         return self._part_of
 
@@ -133,7 +136,7 @@ class Step(StepABC):
             return []
         content = ''
         if with_header:
-            content += f"# {self.step_title}\n" if len(self.step_title) > 0 else ""
+            content += f"{self.step_header}\n" if len(self.step_header) > 0 else ""
             tag = self.step_name_tag(step_index)
             content += f"{tag}\n\n"
         content += self.description
@@ -162,15 +165,6 @@ class Step(StepABC):
 
     def validate(self, executor: Executor):
         pass
-
-    @property
-    def collected_files(self) -> dict[str, GeneratedFile]:
-        sections: dict[str, str] = parse_sections(self.description)
-        extracted_contents = gather_file_contents(sections, pop_file_sections=True, unique=True)
-        return {
-            file_path: taogpt.GeneratedFile(content_type, content, desc)
-            for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
-        }
 
 
 class Idle(Step):
@@ -261,7 +255,6 @@ class DirectAnswerStep(TaoReplyStep, FixableStep):
         config = executor.config
         prompt_db: PromptDb  = executor.prompts
         prompts = executor.show_conversation_thread(with_header=True, with_extras=True, stop_at=self)
-        prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_notes_for_files))
         step_id = executor.step_id(self)
         instr = prompt_db.tao_fix_issues.format(step_id=step_id, step=self.step_name, critic_text=critic_text)
         prompts.append((ROLE_ORCHESTRATOR, instr))
@@ -308,6 +301,32 @@ class WriteFileStep(DirectAnswerStep):
     def step_title(self) -> str:
         return WriteFileStep.TYPE_SPEC
 
+    @property
+    def step_header(self):
+        return f"{self.step_title}: {self.file_path}"
+
+    def __init__(self, *, description: str, role: str, step_name: str, is_final_step=False, **kwargs):
+        lines = description.strip().split('\n')
+        if len(lines) == 0:
+            raise ParseError("No file name and content in Markdown fenced block")
+        path = normalize_path(lines[0])
+        description = '\n'.join(lines[1:]).strip()
+        if _utils.str_or_blank(step_name) == '':
+            step_name = f'write/update file `{path}`'
+        super().__init__(description=description, role=role, step_name=step_name, is_final_step=is_final_step, **kwargs)
+        self._file_path = path
+
+    @property
+    def file_path(self) -> str:
+        return self.file_path
+
+    @property
+    def collected_files(self) -> dict[str, GeneratedFile]:
+        content_type, content, _, desc = gather_file_contents(self.description)
+        return {
+            self.file_path: GeneratedFile(content_type, content, desc)
+        }
+
 
 class ConsolidateFileStep(WriteFileStep):
     TYPE_SPEC = "CONSOLIDATE_FILE"
@@ -315,8 +334,11 @@ class ConsolidateFileStep(WriteFileStep):
     def __init__(self, *, description: str, role: str, file_name: str,
                  between: list[Step]=None,
                  keep_content_even_if_same=False, **kwargs):
+        description = _utils.str_or_blank(description)
+        file_name = normalize_path(file_name)
+        if not description.startswith(file_name):
+            description = file_name + '\n\n' + description
         super().__init__(description=description, role=role, step_name=f"consolidate file {file_name}", **kwargs)
-        self._file_name = file_name
         self.keep_content_even_if_same = keep_content_even_if_same
         self._evaluated = False
         self.between_steps = between
@@ -351,7 +373,7 @@ class ConsolidateFileStep(WriteFileStep):
         prompts = executor.show_conversation_thread(with_header=True, with_extras=True,
                                                     except_step=except_me, stop_at=self)
         prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_ensure_updated_file_integrity.format(
-            file_name=self._file_name, between=between)))
+            file_name=self._file_path, between=between)))
         critic_text = ''
         if len(self.criticisms) > 0:
             critic_text = self.format_critic_text()
@@ -359,20 +381,20 @@ class ConsolidateFileStep(WriteFileStep):
             instr = prompt_db.tao_fix_issues.format(step_id=step_id, step=self.step_name, critic_text=critic_text)
             prompts.append((ROLE_ORCHESTRATOR, instr))
 
-        all_versions: list[GeneratedFile] = collect_all_versions(self.between_steps, self._file_name)
+        all_versions: list[GeneratedFile] = collect_all_versions(self.between_steps, self._file_path)
         if len(all_versions) == 0:
-            raise ValueError(f"No file snippet found for {self._file_name} in the chain")
+            raise ValueError(f"No file snippet found for {self._file_path} in the chain")
         if len(all_versions) == 1:
             if self.keep_content_even_if_same:
-                self.collected_files[self._file_name] = all_versions[-1]
+                self.collected_files[self._file_path] = all_versions[-1]
             self._evaluated = True
             return None
         last_version = all_versions[-1]
 
         file_sizes = [len(version.content) for version in all_versions]
         if max(file_sizes) > 1024 or sum(file_sizes) > 2048: # maybe too hard
-            self.collected_files[self._file_name] = rolling_diff_file_consolidate(
-                executor, self._file_name, chain=self.between_steps, critic_text=critic_text)
+            self.collected_files[self._file_path] = rolling_diff_file_consolidate(
+                executor, self._file_path, chain=self.between_steps, critic_text=critic_text)
             self.finish_consolidation(last_version)
             return None
 
@@ -386,14 +408,14 @@ class ConsolidateFileStep(WriteFileStep):
                     reason=self.TYPE_SPEC,
                     step_id=f"{executor.step_id(self)}#{n_retries}",
                     temperature=executor.config.get_temperature(n_retries))
-                if len(self.collected_files) != 1 or self._file_name not in self.collected_files:
-                    raise ParseError(f"You should respond (only) with the complete content of file {self._file_name}")
+                if len(self.collected_files) != 1 or self._file_path not in self.collected_files:
+                    raise ParseError(f"You should respond (only) with the complete content of file {self._file_path}")
                 self.finish_consolidation(last_version)
                 return None
             except ThisMaybeTooHardError as ex:
                 executor.logger.log_error(str(ex))
-                self.collected_files[self._file_name] = rolling_diff_file_consolidate(
-                    executor, self._file_name, chain=self.between_steps, critic_text=critic_text)
+                self.collected_files[self._file_path] = rolling_diff_file_consolidate(
+                    executor, self._file_path, chain=self.between_steps, critic_text=critic_text)
                 self.finish_consolidation(last_version)
                 return None
             except ParseError as ex:
@@ -405,12 +427,12 @@ class ConsolidateFileStep(WriteFileStep):
     def finish_consolidation(self, last_version):
         if self.keep_content_even_if_same:
             pass
-        elif self.collected_files[self._file_name].content == last_version.content and \
-                self.collected_files[self._file_name].content_type == last_version.content_type:
+        elif self.collected_files[self._file_path].content == last_version.content and \
+                self.collected_files[self._file_path].content_type == last_version.content_type:
             self.collected_files.clear()
-            self.description = f"The last version of file `{self._file_name}` looks good. No change."
+            self.description = f"The last version of file `{self._file_path}` looks good. No change."
         else:
-            self.description = f"The file `{self._file_name}` has been reconciled with prior edits."
+            self.description = f"The file `{self._file_path}` has been reconciled with prior edits."
         self.evaluated = True
 
     def repair(self, executor: Executor):
@@ -803,7 +825,7 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
         self._code_snippets = parse_python_snippets(self.description)
         if len(self._code_snippets) == 0:
             raise ParseError("No python code snippet inside markdown fenced block.")
-        pitch = "Python Genie, Python Genie, run the Python snippet underneath"
+        pitch = "Run the Python snippet underneath"
         if pitch not in self.description:
             self.description = f"{pitch}:\n\n{self.description}"
         self._original_description = self.description
@@ -862,7 +884,7 @@ class AskPythonGenieStep(TaoReplyStep, FixableStep):
                     reason="repair",
                     step_id=f"{self.n_tries}#{n_retries}")
                 response = _utils.str_or_blank(response)
-                response = response.replace(f"# {self.TYPE_SPEC}", "").strip()
+                response = response.replace(f"{self.TYPE_SPEC}:", "").strip()
                 self._build(description=response)
                 break
             except ParseError as ex:
@@ -972,13 +994,6 @@ def parse_to_step(response: str, working_on: str = None, init_expansion=False,
     role = ROLE_TAO
     step: TaoReplyStep = step_class(description=step_def, role=role, step_name=working_on,
                                     init_expansion=init_expansion)
-    if len(step.collected_files) > 0 and not _utils.safe_is_instance(step, WriteFileStep):
-        if _utils.safe_is_instance(step, DirectAnswerStep):
-            return WriteFileStep(description=step_def, role=role, step_name=working_on, init_expansion=init_expansion)
-        else:
-            raise ReplyHeaderParseError(
-                f"`FILE:` section presents in non-write file response."
-                f"To write file, choose the write file action with header `# {WRITE_FILE}`")
     return step
 
 
@@ -1036,7 +1051,7 @@ class ExpandableStep(Step):
             prompts = base_prompts.copy()
             if len(self.choices) > 0:
                 prior_plans = [
-                    (f"[{PRIOR_PROPOSAL}#{i + 1}] {prior.step_title}\n\n{prior.description}\n\n{prior.extras}\n\n"
+                    (f"[{PRIOR_PROPOSAL}#{i + 1}] {prior.step_header}\n\n{prior.description}\n\n{prior.extras}\n\n"
                      f"{self._collect_criticism(prior)}")
                     for i, prior in enumerate(self.choices)
                 ]
@@ -1143,7 +1158,7 @@ class ExpandableStep(Step):
         work_prompt = f"[at step#{executor.step_id(self)}: {self.step_name}]\n\n"
         work_prompt += prompt_db.sage_rank_choices.format(
             choices='\n\n---\n\n'.join([
-                f"[Choice {i+1}] {plan.step_title}\n\n{plan.description}\n\n{plan.extras}"
+                f"[Proposal {i+1}] {plan.step_header}\n\n{plan.description}\n\n{plan.extras}"
                 for i, plan in enumerate(self.choices)
             ])
         )
@@ -1373,7 +1388,7 @@ class NextStep(Step):
                                  supported_headers=supported_ops(executor.config),
                                  default_header=REPORT_ERROR)
             if not _utils.safe_is_instance(step, ReportErrorStep):
-                raise ParseError(f"Expecting either next step declaration or error report with `# {REPORT_ERROR}`")
+                raise ParseError(f"Expecting either next step declaration or error report with `{REPORT_ERROR}:`")
             step.validate(executor)
             return step
 
@@ -1770,7 +1785,7 @@ def rolling_diff_file_consolidate(executor: Executor, file: str,
         prompts = []
         prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_ensure_updated_file_integrity.format(
             file_name=file, between='')))
-        prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_notes_for_files))
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_op_files))
         original: GeneratedFile
         snippet_text = "\n\n".join(f"**Update#{k+1}: {step.step_name}**\n{step.description}"
                                    for k, (original, step) in enumerate(collecting))
@@ -1795,18 +1810,8 @@ full diffs would look confusing); it is possible lines are removed intentionally
                     prompts,
                     reason='rolling_file_consolidate',
                     step_id=f"{file}/{actual_merges}")
-                sections: dict[str, str] = parse_sections(response)
-                extracted_contents = gather_file_contents(sections, pop_file_sections=True, unique=True)
-                files = {
-                    file_path: GeneratedFile(content_type, content, desc)
-                    for file_path, (content_type, content, snippet, desc) in extracted_contents.items()
-                }
-                if len(files) != 1:
-                    raise ParseError(f"Expecting one Markdown fenced block holding contents for file `{file}`. Found "
-                                     f"{len(files)}")
-                merged_file_name, updated = next(iter(files.items()))
-                if file != merged_file_name:
-                    executor.logger.log(f"Incorrect file name `{merged_file_name}`, changed to `{file}`")
+                content_type, content, snippet, desc = gather_file_contents(response)
+                updated = GeneratedFile(content_type, content, desc)
                 snippets.insert(0, (updated, collecting[-1][1]))
                 actual_merges += 1
                 with open(merge_file, 'a') as f:

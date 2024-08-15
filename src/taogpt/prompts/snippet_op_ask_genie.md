@@ -1,12 +1,12 @@
-## Ask the Python Genie
+## Run code snippet
 
-The Python Genie is a sandboxed Python interpreter with standard library and numpy. It is a useful tool to help Tao
+Run a code snippet in a sandboxed Python interpreter with standard library and numpy. It is a useful tool to help Tao
 solve problems. It's stateful and previously defined globals can be used without redefining.
 
-Follow the good example below to ask Genie:
+Following the template and the example below:
 
 `````markdown
-# LET_ME_ASK_THE_PYTHON_GENIE
+RUN_CODE_SNIPPET:
 <brief explanation of what the code snippet is for>
 
 ```python
@@ -18,5 +18,5 @@ print(f"Tao sucks at math but he's a superb Python programmer! Here is the answe
 <declare the next step to work at; see the notes below.>
 `````
 
-1. Not paying attention to Python indentation.
-2. The code comment is redundant; avoid useless comments
+1. Must paying attention to Python indentation.
+2. Avoid trivial comments.

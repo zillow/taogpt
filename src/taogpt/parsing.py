@@ -23,8 +23,8 @@ _action_re = (rf"{MY_THOUGHT.replace('_', _dash_or_slash)}"
     rf"|{WILL_ASK_QUESTIONS.replace('_', _dash_or_slash)}"
     rf"|{HERE_IS_MY_STEP_BY_STEP_PLAN.replace('_', _dash_or_slash)}")
 
-step_type_re = _re.compile(r"(^|\n)#{1,2}\s*(" + _action_re + r").*\n((.|\n)+)")
-action_type_re = _re.compile(r"#{1,2}\s*(" + _action_re + r")")
+step_type_re = _re.compile(r"(^)\s*(" + _action_re + r"):\s*((.|\n)+)")
+action_type_re = _re.compile(r"\s*(" + _action_re + r"):")
 
 _true_false_answer_re = _re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
                                    flags=_re.MULTILINE|_re.DOTALL|_re.IGNORECASE)
@@ -76,7 +76,7 @@ def parse_step_type_spec(text: str, working_on:str=None) -> tuple[str|None, str|
 Like:
 
 ```markdown
-{actions[0]}
+{actions[0]}:
 
 ... <response content> ...
 <end of response>
@@ -92,27 +92,6 @@ Like:
         return None, None
     step_type = step_type.replace('-', '_')
     return step_type, definition
-
-
-def parse_sections(text: str, section_level: str='##') -> dict[str, str|None]:
-    try:
-        fenced_blocks, text = extract_fenced_blocks(text)
-    except SyntaxError as e:
-        raise ParseError(str(e))
-    matched_sections = {FREE_TEXT: ''}
-    section = FREE_TEXT
-    for line in text.split('\n'):
-        match: _re.Match = _re.match(rf"^{section_level}+\s+([^\n]+)", line)
-        if match is not None:
-            section = match.group(1).strip()
-            while section != 'FILE:' and section.endswith(':'):
-                section = section[:-1]
-            matched_sections[section] = ''
-        else:
-            matched_sections[section] += line + '\n'
-
-    return {k: (restore_fenced_block(text, fenced_blocks).strip() if text is not None else None)
-            for k, text in matched_sections.items()}
 
 
 def parse_ordered_list(markdown_text, at_least_one_list=True) -> list[str]:
@@ -478,13 +457,10 @@ def parse_json_list(text):
 
 
 def parse_next_step_reply(text: str) -> tuple[str, NextStepDesc|str]:
-    sections: dict[str, str] = parse_sections(text, section_level='#')
-    sections.pop(FREE_TEXT)
-    for section in [REPORT_ERROR]:
-        if section in sections:
-            remaining = sections.pop(section)
-            return section, f"# {section}\n{remaining}"
-    next_step, _ = parse_next_step_spec(text, required=False)
+    text = text.strip()
+    if REPORT_ERROR in text:
+        return REPORT_ERROR, text
+    next_step, _ = parse_next_step_spec(text, required=True)
     return NEXT_I_WANT_TO_WORK_AT, next_step
 
 
@@ -530,39 +506,21 @@ def restore_fenced_block(text: str, fenced_blocks: dict[str, str]):
     return text
 
 
-file_section_re = _re.compile(r"FILE[\s:]+[\s\"\'`]*([^\s\"\'`]+)?[\s\"\'`]*")
-
-
-def gather_file_contents(sections: dict[str, str], pop_file_sections=False, unique=True) \
-        -> dict[str, tuple[str, str, str, str]]:
-    file_sections = set()
-    results: dict[str, tuple[str, str, str, str]] = dict()
-    for section, markdown_full_content in sections.items():
-        match = _re.match(file_section_re, section)
-        if match is None:
-            continue
-        file_path = match.group(1)
-        if file_path is None or file_path.strip() == '':
-            raise ParseError(f"No file path for file section '{section}'")
-        if unique and file_path in results:
-            raise ParseError(f"Can only write a file once in the response. {file_path} has been written already; "
-                             f"please merge the edits into one file update.")
-        file_sections.add(section)
-        collapsed, blocks = check_and_fix_fenced_blocks(markdown_full_content, collapse_blocks=True)
-        if len(blocks) != 1:
-            raise ParseError(f"File content in section `{section}` must be in one Markdown fenced block.")
-        digest, (snippet, content_type, line_number, _) = next(iter(blocks.items()))
+def gather_file_contents(markdown_full_content: str) -> tuple[str,str,str,str]:
+    results: list[tuple[str, str, str, str]] = list()
+    collapsed, blocks = check_and_fix_fenced_blocks(markdown_full_content, collapse_blocks=True)
+    for digest, (snippet, content_type, line_number, _) in blocks.items():
         if snippet is None:
-            raise ParseError(f"No content (in markdown fenced block) for section '{section}'")
+            raise ParseError(f"No content (in markdown fenced block) found")
         block_lines = snippet.split('\n')
         content = '\n'.join(block_lines[1:-1])
         desc = collapsed.replace(digest + '\n', '').strip()
         desc = desc.replace(digest, '').strip() # to be safe
-        results[file_path] = (content_type, content, snippet, desc)
-    if pop_file_sections:
-        for section in file_sections:
-            sections.pop(section)
-    return results
+        results.append((content_type, content, snippet, desc))
+    if len(results) != 1:
+        raise ParseError(f"Need exactly one file content fenced block. Found {len(results)}")
+    content_type, content, snippet, desc = results[0]
+    return content_type, content, snippet, desc
 
 
 def match_step_name(actual: str, expected_step_num: int, expected_step_name: str) -> bool:
@@ -696,3 +654,12 @@ def fix_nested_markdown_blocks_by_report(content: str, report: list[dict[str, st
     # Remove all remaining backtick markers
     content = _re.sub(r" # BACKTICK\d+", "", content)
     return content
+
+
+def normalize_path(string: str) -> str:
+    matched = _re.match(r"/*(([.a-zA-Z0-9_]+/+)*[.a-zA-Z0-9_]+)$", string.strip())
+    if not matched:
+        raise ParseError("File path must be slash-separated components consisting only alphanumeric, period, "
+                         "and underscore characters. Only file path is allowed, not directory path ending with slash.")
+    path = matched.group(1)
+    return _re.sub(r'/+', '/', path)

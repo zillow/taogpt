@@ -20,7 +20,7 @@ The plan can contain go-to loop, conditional branch, or recursion. Also estimate
 Follow this markdown template:
 
 ```markdown
-# HERE_IS_MY_STEP_BY_STEP_PLAN
+HERE_IS_MY_STEP_BY_STEP_PLAN:
 
 1. <description>. Difficulty: 1 to 10
 2. <description>. Difficulty: 1 to 10
@@ -34,7 +34,7 @@ Just answer directly if this is simple.
 Follow this template:
 
 `````markdown
-# MY_THOUGHT
+MY_THOUGHT:
 <answer and explanation>
 
 <declare the next step to work at; see the notes below.>
