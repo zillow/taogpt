@@ -1,22 +1,17 @@
 ## Write one file
 
-If the task want a file as the deliverable. However, contents **NOT** for deliverable, e.g. for 
-illustration/explanation, should be outputs in direct answer/thought. 
+If the task needs to create a file as the deliverable, use the `WRITE_FILE` action. 
 
-Template and example:
+Note: this action is for creating/updating a file, content only for illustration/explanation should be written in direct answer/thought action.
+
+Follow this template and example:
 
 ````markdown
 WRITE_FILE: <file_path_name>
+
 <explain the purpose of this file update>
 
-```python
-// content from previous
-
-def foo():
-    x += 1 
-
-// rest of the content
-```
+<content as a Markdown fenced block>
 
 <declare the next step to work at; see the notes below.>
 ````

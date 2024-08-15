@@ -318,7 +318,7 @@ class WriteFileStep(DirectAnswerStep):
 
     @property
     def file_path(self) -> str:
-        return self.file_path
+        return self._file_path
 
     @property
     def collected_files(self) -> dict[str, GeneratedFile]:
@@ -1405,7 +1405,9 @@ def validate_next_step_spec(executor: Executor, next_step_spec: NextStepDesc,
     else:
         current_plan_id = executor.step_id(current_plan)
 
-    if next_step_spec.target_plan_id is not None and next_step_spec.target_plan_id != current_plan_id:
+    if (current_plan is not None
+            and next_step_spec.target_plan_id is not None
+            and next_step_spec.target_plan_id != current_plan_id):
         raise ParseError(f"Need to know if `done with {current_plan.step_name_tag(current_plan_id)}` is true or false "
                          f"but got key `{next_step_spec.target_plan_tag}`.")
 
