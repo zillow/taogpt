@@ -331,14 +331,11 @@ class WriteFileStep(DirectAnswerStep):
 class ConsolidateFileStep(WriteFileStep):
     TYPE_SPEC = "CONSOLIDATE_FILE"
 
-    def __init__(self, *, description: str, role: str, file_name: str,
+    def __init__(self, *, role: str, file_name: str,
                  between: list[Step]=None,
                  keep_content_even_if_same=False, **kwargs):
-        description = _utils.str_or_blank(description)
-        file_name = normalize_path(file_name)
-        if not description.startswith(file_name):
-            description = file_name + '\n\n' + description
-        super().__init__(description=description, role=role, step_name=f"consolidate file {file_name}", **kwargs)
+        super().__init__(description=f"{normalize_path(file_name)}\n", role=role,
+                         step_name=f"consolidate file {file_name}", **kwargs)
         self.keep_content_even_if_same = keep_content_even_if_same
         self._evaluated = False
         self.between_steps = between
@@ -355,6 +352,14 @@ class ConsolidateFileStep(WriteFileStep):
     def evaluated(self, evaluated: bool):
         self._evaluated = evaluated
 
+    @property
+    def collected_files(self) -> dict[str, GeneratedFile]:
+        file = gather_file_contents(self.description, expect_one=False)
+        if file is None:
+            return dict()
+        content_type, content, _, desc = file
+        return {self.file_path: GeneratedFile(content_type, content, desc)}
+
     def eval_only(self, executor) -> Step | None:
         if self.evaluated:
             return None
@@ -362,77 +367,80 @@ class ConsolidateFileStep(WriteFileStep):
 
         if self.between_steps is None:
             self.between_steps = _t.cast(list[Step], executor.chain)
-        self.between_steps = [step for step in self.between_steps if step.visible_in_chain]
-        between = ''
-        if len(self.between_steps) > 0:
-            from_step = self.between_steps[0].step_name_tag(executor.step_id(self.between_steps[0]))
-            to_step = self.between_steps[-1].step_name_tag(executor.step_id(self.between_steps[-1]))
-            between = "between steps {from_step} to {to_step}".format(from_step=from_step, to_step=to_step)
-        system_prompt = prompt_db.tao_intro
-        except_me = self if len(self.criticisms) == 0 else None
-        prompts = executor.show_conversation_thread(with_header=True, with_extras=True,
-                                                    except_step=except_me, stop_at=self)
-        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_ensure_updated_file_integrity.format(
-            file_name=self._file_path, between=between)))
+        self.between_steps = [step for step in self.between_steps if step.visible_in_chain and step is not self]
         critic_text = ''
         if len(self.criticisms) > 0:
             critic_text = self.format_critic_text()
-            step_id = executor.step_id(self)
-            instr = prompt_db.tao_fix_issues.format(step_id=step_id, step=self.step_name, critic_text=critic_text)
-            prompts.append((ROLE_ORCHESTRATOR, instr))
 
         all_versions: list[GeneratedFile] = collect_all_versions(self.between_steps, self._file_path)
-        if len(all_versions) == 0:
-            raise ValueError(f"No file snippet found for {self._file_path} in the chain")
-        if len(all_versions) == 1:
+        if len(all_versions) <= 1: # should not happen due to caller filtering
             if self.keep_content_even_if_same:
-                self.collected_files[self._file_path] = all_versions[-1]
+                self.description = f"The last version of file `{self._file_path}` looks good. No change."
             self._evaluated = True
             return None
         last_version = all_versions[-1]
 
-        file_sizes = [len(version.content) for version in all_versions]
-        if max(file_sizes) > 1024 or sum(file_sizes) > 2048: # maybe too hard
-            self.collected_files[self._file_path] = rolling_diff_file_consolidate(
-                executor, self._file_path, chain=self.between_steps, critic_text=critic_text)
-            self.finish_consolidation(last_version)
-            return None
-
-        n_retries = 0
-        response: str|None = None
-        to_be_sent = prompts.copy()
-        while n_retries < executor.config.max_retries:
-            try:
-                self.description = executor.llm.ask(
-                    system_prompt, to_be_sent,
-                    reason=self.TYPE_SPEC,
-                    step_id=f"{executor.step_id(self)}#{n_retries}",
-                    temperature=executor.config.get_temperature(n_retries))
-                if len(self.collected_files) != 1 or self._file_path not in self.collected_files:
-                    raise ParseError(f"You should respond (only) with the complete content of file {self._file_path}")
-                self.finish_consolidation(last_version)
-                return None
-            except ThisMaybeTooHardError as ex:
-                executor.logger.log_error(str(ex))
-                self.collected_files[self._file_path] = rolling_diff_file_consolidate(
-                    executor, self._file_path, chain=self.between_steps, critic_text=critic_text)
-                self.finish_consolidation(last_version)
-                return None
-            except ParseError as ex:
-                n_retries += 1
-                executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
-                                            prompt_db.orchestrator_parse_error)
+        # file_sizes = [len(version.content) for version in all_versions]
+        # if max(file_sizes) > 1024 or sum(file_sizes) > 2048: # maybe too hard
+        g_file = rolling_diff_file_consolidate(
+            executor, self._file_path, chain=self.between_steps, critic_text=critic_text)
+        desc = _utils.str_or_blank(g_file.description)
+        if len(desc) > 0:
+            desc = f"This file is for: {desc}\n"
+        self.description = f"""Consolidated file `{self.file_path}`.
+{desc}
+{g_file.markdown_snippet}
+"""
+        self.finish_consolidation(last_version)
         return None
+
+        # between = ''
+        # if len(self.between_steps) > 0:
+        #     from_step = self.between_steps[0].step_name_tag(executor.step_id(self.between_steps[0]))
+        #     to_step = self.between_steps[-1].step_name_tag(executor.step_id(self.between_steps[-1]))
+        #     between = "between steps {from_step} to {to_step}".format(from_step=from_step, to_step=to_step)
+        # system_prompt = prompt_db.tao_intro
+        # except_me = self if len(self.criticisms) == 0 else None
+        # prompts = executor.show_conversation_thread(with_header=True, with_extras=True,
+        #                                             except_step=except_me, stop_at=self)
+        # prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_ensure_updated_file_integrity.format(
+        #     file_name=self._file_path, between=between)))
+        # if len(critic_text) > 0:
+        #     step_id = executor.step_id(self)
+        #     instr = prompt_db.tao_fix_issues.format(step_id=step_id, step=self.step_name, critic_text=critic_text)
+        #     prompts.append((ROLE_ORCHESTRATOR, instr))
+        # n_retries = 0
+        # response: str|None = None
+        # to_be_sent = prompts.copy()
+        # while n_retries < executor.config.max_retries:
+        #     try:
+        #         self.description = executor.llm.ask(
+        #             system_prompt, to_be_sent,
+        #             reason=self.TYPE_SPEC,
+        #             step_id=f"{executor.step_id(self)}#{n_retries}",
+        #             temperature=executor.config.get_temperature(n_retries))
+        #         if len(self.collected_files) != 1 or self._file_path not in self.collected_files:
+        #             raise ParseError(f"You should respond (only) with the complete content of file {self._file_path}")
+        #         self.finish_consolidation(last_version)
+        #         return None
+        #     except ThisMaybeTooHardError as ex:
+        #         executor.logger.log_error(str(ex))
+        #         self.collected_files[self._file_path] = rolling_diff_file_consolidate(
+        #             executor, self._file_path, chain=self.between_steps, critic_text=critic_text)
+        #         self.finish_consolidation(last_version)
+        #         return None
+        #     except ParseError as ex:
+        #         n_retries += 1
+        #         executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
+        #                                     prompt_db.orchestrator_parse_error)
+        # return None
 
     def finish_consolidation(self, last_version):
         if self.keep_content_even_if_same:
             pass
         elif self.collected_files[self._file_path].content == last_version.content and \
                 self.collected_files[self._file_path].content_type == last_version.content_type:
-            self.collected_files.clear()
             self.description = f"The last version of file `{self._file_path}` looks good. No change."
-        else:
-            self.description = f"The file `{self._file_path}` has been reconciled with prior edits."
         self.evaluated = True
 
     def repair(self, executor: Executor):
@@ -1118,8 +1126,7 @@ class ExpandableStep(Step):
             base_prompts.append((ROLE_ORCHESTRATOR, work_prompt))
 
         base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_template))
-        next_step_instr = prompt_db.snippet_next_step.format(step=current_plan)
-        base_prompts.append((ROLE_ORCHESTRATOR, next_step_instr))
+        # base_prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_next_step.format(step=current_plan)))
         question_asked = len(executor.select_steps(AskQuestionStep, stop_at=self)) > 0
         hint = None
         if initial:
@@ -1683,12 +1690,10 @@ def consolidate_updated_files(steps: list[StepABC]):
     file_updates = count_file_updates(steps)
     consolidate_file_steps = []
     for file, content in files.items():
-        consolidate_file_step = ConsolidateFileStep(description='', role=ROLE_TAO, file_name=file,
-                                                    keep_content_even_if_same=True, between=steps)
-        consolidate_file_steps.append(consolidate_file_step)
-        if file_updates.get(file, 0) == 1:  # only if more than 1 update. 0 shouldn't happen
-            consolidate_file_step.collected_files[file] = content
-            consolidate_file_step.evaluated = True
+        if file_updates.get(file, 0) > 1:
+            consolidate_file_step = ConsolidateFileStep(
+                role=ROLE_TAO, file_name=file, keep_content_even_if_same=True, between=steps)
+            consolidate_file_steps.append(consolidate_file_step)
     return consolidate_file_steps
 
 
@@ -1785,26 +1790,18 @@ def rolling_diff_file_consolidate(executor: Executor, file: str,
         executor.logger.log(f"Rolling consolidation. starting snippets: {len(snippets)}, "
                             f"text length: {len(collecting[0][0].content)}")
         prompts = []
-        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_ensure_updated_file_integrity.format(
-            file_name=file, between='')))
-        prompts.append((ROLE_ORCHESTRATOR, prompt_db.snippet_op_files))
         original: GeneratedFile
         snippet_text = "\n\n".join(f"**Update#{k+1}: {step.step_name}**\n{step.description}"
                                    for k, (original, step) in enumerate(collecting))
         diffs = _unified_diff(collecting[0][0].content.split('\n'), collecting[1][0].content.split('\n'),
                               fromfile='Update#1', tofile='Update#2', lineterm='')
         diffs = '\n'.join(line for line in diffs if not line.startswith('-'))
-        snippet_text += f"""
-To help you, here are the ADDITIONS of the update#2 (because only part of the file may be shown during an update, 
-full diffs would look confusing); it is possible lines are removed intentionally, check it for yourself:
 
-`````
-{diffs}
-`````
-"""
         prompts.append((ROLE_ORCHESTRATOR, snippet_text))
         if critic_text is not None and len(critic_text) > 0:
             prompts.append((ROLE_ORCHESTRATOR, f"Prior issues trying this:\n\n{critic_text}"))
+        prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_ensure_updated_file_integrity.format(
+            file_name=file, diffs=diffs)))
         for n_try in range(2):
             try:
                 response = executor.llm.ask(

@@ -12,8 +12,6 @@ WRITE_FILE: <file_path_name>
 <explain the purpose of this file update>
 
 <content as a Markdown fenced block>
-
-<declare the next step to work at; see the notes below.>
 ````
 
 Note:

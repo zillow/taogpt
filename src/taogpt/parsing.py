@@ -506,17 +506,22 @@ def restore_fenced_block(text: str, fenced_blocks: dict[str, str]):
     return text
 
 
-def gather_file_contents(markdown_full_content: str) -> tuple[str,str,str,str]:
+def gather_file_contents(markdown_full_content: str, expect_one=True) -> tuple[str,str,str,str]|None:
     results: list[tuple[str, str, str, str]] = list()
     collapsed, blocks = check_and_fix_fenced_blocks(markdown_full_content, collapse_blocks=True)
     for digest, (snippet, content_type, line_number, _) in blocks.items():
         if snippet is None:
-            raise ParseError(f"No content (in markdown fenced block) found")
+            continue
         block_lines = snippet.split('\n')
         content = '\n'.join(block_lines[1:-1])
         desc = collapsed.replace(digest + '\n', '').strip()
         desc = desc.replace(digest, '').strip() # to be safe
         results.append((content_type, content, snippet, desc))
+    if len(results) == 0:
+        if expect_one:
+            raise ParseError(f"Need exactly one file content fenced block. Found {len(results)}")
+        else:
+            return None
     if len(results) != 1:
         raise ParseError(f"Need exactly one file content fenced block. Found {len(results)}")
     content_type, content, snippet, desc = results[0]

@@ -14,8 +14,6 @@ def fib(n):
     return fib(n-1) + f(n-2) if n > 1 else 1
 print(f"Tao sucks at math but he's a superb Python programmer! Here is the answer {{fib(22)}}")
 ```
-
-<declare the next step to work at; see the notes below.>
 `````
 
 1. Must paying attention to Python indentation.

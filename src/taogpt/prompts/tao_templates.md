@@ -13,7 +13,6 @@ proposals, you should come up with a new proposal avoiding those issues.
 
 Deliberate on this task step, outline a sequence of sub-tasks.
 Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each sub-task later.
-No need to declare the next step for this choice because the next step is the first in the plan.
 
 The plan can contain go-to loop, conditional branch, or recursion. Also estimate the difficulty level for each sub-step.
 
@@ -36,8 +35,6 @@ Follow this template:
 `````markdown
 MY_THOUGHT:
 <answer and explanation>
-
-<declare the next step to work at; see the notes below.>
 `````
 
 {snippet_op_files}
