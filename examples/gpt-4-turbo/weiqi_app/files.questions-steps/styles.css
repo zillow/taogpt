@@ -1,35 +1,39 @@
-body {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    background-color: #f4f4f4;
-}
-
+/* Basic styling for the Weiqi board */
 #weiqi-board {
+    width: 1900px; /* 19 x 100px */
+    height: 1900px; /* 19 x 100px */
     display: grid;
     grid-template-columns: repeat(19, 100px);
     grid-template-rows: repeat(19, 100px);
-    background-image: url('assets/wood_texture.jpg');
-    border: 10px solid #76422d;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    border: 1px solid black;
+    background-color: #DDBB88; /* Traditional wooden board color */
 }
 
+/* Grid point styles */
 .grid-point {
     width: 100px;
     height: 100px;
     background-size: cover;
 }
 
-.grid-point.mid { background-image: url('assets/grid_point_mid.png'); }
-.grid-point.north { background-image: url('assets/grid_point_north.png'); }
-.grid-point.south { background-image: url('assets/grid_point_south.png'); }
-.grid-point.east { background-image: url('assets/grid_point_east.png'); }
-.grid-point.west { background-image: url('assets/grid_point_west.png'); }
-.grid-point.north-east { background-image: url('assets/grid_point_north_east.png'); }
-.grid-point.north-west { background-image: url('assets/grid_point_north_west.png'); }
-.grid-point.south-east { background-image: url('assets/grid_point_south_east.png'); }
-.grid-point.south-west { background-image: url('assets/grid_point_south_west.png'); }
+/* Specific grid point positions */
+.grid-point-north { background-image: url('assets/grid_point_north.png'); }
+.grid-point-south { background-image: url('assets/grid_point_south.png'); }
+.grid-point-east { background-image: url('assets/grid_point_east.png'); }
+.grid-point-west { background-image: url('assets/grid_point_west.png'); }
+.grid-point-north-east { background-image: url('assets/grid_point_north_east.png'); }
+.grid-point-north-west { background-image: url('assets/grid_point_north_west.png'); }
+.grid-point-south-east { background-image: url('assets/grid_point_south_east.png'); }
+.grid-point-south-west { background-image: url('assets/grid_point_south_west.png'); }
+.grid-point-mid { background-image: url('assets/grid_point_mid.png'); }
 
-.stone.black { background-image: url('assets/black_stone.png'); }
-.stone.white { background-image: url('assets/white_stone.png'); }
+/* Stone styles */
+.stone {
+    width: 100px;
+    height: 100px;
+    background-size: cover;
+    cursor: pointer; /* Indicates that the stone can be placed */
+}
+
+.stone-black { background-image: url('assets/black_stone.png'); }
+.stone-white { background-image: url('assets/white_stone.png'); }

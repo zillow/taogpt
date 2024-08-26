@@ -12,6 +12,8 @@ import taogpt.utils as _utils
 from taogpt.constants import *
 from taogpt.exceptions import ParseError, UnbalancedBlockParseError
 
+FREE_TEXT = '_FREE_TEXT'
+
 _logger = _logging.getLogger(__file__)
 
 _dash_or_slash = r'[_ \-]'
@@ -69,19 +71,18 @@ def parse_step_type_spec(text: str, working_on:str=None) -> tuple[str|None, str|
         return None, None
     actions = action_type_re.findall(text)
     if len(actions) > 1:
-        msg = f"Expecting 1 action heading but found {len(actions)}."
-        if _utils.str_or_blank(working_on) != '':
-            msg += f" Please respond with one action for the step '{working_on}' only."
-        msg += f"""
-Like:
+        actions_str = ', '.join(actions)
+        msg = f"""Expecting 1 action heading but found {len(actions)}: {actions_str}. 
+Don't work on more than one step. Take only one action when working at one step. Like:
 
 ```markdown
-{actions[0]}:
+<ACTION_HEADING>:
 
-... <response content> ...
-<end of response>
+... response content for this action ...
 ```
 """
+        if _utils.str_or_blank(working_on) != '':
+            msg += f" Please respond with one action for the step '{working_on}' only."
         raise ParseError(msg)
     match: _re.Match = step_type_re.search(text)
     if match is None:
@@ -90,8 +91,29 @@ Like:
     step_type, definition = match.group(2), _utils.str_or_blank(match.group(3))
     if definition == '':
         return None, None
-    step_type = step_type.replace('-', '_')
+    step_type = _re.sub(r'[\- ]', '_', step_type)
     return step_type, definition
+
+
+def parse_sections(text: str, section_level: str='##') -> dict[str, str|None]:
+    try:
+        fenced_blocks, text = extract_fenced_blocks(text)
+    except SyntaxError as e:
+        raise ParseError(str(e))
+    matched_sections = {FREE_TEXT: ''}
+    section = FREE_TEXT
+    for line in text.split('\n'):
+        match: _re.Match = _re.match(rf"^{section_level}+\s+([^\n]+)", line)
+        if match is not None:
+            section = match.group(1).strip()
+            while section != 'FILE:' and section.endswith(':'):
+                section = section[:-1]
+            matched_sections[section] = ''
+        else:
+            matched_sections[section] += line + '\n'
+
+    return {k: (restore_fenced_block(text, fenced_blocks).strip() if text is not None else None)
+            for k, text in matched_sections.items()}
 
 
 def parse_ordered_list(markdown_text, at_least_one_list=True) -> list[str]:
@@ -120,15 +142,11 @@ _final_solution_check_re = _re.compile(r"^\s*(yes|no)[.,]?\s+(.+)$", flags=_re.D
 at_step_re = _re.compile(r"\s*\[ *at +step(.*?)]", flags=_re.IGNORECASE)
 _step_re = _re.compile(r"^( *\[? *(at )?(step#)?(\d+): *)?(.*?)[\s\]]*$", flags=_re.IGNORECASE)
 _next_step_re = _re.compile(r"^( *\[? *(at )?step#?\d*:? *)?(response to +)?(.*?)[\s\]]*$", flags=_re.IGNORECASE)
-_proposal_re = _re.compile(f"^\s*\[?{PRIOR_PROPOSAL}", flags=_re.IGNORECASE)
 
-def parse_step_id_and_name(text: str, ok_without_step_id=False, key='') -> tuple[int|None, str]:
+def parse_step_id_and_name(text: str, key='') -> tuple[int|None, str]:
     if key != '':
         key = f"{key}: "
     text = _utils.str_or_blank(text)
-    if _proposal_re.search(text) is not None:
-        raise ParseError(f"{key}You tried to report error in other proposals. Error report is only for previous "
-                         f"executed steps. Either report issues in previous steps or try different actions.")
     match = _step_re.match(text)
     if match is None:
         raise ParseError(f"{key}Step ID and description must be in the format of "
@@ -137,8 +155,6 @@ def parse_step_id_and_name(text: str, ok_without_step_id=False, key='') -> tuple
         step_num = int(match.group(4))
         return (step_num, match.group(5))
     except TypeError:
-        if ok_without_step_id:
-            return None, text
         raise ParseError(f"{key}Step ID and description must be in the format of "
                          f"'step#<ID>: <string description>'.")
 
@@ -149,8 +165,7 @@ class NextStepDesc:
     target_plan_tag: str | None
     target_plan_done: bool
     next_step_desc: str|None
-    plan_of_next_step: str|None
-    difficulty: int=5
+    difficulty: int=6
 
     @property
     def is_final_step(self):
@@ -192,19 +207,11 @@ def parse_next_step_spec(text: str, required=False) -> tuple[NextStepDesc|None, 
         if required:
             raise ParseError("Expecting a fenced block of JSON type with key `next_to_work_at`, but not found")
         return None, text
+
+    difficulty = next_step_response.get('difficulty', 5)
     target_plan_id: int|None = None
-    target_plan_desc: str|None = None
     target_plan_tag: str|None = None
     target_done: bool|None = None
-    next_step = next_step_response.get('step', next_step_response.get('next_step', None))
-    if not isinstance(next_step, str):
-        raise ParseError(f"The key `next_step` must have a string value indicating the next step.")
-    if next_step == '':
-        raise ParseError(f'No next step specified. Set next step description to the `next_step` key.')
-    elif next_step not in ('all done', 'done'):
-        _, next_step = parse_step_id_and_name(next_step, ok_without_step_id=True)
-    else:
-        return NextStepDesc(None, None, True, "all done", None), text.strip()
 
     for key, value in next_step_response.items():
         matched = _re.match(r"^\s*done\s+with\s+\[*([^]]+)", key)
@@ -213,16 +220,28 @@ def parse_next_step_spec(text: str, required=False) -> tuple[NextStepDesc|None, 
             target_plan_tag = f"step#{target_plan_id}: {target_plan_desc}"
             target_done = value
             break
+
     plan_of_next_step: str|None = next_step_response.get('plan_of_next_step', None)
     if target_done:
         if plan_of_next_step is not None:
-            next_plan_id, next_plan_desc = parse_step_id_and_name(plan_of_next_step, ok_without_step_id=True)
-            if target_plan_id == next_plan_id or target_plan_desc == next_plan_desc:
-                target_plan_id, target_plan_tag, target_done = None, None, False
-    difficulty = next_step_response.get('difficulty', 5)
-    return (NextStepDesc(target_plan_id=target_plan_id, target_plan_tag=target_plan_tag, target_plan_done=target_done,
-                        next_step_desc=next_step, plan_of_next_step=plan_of_next_step, difficulty=difficulty),
-            text.strip())
+            try:
+                next_plan_id, next_plan_desc = parse_step_id_and_name(plan_of_next_step)
+            except ParseError:
+                next_plan_id = None
+            if target_plan_id == next_plan_id:
+                raise ParseError(f"You claim step#{target_plan_id} is done "
+                                 f"while declare it as the plan of next step. This is contradictory.")
+
+    next_step: str|None = next_step_response.get('step', next_step_response.get('next_step', None))
+    if target_done:
+        return NextStepDesc(target_plan_id, target_plan_tag, target_done, next_step, difficulty=difficulty), text
+
+    if next_step is None or next_step == '':
+        raise ParseError(f'No next step specified. Set next step description to the `next_step` key.')
+    elif next_step in ('all done', 'done'):
+        return NextStepDesc(None, None, True, "all done"), text
+
+    return NextStepDesc(target_plan_id, target_plan_tag, target_done, next_step, difficulty=difficulty), text
 
 
 def parse_verification_response(text: str) -> tuple[dict[str, tuple[str, list[tuple[int, str]]|None]], dict]:
@@ -325,7 +344,7 @@ class StepDescriptor:
     description: str
     why: str|None
     sub_steps: dict[str, _t.Any]|None = None
-    difficulty: int = 5
+    difficulty: int = 6
 
     def __eq__(self, __value):
         if self is __value:
@@ -506,7 +525,7 @@ def restore_fenced_block(text: str, fenced_blocks: dict[str, str]):
     return text
 
 
-def gather_file_contents(markdown_full_content: str, expect_one=True) -> tuple[str,str,str,str]|None:
+def gather_file_contents(markdown_full_content: str) -> tuple[str,str,str,str]|None:
     results: list[tuple[str, str, str, str]] = list()
     collapsed, blocks = check_and_fix_fenced_blocks(markdown_full_content, collapse_blocks=True)
     for digest, (snippet, content_type, line_number, _) in blocks.items():
@@ -517,11 +536,6 @@ def gather_file_contents(markdown_full_content: str, expect_one=True) -> tuple[s
         desc = collapsed.replace(digest + '\n', '').strip()
         desc = desc.replace(digest, '').strip() # to be safe
         results.append((content_type, content, snippet, desc))
-    if len(results) == 0:
-        if expect_one:
-            raise ParseError(f"Need exactly one file content fenced block. Found {len(results)}")
-        else:
-            return None
     if len(results) != 1:
         raise ParseError(f"Need exactly one file content fenced block. Found {len(results)}")
     content_type, content, snippet, desc = results[0]
@@ -639,15 +653,16 @@ def annotate_fenced_block_backtick_quotes(content):
     return content
 
 
-def fix_nested_markdown_blocks_by_report(content: str, report: list[dict[str, str|int|None]]):
-    max_level = max(item['level'] for item in report if item['close'] is not None) if len(report) > 0 else 3
-    report_sorted = sorted(report, key=lambda x: x['level'], reverse=True)
+def fix_nested_markdown_blocks_by_report(content: str, match_results: list[dict[str, str | int | None]]):
+    max_level = max(item['level'] for item in match_results if item['open'] is not None) if len(match_results) > 0 else 3
+    report_sorted = sorted(match_results, key=lambda x: x['level'], reverse=True)
     for item in report_sorted:
         open_tag = item['open']
         close_tag = item['close']
         level = item['level']
 
         if close_tag is None:
+            _logger.error(f"Missing close tag:\n{json.dumps(match_results, indent=2)}")
             raise ParseError(f"Unmatched backtick quote.")
 
         num_backticks = 3 + max_level - level
@@ -662,9 +677,10 @@ def fix_nested_markdown_blocks_by_report(content: str, report: list[dict[str, st
 
 
 def normalize_path(string: str) -> str:
-    matched = _re.match(r"/*(([.a-zA-Z0-9_]+/+)*[.a-zA-Z0-9_]+)$", string.strip())
+    matched = _re.match(r"/*(([.a-zA-Z0-9_\-]+/+)*[.a-zA-Z0-9_]+)$", string.strip())
     if not matched:
-        raise ParseError("File path must be slash-separated components consisting only alphanumeric, period, "
-                         "and underscore characters. Only file path is allowed, not directory path ending with slash.")
+        raise ParseError("Make sure to include file path consisting slash-separated components of only "
+                         "alphanumeric, period, dash, and underscore characters. "
+                         "Only file path is allowed, not directory path ending with slash.")
     path = matched.group(1)
     return _re.sub(r'/+', '/', path)

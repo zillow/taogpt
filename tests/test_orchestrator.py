@@ -35,16 +35,18 @@ def test_check_final_solution_success(logger):
             return text
         elif reason == 'SummarizeStep':
             return "Here is your answer"
+        elif reason == 'fix':
+            return f"{MY_THOUGHT}:\nHere is your answer."
+        raise ValueError(f"Unknown reason: {reason}")
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
-    orchestrator.config.verification_votes = 2
-    orchestrator.config.max_repairs = 0
     step.eval(orchestrator)
-    assert len(llm.conversation_sequence) == 4
+    assert len(llm.conversation_sequence) == 5
     assert llm.conversation_sequence[0][0] == 'verify'
-    assert llm.conversation_sequence[1][0] == 'verify'
-    assert llm.conversation_sequence[2][0] == 'merge_criticisms'
-    assert llm.conversation_sequence[3][0] == 'SummarizeStep'
+    assert llm.conversation_sequence[1][0] == 'merge_criticisms'
+    assert llm.conversation_sequence[2][0] == 'fix'
+    assert llm.conversation_sequence[3][0] == 'fix'
+    assert llm.conversation_sequence[4][0] == 'SummarizeStep'
 
 
 def test_check_final_solution_failed(logger):
@@ -68,13 +70,12 @@ def test_check_final_solution_failed(logger):
         assert False, f"Unexpected reason: {reason}"
 
     step, llm, orchestrator = create_final_check_chain(reply, logger)
-    _t.cast(DirectAnswerStep, orchestrator.previous_step(step))._n_tries = orchestrator.config.max_repairs
     step._reset_chain_retry_count = True
+    step._n_verifications = 0
     try:
         step.eval(orchestrator)
-        assert False, "expecting Backtrack not raised"
-    except Backtrack:
-        pass
+    except Backtrack as e:
+        raise e # no backtrack exception on max repairs
 
 
 def test_check_final_solution_parse_error(logger):
@@ -101,14 +102,14 @@ def test_check_final_solution_parse_error(logger):
         pass
 
 
-def create_final_check_chain(reply, logger):
+def create_final_check_chain(reply, logger, n_verifications=1):
     llm = MockLLM(logger, reply_fn=reply)
     orchestrator = create_orchestrator(llm, logger, check_final=True)
     step = PresentTaskStep(description="This is a problem", role=ROLE_USER)
     orchestrator.chain.append(step)
     step = DirectAnswerStep(description="This is an answer", role=ROLE_TAO, step_name='calculate total')
     orchestrator.chain.append(step)
-    step = SummarizeStep()
+    step = SummarizeStep(n_verifications=1)
     orchestrator.chain.append(step)
     return step, llm, orchestrator
 
@@ -308,24 +309,21 @@ def test_validate_next_step_spec(logger):
                                   role=ROLE_TAO, step_name='Find unfilled slots')
     orchestrator.chain.append(grandchild)
 
-    next_step = NextStepDesc(None, None, False, "Fill in the second row", plan_of_next_step='step#1: start')
+    next_step = NextStepDesc(orchestrator.step_id(step_by_step2), 'dummy', False, "Fill in the second row")
     validate_next_step_spec(orchestrator, next_step)
 
     # next step in parent
-    next_step = NextStepDesc(2, 'step#2: Fill in the first row', True, "Fill in the second row",
-                             plan_of_next_step='step#1: start')
+    next_step = NextStepDesc(2, 'step#2: Fill in the first row', True, "Fill in the second row")
     validate_next_step_spec(orchestrator, next_step)
     assert next_step.next_step_desc is None # reset to ask later
 
     # next step in grandparent
-    next_step = NextStepDesc(2, 'step#2: Fill in the first row', True, "Fill in the second row",
-                             plan_of_next_step='step#2: Fill in the first row')
+    next_step = NextStepDesc(2, 'step#2: Fill in the first row', True, "Fill in the second row")
     validate_next_step_spec(orchestrator, next_step)
     assert next_step.next_step_desc is None
 
     try:
-        next_step = NextStepDesc(0, "step#0: This is a problem", True, "Fill in the second row",
-                                 plan_of_next_step='step#0: This is a problem')
+        next_step = NextStepDesc(0, "step#0: This is a problem", True, "Fill in the second row")
         validate_next_step_spec(orchestrator, next_step, current_plan=step_by_step)
         raise AssertionError("Expecting ParseError not raised")
     except ParseError:

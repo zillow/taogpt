@@ -348,8 +348,8 @@ def test_parse_next_step():
 """
     next_step, _ = parsing.parse_next_step_spec(text)
     assert next_step.next_step_desc == "all done"
-    assert next_step.target_plan_id is None
-    assert next_step.difficulty == 5
+    assert next_step.target_plan_id == 1
+    assert next_step.difficulty == 8
 
 
 def test_parse_next_step_invalid():
@@ -379,15 +379,6 @@ def test_parse_step_id_and_name():
             raise AssertionError(f"expecting ParseError not raised for patten '{invalid}'")
         except taogpt.exceptions.ParseError:
             pass
-
-
-def test_prior_proposal_in_step_id_name():
-    text = "Proposal#1: The given solution does not meet the rules"
-    try:
-        result = parsing.parse_step_id_and_name(text)
-        raise AssertionError(f"Expecting ParseError not raised. Got: '{result}'")
-    except taogpt.exceptions.ParseError as e:
-        assert "You tried to report error in other proposals" in str(e)
 
 
 def test_gather_file_sections():

@@ -1,6 +1,5 @@
 Format the above step-by-step plan in a JSON fenced block:
 
-`````markdown
 ```json
 {{
   "1": {{
@@ -17,4 +16,3 @@ Format the above step-by-step plan in a JSON fenced block:
   "looping_among_steps": true or false // does this plan contain any loop AMONG its peer steps?
 }}
 ```
-`````

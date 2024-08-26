@@ -251,7 +251,9 @@ class LangChainLLM(LLM):
         else:
             reply = llm.invoke(messages, max_tokens=max_tokens)
             reply_content = reply.content
-        reply_content = fix_nested_markdown_backticks(llm, reply_content)
+        reply_tokens = self.count_tokens(reply_content)
+        reply_content = fix_nested_markdown_backticks(llm, reply_content,
+                                                      context_tokens=context_tokens, reply_tokens=reply_tokens)
         _old = reply_content
         reply_content = _utils.str_or_blank(reply_content)
         return (reply_content, total_context_tokens) if return_context_token_usages else reply_content
@@ -286,7 +288,8 @@ _debug_content = None
 _debug_reply = None
 
 
-def fix_nested_markdown_backticks(llm: ChatOpenAIWithGenInfo, original_content: str):
+def fix_nested_markdown_backticks(llm: ChatOpenAIWithGenInfo, original_content: str,
+                                  context_tokens: int, reply_tokens: int):
     try:
         fixed, _ = check_and_fix_fenced_blocks(original_content)
         return fixed
@@ -294,6 +297,7 @@ def fix_nested_markdown_backticks(llm: ChatOpenAIWithGenInfo, original_content: 
         pass
 
     content = annotate_fenced_block_backtick_quotes(original_content)
+    _dev_logger.error(f"Unmatched fenced block backticks (tokens: {reply_tokens}/{context_tokens}):\n{content}")
 
     task = """
 A Markdown content generator fails to understand the backtick rules on nested fenced block and produce corrupted 

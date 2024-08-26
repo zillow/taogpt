@@ -1,6 +1,6 @@
 # Problem Solving Instructions:
 
-Given problem solving session so far, choose one of the following actions:
+Assess the difficulty of the task/step and choose one of the following actions:
 
 ## Report errors
 
@@ -11,7 +11,11 @@ proposals, you should come up with a new proposal avoiding those issues.
 
 ## Make a step-by-step plan
 
-Deliberate on this task step, outline a sequence of sub-tasks.
+Deliberate on this task step, outline a sequence of sub-tasks. 
+
+Choose this action only if the task step is hard, not because it can be broken down into sub-steps; 
+if steps become too detailed, choose other types of actions instead.
+
 Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each sub-task later.
 
 The plan can contain go-to loop, conditional branch, or recursion. Also estimate the difficulty level for each sub-step.
@@ -20,6 +24,8 @@ Follow this markdown template:
 
 ```markdown
 HERE_IS_MY_STEP_BY_STEP_PLAN:
+
+<briefly explain the rationales>
 
 1. <description>. Difficulty: 1 to 10
 2. <description>. Difficulty: 1 to 10

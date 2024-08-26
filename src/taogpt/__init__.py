@@ -79,9 +79,7 @@ class Config:
     first_try_temperature: float = 0.0
     alternative_temperature: float = 0.7
     max_search_expansion: int = 4
-    max_repairs: int = 4
-    votes: int = 2
-    verification_votes: int = 2
+    votes: int = 1
     n_final_checks: int = 3
 
     # behavioral

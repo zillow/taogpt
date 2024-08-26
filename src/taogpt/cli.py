@@ -30,15 +30,11 @@ parser.add_argument('-T1', '--alternative-temperature', type=float,
                     default=_proto_config.alternative_temperature, help='Alternative temperature')
 parser.add_argument('-m', '--max-search-expansion', type=int,
                     default=_proto_config.max_search_expansion, help='Maximum search expansion')
-parser.add_argument('-R', '--max-repairs', type=int,
-                    default=_proto_config.max_repairs, help='Maximum repairs attempted')
 parser.add_argument('-v', '--votes', type=int,
-                    default=_proto_config.votes, help='Number of votes')
-parser.add_argument('-V', '--verification-votes', type=int,
-                    default=_proto_config.verification_votes, help='Number of votes')
+                    default=_proto_config.votes, help='Number of ranking votes')
 parser.add_argument('-c', '--n-final-checks', type=int,
                     default=_proto_config.n_final_checks,
-                    action=argparse.BooleanOptionalAction, help='Number of final verifications')
+                    action=argparse.BooleanOptionalAction, help='Number of final verifications and repairs')
 
 # behavioral
 parser.add_argument('-Q', '--ask-questions', type=bool, default=_proto_config.ask_questions,

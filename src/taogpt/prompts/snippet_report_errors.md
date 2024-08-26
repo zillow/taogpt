@@ -4,14 +4,16 @@ responsible in the following format:
 ````markdown
 I_FOUND_ERRORS:
 
-At step#<ID>: <step description>: <issue found and reason>. Severity: `error` or `warning`. 
-    Already fixed in subsequentstep: yes/no;
-    Recommendation: <any suggestion>.
+**At step#<ID>: <step description>**: <issue found and reason>. Severity: `error` or `warning`. 
+Already fixed in subsequent step: yes/no;
+Recommendation: <any suggestion>.
+
 ...
-At step#<ID>: affected by issue found at step#<previous ID>: <step description>.
+
+**At step#<ID>: affected by issue found at step#<previous ID>**: <step description>.
 ````
 
 where `"step#<ID>: <step description>"` can be found in the bracket "[at step#<ID>: <step_description>]" of the steps 
 (without the brackets.)
 
-Report only real errors. Do NOT report small issues/warnings or intermittent errors that have already been fixed.
+Report only real errors while avoid nitpicking.

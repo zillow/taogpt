@@ -134,3 +134,28 @@ some text
     assert dn.next_step.target_plan_id == 12
     assert dn.next_step.next_step_desc == 'next thing to do'
     assert dn.next_step.difficulty == 4
+
+
+def test_parse_to_file_steps():
+    text = f"""
+Write some file
+
+## File: path1/file1.txt
+
+```text
+file 1 text
+```
+
+## File: path2//file2.txt
+
+```text
+file 2 text
+```
+"""
+    step = parse_to_step(f"""{WRITE_FILE}:
+{text}""")
+    assert step.description == text.strip()
+    files = step.collected_files
+    assert len(files) == 2
+    assert files['path1/file1.txt'].content == 'file 1 text'
+    assert files['path2/file2.txt'].content == 'file 2 text'
