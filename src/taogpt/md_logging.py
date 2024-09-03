@@ -143,7 +143,7 @@ class MarkdownLogger:
         self._log.write('<div class="content">\n\n')
         self._log.flush()
         if self._console_out is not None:
-            self._console_out.write(f"\n--- {role.strip()} ---\n", file=self._console_out)
+            self._console_out.write(f"\n--- {role.strip()} ---\n")
 
     def close_message_section(self):
         self._log.write('\n</div></div>\n\n') # close: content section_header

@@ -26,6 +26,7 @@ class PromptDb:
         self.sage_rank_choices=_read(path / 'sage_rank_choices.md')
         self.sage_rank_instructions=_read(path / 'sage_rank_instructions.md')
         self.tao_next_step=_read(path / 'tao_next_step.md')
+        self.tao_format_next_step=_read(path / 'tao_format_next_step.md')
         self.tao_proceed_to_step=_read(path / 'tao_proceed_to_step.md')
         self.orchestrator_parse_error=_read(path / 'orchestrator_parse_error.md')
         self.tao_prior_approaches=_read(path / 'tao_prior_approaches.md')
@@ -38,6 +39,7 @@ class PromptDb:
         self.snippet_report_errors=_read(path / 'snippet_report_errors.md')
         self.sage_merge_criticisms=_read(path / 'sage_merge_criticisms.md')
         self.tao_ensure_updated_file_integrity=_read(path / 'tao_ensure_updated_file_integrity.md')
+        self.tao_check_merged_file=_read(path / 'tao_check_merged_file.md')
         self.tao_encourage_question=_read(path / 'tao_encourage_question.md')
         self.orchestrator_note_past_criticisms =_read(path / 'orchestrator_note_past_criticisms.md')
 

@@ -146,6 +146,14 @@ class Executor(_abc.ABC):
         return self.llm
 
     @property
+    def file_merging_llm(self) -> LLM:
+        """
+        The LLM is used for consolidating file revisions. By default, it just returns the regular LLM.
+        :return: an LLM
+        """
+        return self.llm
+
+    @property
     def total_tokens(self) -> int:
         tokens = self.llm.total_tokens
         if self.sage_llm is not None and self.sage_llm is not self.llm:

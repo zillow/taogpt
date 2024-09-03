@@ -5,13 +5,13 @@ current step, higher is better. Note: choices not directly providing the answer 
   be scored based on the correctness and efficiency of the plan. They are plans! The problem solver will work on each
   step later. If the task asks for skipping something, prefer plans that obey it.
 * `MY_THOUGHT` choices provides intuitive thought to the problem step and should be scored according to correctness
-  and clarity of the thought. Simple task/steps should have direct/intuitive an answer. Incorrect but fixable answers 
-  should get some points rather than 0.
+  and clarity of the thought. Simple task/steps should have direct/intuitive an answer. Incorrect but fixable 
+  answers should get some points rather than 0.
 * `I_FOUND_ERRORS` choices report errors found in preceding problem solving trajectory and should be scored by
   severity and accuracy of the reports.
 * `I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED` choices seek clarifications from the user and should be scored
-  according to the usefulness of the questions to the solving the problem. This action is the only way to ask 
-  questions.
+  according to the usefulness of the questions to the solving the problem. Should rank high if at least some 
+  questions are very useful. This action is the only way to ask questions.
 * `RUN_CODE_SNIPPET` choices try to execute a Python code snippet to provide the answer and should be
   scored according to the usefulness, correctness, and efficiency of the code snippet. Coding style here is not an
   issue.

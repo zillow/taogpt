@@ -25,8 +25,8 @@ _action_re = (rf"{MY_THOUGHT.replace('_', _dash_or_slash)}"
     rf"|{WILL_ASK_QUESTIONS.replace('_', _dash_or_slash)}"
     rf"|{HERE_IS_MY_STEP_BY_STEP_PLAN.replace('_', _dash_or_slash)}")
 
-step_type_re = _re.compile(r"(^)\s*(" + _action_re + r"):\s*((.|\n)+)")
-action_type_re = _re.compile(r"\s*(" + _action_re + r"):")
+step_type_re = _re.compile(r"(^)[\s#]*(" + _action_re + r"):\s*((.|\n)+)", flags=_re.IGNORECASE)
+action_type_re = _re.compile(r"[\s#]*(" + _action_re + r"):", flags=_re.IGNORECASE)
 
 _true_false_answer_re = _re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
                                    flags=_re.MULTILINE|_re.DOTALL|_re.IGNORECASE)
@@ -88,7 +88,7 @@ Don't work on more than one step. Take only one action when working at one step.
     if match is None:
         return None, None
     step_type: str
-    step_type, definition = match.group(2), _utils.str_or_blank(match.group(3))
+    step_type, definition = str(match.group(2)).upper(), _utils.str_or_blank(match.group(3))
     if definition == '':
         return None, None
     step_type = _re.sub(r'[\- ]', '_', step_type)
@@ -208,13 +208,14 @@ def parse_next_step_spec(text: str, required=False) -> tuple[NextStepDesc|None, 
             raise ParseError("Expecting a fenced block of JSON type with key `next_to_work_at`, but not found")
         return None, text
 
+    next_step: str|None = next_step_response.get('step', next_step_response.get('next_step', None))
     difficulty = next_step_response.get('difficulty', 5)
     target_plan_id: int|None = None
     target_plan_tag: str|None = None
     target_done: bool|None = None
 
     for key, value in next_step_response.items():
-        matched = _re.match(r"^\s*done\s+with\s+\[*([^]]+)", key)
+        matched = _re.match(r"^\s*done[\s_\-]+with[\s_\-]+\[*([^]]+)", key)
         if matched:
             target_plan_id, target_plan_desc = parse_step_id_and_name(matched.group(1), key=key)
             target_plan_tag = f"step#{target_plan_id}: {target_plan_desc}"
@@ -222,7 +223,7 @@ def parse_next_step_spec(text: str, required=False) -> tuple[NextStepDesc|None, 
             break
 
     plan_of_next_step: str|None = next_step_response.get('plan_of_next_step', None)
-    if target_done:
+    if target_done and next_step != 'all done':
         if plan_of_next_step is not None:
             try:
                 next_plan_id, next_plan_desc = parse_step_id_and_name(plan_of_next_step)
@@ -232,7 +233,6 @@ def parse_next_step_spec(text: str, required=False) -> tuple[NextStepDesc|None, 
                 raise ParseError(f"You claim step#{target_plan_id} is done "
                                  f"while declare it as the plan of next step. This is contradictory.")
 
-    next_step: str|None = next_step_response.get('step', next_step_response.get('next_step', None))
     if target_done:
         return NextStepDesc(target_plan_id, target_plan_tag, target_done, next_step, difficulty=difficulty), text
 
@@ -525,23 +525,6 @@ def restore_fenced_block(text: str, fenced_blocks: dict[str, str]):
     return text
 
 
-def gather_file_contents(markdown_full_content: str) -> tuple[str,str,str,str]|None:
-    results: list[tuple[str, str, str, str]] = list()
-    collapsed, blocks = check_and_fix_fenced_blocks(markdown_full_content, collapse_blocks=True)
-    for digest, (snippet, content_type, line_number, _) in blocks.items():
-        if snippet is None:
-            continue
-        block_lines = snippet.split('\n')
-        content = '\n'.join(block_lines[1:-1])
-        desc = collapsed.replace(digest + '\n', '').strip()
-        desc = desc.replace(digest, '').strip() # to be safe
-        results.append((content_type, content, snippet, desc))
-    if len(results) != 1:
-        raise ParseError(f"Need exactly one file content fenced block. Found {len(results)}")
-    content_type, content, snippet, desc = results[0]
-    return content_type, content, snippet, desc
-
-
 def match_step_name(actual: str, expected_step_num: int, expected_step_name: str) -> bool:
     import Levenshtein
     dist = min(Levenshtein.distance(actual, expected_step_name),
@@ -674,13 +657,3 @@ def fix_nested_markdown_blocks_by_report(content: str, match_results: list[dict[
     # Remove all remaining backtick markers
     content = _re.sub(r" # BACKTICK\d+", "", content)
     return content
-
-
-def normalize_path(string: str) -> str:
-    matched = _re.match(r"/*(([.a-zA-Z0-9_\-]+/+)*[.a-zA-Z0-9_]+)$", string.strip())
-    if not matched:
-        raise ParseError("Make sure to include file path consisting slash-separated components of only "
-                         "alphanumeric, period, dash, and underscore characters. "
-                         "Only file path is allowed, not directory path ending with slash.")
-    path = matched.group(1)
-    return _re.sub(r'/+', '/', path)

@@ -21,7 +21,8 @@ class Orchestrator(Executor):
                  llm: LLM,
                  prompts: PromptDb,
                  markdown_logger: taogpt.md_logging.MarkdownLogger,
-                 sage_llm: LLM | None = None,
+                 sage_llm: LLM=None,
+                 file_merging_llm: LLM=None,
                  **kwargs):
         super().__init__(**kwargs)
         self._config = Config(**_dc.asdict(config))
@@ -29,6 +30,7 @@ class Orchestrator(Executor):
         self._prompts = prompts
         self._markdown_logger = markdown_logger
         self._sage_llm = sage_llm
+        self._merge_file_llm = file_merging_llm
 
         self._chain: list[Step] = []
         self._waiting: list[Step] = []
@@ -68,6 +70,10 @@ class Orchestrator(Executor):
     @property
     def sage_llm(self) -> LLM:
         return self._sage_llm or self.llm
+
+    @property
+    def file_merging_llm(self) -> LLM:
+        return self._merge_file_llm or self.llm
 
     @property
     def logger(self) -> MarkdownLogger:
@@ -126,10 +132,10 @@ class Orchestrator(Executor):
         today = _datetime.date.today().strftime('%Y/%m/%d')
         logger.log(f"Date: {today}", role='debug')
         logger.log(f"**Configurations for {self.__class__.__name__}**", role='debug')
-        llm_repr = repr(self.llm)
-        sage_llm_repr = repr(self.sage_llm)
-        logger.log(f"LLM: {llm_repr}")
-        logger.log(f"Sage LLM: {sage_llm_repr}")
+        logger.log(f"LLM: {repr(self.llm)}")
+        logger.log(f"Sage LLM: {repr(self.sage_llm)}")
+        if self.config.file_support:
+            logger.log(f"File consolidation LLM: {repr(self.file_merging_llm)}")
         logger.log(f"""```json
 {_json.dumps(_dc.asdict(self.config), indent=2)}
 ```
@@ -141,6 +147,10 @@ class Orchestrator(Executor):
             self.config.max_tokens += additional_tokens
             self.llm.max_token_usage = self.config.max_tokens * 2
             self.logger.log(f"**resume**: extend token allowance by {additional_tokens} to {self.config.max_tokens}")
+            if self.file_merging_llm is not self.llm:
+                self.file_merging_llm.max_token_usage = self.config.max_tokens * 2
+                self.logger.log(f"**resume**: extend file mergining token allowance by {additional_tokens} to"
+                                f" {self.config.max_tokens}")
         if additional_sage_tokens is not None:
             self.config.max_tokens_for_sage_llm += additional_sage_tokens
             if self._sage_llm is not None:
@@ -196,24 +206,22 @@ class Orchestrator(Executor):
         if _utils.safe_is_instance(blamed_step, TaoReplyStep):
             _t.cast(TaoReplyStep, blamed_step).record_criticisms([str(backtrack)])
         backtrack_to: Step|None = _t.cast(Step, backtrack.blame).created_by
-        if backtrack_to is None or not backtrack_to.retryable(self.config):
-            i = self.step_id(backtrack.blame if backtrack_to is None else backtrack_to)
-            if i is None:
-                i = len(self.chain) - 1
-            while 0 <= i < len(self.chain):
-                step = self.chain[i]
-                if _utils.safe_is_instance(step, ExpandableStep) and step.retryable(self.config):
-                    backtrack_to = step
-                    break
-                i -= 1
+        i = self.step_id(backtrack.blame if backtrack_to is None else backtrack_to)
+        if i is None:
+            i = len(self.chain) - 1
+        while 0 <= i < len(self.chain):
+            step = self.chain[i]
+            if _utils.safe_is_instance(step, ExpandableStep):
+                backtrack_to = step
+                break
+            i -= 1
 
-        if backtrack_to is None:
+        if backtrack_to is None or not _utils.safe_is_instance(backtrack_to, ExpandableStep):
             raise UnsolvableError(f"Sorry, I can't solve this problem or perform this task.")
-        elif _utils.safe_is_instance(backtrack_to, ExpandableStep):
-            choices = _t.cast(ExpandableStep, backtrack_to).choices
-            if (len(choices) > 0 and
-                    _utils.safe_is_instance(choices[-1], TaoReplyStep) and choices[-1] is not blamed_step):
-                _t.cast(TaoReplyStep, choices[-1]).record_criticisms([str(backtrack)])
+        choices = _t.cast(ExpandableStep, backtrack_to).choices
+        if (len(choices) > 0 and
+                _utils.safe_is_instance(choices[-1], TaoReplyStep) and choices[-1] is not blamed_step):
+            _t.cast(TaoReplyStep, choices[-1]).record_criticisms([str(backtrack)])
 
         reverted_steps = []
         while len(self.chain) > 0 and self.chain[-1] is not backtrack_to:
@@ -277,6 +285,9 @@ class Orchestrator(Executor):
         if self.llm is not self.sage_llm and 0 < self.config.max_tokens_for_sage_llm <= self.sage_llm.total_tokens:
             raise TokenUsageError(f"Smarter LLM consumed {self.sage_llm.total_tokens} tokens, "
                                   f"exceeded allowance of {self.config.max_tokens_for_sage_llm}", self.chain[-1])
+        if self.llm is not self.file_merging_llm and 0 < self.config.max_tokens <= self.file_merging_llm.total_tokens:
+            raise TokenUsageError(f"File merging LLM consumed {self.file_merging_llm.total_tokens} tokens, "
+                                  f"exceeded allowance of {self.config.max_tokens}", self.chain[-1])
 
     def step_id(self, step) -> int|None:
         assert step is not None
@@ -357,10 +368,10 @@ class Orchestrator(Executor):
 
     def finalize_files(self):
         from taogpt.program import consolidate_updated_files
-        consolidate_file_steps = consolidate_updated_files(self.chain)
+        consolidate_file_steps, shadowing_steps = consolidate_updated_files(self, self.chain, 'final file consolidation')
         for consolidate_file_step in consolidate_file_steps:
             self.chain.append(consolidate_file_step)
-            consolidate_file_step.eval(self)
+        self.remove_steps(steps=list(shadowing_steps.values()))
 
     def ask_questions(self, questions: list[str]) -> dict[str, str]:
         # for now just use the console input

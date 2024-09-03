@@ -330,7 +330,7 @@ function calculateFinalScores() {
     const whiteScore = whiteStones + whiteTerritory;
      */
     const blackScoreFinal = blackScore + blackStones + blackTerritory;
-    const whiteScoreFinal = whiteStones + whiteTerritory;
+    const whiteScoreFinal = whiteScore + whiteStones + whiteTerritory;
 
 
     console.log(`Final Scores - Black: ${blackScoreFinal}, White: ${whiteScoreFinal}`);

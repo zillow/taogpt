@@ -381,48 +381,6 @@ def test_parse_step_id_and_name():
             pass
 
 
-def test_gather_file_sections():
-    text = """Here is your file.
-    
-The HTML template for the main page.
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-</html>
-```"""
-    content_type, content, _, _ = parsing.gather_file_contents(text)
-    assert content_type == 'html'
-    assert content == """<!DOCTYPE html>
-<html lang="en">
-</html>"""
-
-
-def test_gather_multi_file_sections():
-    text = """Here is your file.
-    
-```html
-<!DOCTYPE html>
-<html lang="en">
-</html>
-```
-
-another
-
-````markdown
-  some markdown text
-```
-  nested block
-```
-````
-"""
-    try:
-        parsing.gather_file_contents(text)
-        assert False, "Expecting parse error not raised"
-    except parsing.ParseError as e:
-        assert 'Need exactly one file content fenced block' in str(e)
-
-
 def test_check_and_fix_fenced_block_extraction():
     fixed, blocks = parsing.check_and_fix_fenced_blocks("""
 ````markdown

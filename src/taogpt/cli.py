@@ -91,11 +91,15 @@ parser.add_argument('--long-sage-llm', type=str, default=None,
                     help='Long-context sage LLM model name')
 parser.add_argument('--long-context-threshold', type=int, default=3000,
                     help='Number of tokens before switching to long-context LLM')
+parser.add_argument('--file-merge-llm', type=str, default=None,
+                    help='File merge LLM model name')
 
 parser.add_argument('-C', '--openai-credential', type=str, default=None,
                     help='Path of .ini or .json file containing key-value pair for `OPENAI_API_KEY`, '
                          '`OPENAI_API_BASE`, etc. (under the `DEFAULT` section for `.ini` file),'
                          'corresponding to the same OpenAI credential environment variables respectively')
+parser.add_argument('--silence', type=int, default=0,
+                    help='Level of console printouts: 0: print conversation; 1: do not print conversation.')
 parser.add_argument('--debug', type=bool, default=False,
                     action=argparse.BooleanOptionalAction, help='Enable debugging')
 parser.add_argument('--load-chain', type=bool, default=False,
@@ -117,6 +121,7 @@ def main() -> int:
     sage_llm = args.sage_llm
     long_llm = args.long_llm
     long_sage_llm = args.long_sage_llm
+    file_merge_llm = args.file_merge_llm
     user_task: str = args.user_task
     long_context_token_threshold = args.long_context_threshold
     debug = args.debug
@@ -148,11 +153,27 @@ def main() -> int:
 
     os.makedirs(log_path, exist_ok=True)
     if previous_states is None:
-        solve_problem(user_task, log_path, config, llm, long_llm, long_sage_llm, sage_llm, long_context_token_threshold,
-                      input, log_to_stdout, debug)
+        solve_problem(
+            user_task, log_path, config, llm,
+            long_llm=long_llm,
+            long_sage_llm=long_sage_llm,
+            sage_llm=sage_llm,
+            file_merging_llm=file_merge_llm,
+            long_context_token_threshold=long_context_token_threshold,
+            user_input_fn=input,
+            console_out=log_to_stdout,
+            debug=debug)
     else:
-        load_and_resume_problem(previous_states, log_path, config, llm, long_llm, long_sage_llm, sage_llm,
-                                long_context_token_threshold, input, log_to_stdout, debug)
+        load_and_resume_problem(
+            previous_states, log_path, config, llm,
+            long_llm=long_llm,
+            long_sage_llm=long_sage_llm,
+            sage_llm=sage_llm,
+            file_merging_llm=file_merge_llm,
+            long_context_token_threshold=long_context_token_threshold,
+            user_input_fn=input,
+            console_out=log_to_stdout,
+            debug=debug)
     return 0
 
 

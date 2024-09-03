@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weiqi Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div style="text-align: center">
+        <!-- HUMAN: design issue: though optional, it should display the current player in the main UI -->
+        Current turn: <span id="current-player">black</span>
+        <!-- HUMAN: missing pass button -->
+        <button id="pass-button">Pass</button>
+    </div>
+    <div id="weiqi-board">
+        <!-- Generate 19x19 grid cells -->
+        <!-- Each cell can be a potential placement for a stone -->
+        <!-- Using JavaScript to dynamically add cells with data attributes for row and column -->
+        <!-- These data attributes help in game logic implementation -->
+        <script>
+            <!-- HUMAN: the variable `board` is also declared in the JS file, causing syntax error -->
+            // const board = document.getElementById('weiqi-board');
+            const board2 = document.getElementById('weiqi-board');
+            for (let row = 0; row < 19; row++) {
+                for (let col = 0; col < 19; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    board2.appendChild(cell);
+                }
+            }
+        </script>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
