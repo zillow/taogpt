@@ -63,12 +63,13 @@ def test_parse_step_type_spec():
     }}
 }}
 ```"""
-    text = f"""{MY_THOUGHT}:
-{reply_detail}
-"""
-    reply_type, step_def = parsing.parse_step_type_spec(text)
-    assert reply_type == MY_THOUGHT
-    assert step_def == reply_detail
+    for left, right in [('', ''), ('# ', ''), ('**', '**'), ('# **', '')]:
+        text = f"""{left}{MY_THOUGHT}:{right}
+    {reply_detail}
+    """
+        reply_type, step_def = parsing.parse_step_type_spec(text)
+        assert reply_type == MY_THOUGHT, f"for heading {left}{MY_THOUGHT}:{right}"
+        assert step_def == reply_detail, f"for heading {left}{MY_THOUGHT}:{right}"
 
 
 def test_ranking_prompt_format():

@@ -366,7 +366,7 @@ class ReportErrorStep(TaoReplyStep):
 
     def eval_only(self, executor):
         if len(self.issues) > 0:
-            culprits, n_errors = identify_culprits(executor, self.issues)
+            culprits, n_errors = identify_culprits(executor, self.issues, None)
             if len(culprits) > 0:
                 try:
                     repair_or_backtrack(executor, culprits)
@@ -374,11 +374,11 @@ class ReportErrorStep(TaoReplyStep):
                     raise Backtrack("Repair attempt failed", self)
                 # No Backtrack raised, we have fixed all errors, pop itself
                 previous = executor.previous_step(self)
-                assert previous is not None and _utils.safe_is_instance(previous, ExpandableStep)
+                if previous is not None and _utils.safe_is_instance(previous, ExpandableStep):
+                    _t.cast(ExpandableStep, previous).choices.remove(self)
                 assert executor.chain[-1] is self
                 executor.chain.pop(-1)
-                _t.cast(ExpandableStep, previous).choices.remove(self)
-                return previous
+                return executor.chain[-1]
         raise Backtrack(f"Problem or step is unsolvable. I gave up.", self)
 
 
@@ -643,6 +643,7 @@ def parse_error_report_to_data_struct(response, visible_step_ids, max_steps, log
 def identify_culprits(
         executor: Executor,
         issues: dict[str, tuple[str, list[tuple[int, str]]]]=None, # issue: (level, [(step#, step desc)])
+        summarizing_step: SummarizeStepABC=None
 ) -> tuple[dict[Step, list[str]], int]:
     # (step#, step desc): [issue desc with level]
     blames: dict[tuple[int, str|None], list[str]] = _defaultdict(list)
@@ -683,6 +684,17 @@ def identify_culprits(
     for culprits_issues in culprits.values():
         severities = count_issue_severities(culprits_issues)
         total_errors += severities.severe_issues
+    culprits = {
+        step: issues for step, issues in sorted(culprits.items(), key=lambda x: executor.step_id(x[0]))
+    }
+    if len(culprits) > 0 and summarizing_step is not None and summarizing_step not in culprits.keys():
+        affected_by = [
+            f"affected by {step.step_name_tag(executor.step_id(step))} issue: {issue}"
+            for step, issues in culprits.items() for issue in issues
+            if not issue.lower().startswith("affected")
+        ]
+        if len(affected_by) > 0:
+            culprits[summarizing_step] = affected_by
     return culprits, total_errors
 
 
@@ -987,7 +999,7 @@ class ExpandableStep(Step):
             n_questions = len([choice for choice in self.choices
                                if _utils.safe_is_instance(choice, AskQuestionStep)])
             initial = executor.is_init_solving_expansion()
-            if initial and not question_asked and n_questions < 1 and config.ask_questions:
+            if initial and not question_asked and n_questions < 2 and config.ask_questions:
                 prompts.append((ROLE_ORCHESTRATOR, prompt_db.tao_encourage_question))
             n_retries = 0
             prompts_to_be_sent = prompts.copy()
@@ -1066,7 +1078,10 @@ class ExpandableStep(Step):
         config = executor.config
         question_indices = [i for i in range(n_existing_choices, len(self.choices))
                             if _utils.safe_is_instance(self.choices[i], AskQuestionStep)]
-        if len(question_indices) > 1:
+        merged_question_index = -1
+        if len(question_indices) == 1:
+            merged_question_index = question_indices[0]
+        elif len(question_indices) > 1:
             indices = list(range(n_existing_choices, len(self.choices)))
             merged_question_index = self.consolidate_questions(self.choices, indices)
             if merged_question_index >= 0:
@@ -1115,6 +1130,10 @@ class ExpandableStep(Step):
                     n_retries += 1
                     executor.handle_parse_error(e, n_retries, prompts, prompts_to_be_sent,
                                                 response, prompt_db.orchestrator_parse_error)
+        if merged_question_index >= 0:
+            old_score = rankings_one_based[merged_question_index+1]
+            rankings_one_based[merged_question_index+1] += len(question_indices)
+            executor.logger.log(f"promote question from {old_score} to {rankings_one_based[merged_question_index+1]}")
         final_score_repr = '\n'.join([f"{k}. score {v}" for k, v in rankings_one_based.items()])
         indices = self.sort_rankings(rankings_one_based, n_existing_choices)
         executor.logger.log_debug(f"\n**Sorted indices**: {indices} **scores**:\n{final_score_repr}\n\n")
@@ -1420,7 +1439,6 @@ class SummarizeStepABC(DirectAnswerStep, metaclass=ABCMeta):
         if not executor.config.summarize:
             self._evaluated = True
             return None
-        reset_fix_counts(executor)
         instr = self.get_instruction(executor)
         involved_steps = self.get_summarize_steps(executor)
         prompt_db = executor.prompts
@@ -1447,8 +1465,6 @@ class SummarizeStepABC(DirectAnswerStep, metaclass=ABCMeta):
                 n_retries += 1
                 executor.handle_parse_error(ex, n_retries, prompts, to_be_sent, response,
                                             prompt_db.orchestrator_parse_error)
-        self.merge_steps(executor)
-        self.clear_criticisms()
         self._evaluated = True
         return None
 
@@ -1467,7 +1483,7 @@ class SummarizeStepABC(DirectAnswerStep, metaclass=ABCMeta):
                 self._n_verifications = 0 # no need for further check
                 reset_fix_counts(executor)
                 return None
-            self._pending_culprits, self._pending_error_count = identify_culprits(executor, all_issues)
+            self._pending_culprits, self._pending_error_count = identify_culprits(executor, all_issues, self)
             if self._n_verifications == 1 and self._pending_error_count > 0 and my_id - first_proceed_step <= 2:
                 culprit_and_blames = next(iter(self._pending_culprits.items()))
                 raise Backtrack("\n".join(culprit_and_blames[1]), blame=culprit_and_blames[0])
@@ -1483,7 +1499,7 @@ class SummarizeStepABC(DirectAnswerStep, metaclass=ABCMeta):
                     self._n_verifications = 0 # no need for further check
                     self._evaluated = False
                     break
-                self._pending_culprits, self._pending_error_count = identify_culprits(executor, all_issues)
+                self._pending_culprits, self._pending_error_count = identify_culprits(executor, all_issues, self)
         self._pending_culprits = None
         if self._pending_error_count > 0:
             self._pending_error_count = 0
@@ -1493,6 +1509,9 @@ class SummarizeStepABC(DirectAnswerStep, metaclass=ABCMeta):
         self._n_verifications = 0 # no need for further check
         self._evaluated = False
         return None
+
+    def _parse_repair_response(self, executor: Executor, response: str):
+        self.description = at_step_re.sub('', response, 1).strip()
 
 
 class SummarizePartialStep(SummarizeStepABC):
@@ -1510,8 +1529,11 @@ class SummarizePartialStep(SummarizeStepABC):
                 from_step_tag=from_step_tag, to_step_tag=to_step_tag), executor)
             if result is not None:
                 return result
+            self.clear_criticisms()
         self._n_verifications = 0
-        return self.eval_only(executor)
+        self.eval_only(executor)
+        self.merge_steps(executor)
+        return None
 
     def merge_steps(self, executor: Executor):
         self.created_by = self._shadowing[0].created_by
@@ -1546,18 +1568,15 @@ class SummarizeStep(SummarizeStepABC):
         return ''
 
     def eval(self, executor: Executor) -> Step | None:
+        self.eval_only(executor)
         if self._n_verifications > 0:
             result = self.verify_and_fix('Is the solution correct?', executor)
             if result is not None:
                 return result
+            self.clear_criticisms()
         self._n_verifications = 0
-        next_step = self.eval_only(executor)
-        if next_step is None:
-            next_step = Idle()
-        return next_step
-
-    def verify_and_fix(self, intent: str, executor: Executor) -> _t.Self | None:
-        return super().verify_and_fix(intent, executor)
+        self.merge_steps(executor)
+        return Idle()
 
     def merge_steps(self, executor):
         steps = self.get_summarize_steps(executor)

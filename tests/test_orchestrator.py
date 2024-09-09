@@ -42,11 +42,11 @@ def test_check_final_solution_success(logger):
     step, llm, orchestrator = create_final_check_chain(reply, logger)
     step.eval(orchestrator)
     assert len(llm.conversation_sequence) == 5
-    assert llm.conversation_sequence[0][0] == 'verify'
-    assert llm.conversation_sequence[1][0] == 'merge_criticisms'
-    assert llm.conversation_sequence[2][0] == 'fix'
+    assert llm.conversation_sequence[0][0] == 'SummarizeStep'
+    assert llm.conversation_sequence[1][0] == 'verify'
+    assert llm.conversation_sequence[2][0] == 'merge_criticisms'
     assert llm.conversation_sequence[3][0] == 'fix'
-    assert llm.conversation_sequence[4][0] == 'SummarizeStep'
+    assert llm.conversation_sequence[4][0] == 'fix'
 
 
 def test_check_final_solution_failed(logger):

@@ -25,8 +25,8 @@ _action_re = (rf"{MY_THOUGHT.replace('_', _dash_or_slash)}"
     rf"|{WILL_ASK_QUESTIONS.replace('_', _dash_or_slash)}"
     rf"|{HERE_IS_MY_STEP_BY_STEP_PLAN.replace('_', _dash_or_slash)}")
 
-step_type_re = _re.compile(r"(^)[\s#]*(" + _action_re + r"):\s*((.|\n)+)", flags=_re.IGNORECASE)
-action_type_re = _re.compile(r"[\s#]*(" + _action_re + r"):", flags=_re.IGNORECASE)
+step_type_re = _re.compile(r"(^)[\s#*]*(" + _action_re + r"):[\s*]*((.|\n)+)", flags=_re.IGNORECASE)
+action_type_re = _re.compile(r"[\s#*]*(" + _action_re + r"):[\s*]*", flags=_re.IGNORECASE)
 
 _true_false_answer_re = _re.compile(r"^\s*(.+)?\s*(true|false|yes|no)$",
                                    flags=_re.MULTILINE|_re.DOTALL|_re.IGNORECASE)
