@@ -694,6 +694,7 @@ def identify_culprits(
             if not issue.lower().startswith("affected")
         ]
         if len(affected_by) > 0:
+            summarizing_step.record_criticisms(affected_by)
             culprits[summarizing_step] = affected_by
     return culprits, total_errors
 
