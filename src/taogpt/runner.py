@@ -6,7 +6,7 @@ import typing as _t
 from io import TextIOBase as _TextIOBase
 import pickle as _pickle
 
-from taogpt import Pause, MarkdownLogger, PromptDb, Config, GeneratedFile
+from taogpt import MarkdownLogger, PromptDb, Config, GeneratedFile, Pause
 from taogpt.llm_model import (
     LangChainLLM,
     fix_model_name,
@@ -17,13 +17,23 @@ from taogpt.orchestrator import Orchestrator
 from io import TextIOBase as _TextIO
 
 
-def solve_problem(user_task: str, log_path: str, config: Config,
-                  llm: str, long_llm: str, long_sage_llm: str, sage_llm: str,
-                  long_context_token_threshold: int,
-                  user_input_fn: _t.Callable[[str], str], console_out: _TextIO|None,
-                  debug=False):
-    executor = create_orchestrator(config, log_path, llm, long_llm, sage_llm, long_sage_llm,
-                                   long_context_token_threshold, console_out, debug=debug)
+def solve_problem(
+        user_task: str,
+        log_path: str,
+        config: Config,
+        llm: str,
+        long_llm: str,
+        long_sage_llm: str,
+        sage_llm: str,
+        file_merging_llm: str,
+        long_context_token_threshold: int,
+        user_input_fn: _t.Callable[[str], str],
+        console_out: _TextIO|None,
+        debug=False):
+    executor = create_orchestrator(config, log_path, llm, long_llm=long_llm, sage_llm=sage_llm,
+                                   file_merging_llm=file_merging_llm, long_sage_llm=long_sage_llm,
+                                   long_context_token_threshold=long_context_token_threshold,
+                                   log_to_stdout=console_out, debug=debug)
     executor.set_input_fn(user_input_fn)
     pause: Pause|None = None
     try:
@@ -41,12 +51,15 @@ def load_and_resume_problem(
         long_llm: str=None,
         long_sage_llm: str=None,
         sage_llm: str=None,
+        file_merging_llm: str='gpt-4o',
         long_context_token_threshold: int=3000,
         user_input_fn: _t.Callable[[str], str]=input,
         console_out: _TextIO=None,
         debug=False):
-    executor = create_orchestrator(config, log_path, llm, long_llm, sage_llm, long_sage_llm,
-                                   long_context_token_threshold, console_out, debug=debug)
+    executor = create_orchestrator(config, log_path, llm, long_llm=long_llm, sage_llm=sage_llm,
+                                   file_merging_llm=file_merging_llm, long_sage_llm=long_sage_llm,
+                                   long_context_token_threshold=long_context_token_threshold,
+                                   log_to_stdout=console_out, debug=debug)
     executor.set_input_fn(user_input_fn)
     executor._chain = states['chain']
     for step in executor.chain:
@@ -105,18 +118,21 @@ def create_orchestrator(
         llm: str,
         long_llm: str=None,
         sage_llm: str=None,
+        file_merging_llm: str='gpt-4o',
         long_sage_llm: str=None,
         long_context_token_threshold: int=3000,
         log_to_stdout: _TextIO=None,
         debug=False):
     llm = fix_model_name(llm, required=True)
     sage_llm = fix_model_name(sage_llm, default_to=llm)
+    file_merging_llm = fix_model_name(file_merging_llm, default_to=llm)
     long_llm = fix_model_name(get_long_model(long_llm), default_to=llm)
     long_sage_llm = fix_model_name(get_long_model(long_sage_llm), default_to=sage_llm)
-    prompts = PromptDb.load_defaults()
+    prompts = PromptDb.load_defaults(ask_questions=config.ask_questions, ask_genie=config.ask_genie,
+                                     file_support=config.file_support)
     logger = MarkdownLogger(_p.Path(log_path) / 'taogpt_log.md', log_debug=debug, console_out=log_to_stdout)
     long_ctx_llm = _ChatOpenAI(model_name=long_llm) if long_llm is not None and long_llm != llm else None
-    primary_model = LangChainLLM(_ChatOpenAI(model_name=llm), logger=logger,
+    primary_model = LangChainLLM(_ChatOpenAI(model_name=llm), logger=logger, max_token_usage=config.max_tokens * 2,
                                  long_context_llm=long_ctx_llm,
                                  long_context_token_threshold=long_context_token_threshold)
     sage_model: LangChainLLM|None = None
@@ -124,13 +140,19 @@ def create_orchestrator(
         long_ctx_llm = _ChatOpenAI(model_name=long_sage_llm) \
             if long_sage_llm is not None and long_sage_llm != sage_llm else None
         sage_model = LangChainLLM(_ChatOpenAI(model_name=sage_llm), logger=logger,
+                                  max_token_usage=config.max_tokens,
                                   long_context_llm=long_ctx_llm,
                                   long_context_token_threshold=long_context_token_threshold)
+    file_merging_model: LangChainLLM|None = None
+    if file_merging_llm is not None and file_merging_llm != llm:
+        file_merging_model = LangChainLLM(_ChatOpenAI(model_name=file_merging_llm), logger=logger,
+                                  max_token_usage=config.max_tokens)
     executor = Orchestrator(
         config=config,
         llm=primary_model,
         prompts=prompts,
         markdown_logger=logger,
         sage_llm=sage_model,
+        file_merging_llm=file_merging_model
     )
     return executor

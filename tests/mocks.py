@@ -13,7 +13,7 @@ class MockLLM(LLM):
     def __init__(self,
                  logger: MarkdownLogger,
                  reply_fn: _t.Callable[[(str, str), str, str], str]=None):
-        super().__init__()
+        super().__init__(max_token_usage=10000)
         self._logger = logger
         self._total_tokens = 0
         self._n_requests = 0
@@ -52,7 +52,7 @@ class MockLLM(LLM):
         tokens = len(self.encoder.encode(message))
         self._logger.new_message_section(role, i)
         self._logger.log(f"**{role} >>> said**:\n")
-        deduped_msg = LLM.deduplicate_for_logging(message, role=role)
+        deduped_msg = self.deduplicate_for_logging(message, role=role)
         self._logger.log(deduped_msg, demote_h1=True)
         self._logger.close_message_section()
         return tokens
@@ -70,7 +70,7 @@ def logger():
 
 def create_orchestrator(llm: MockLLM, logger: MarkdownLogger, check_final=True):
     orchestrator = Orchestrator(
-        config=Config(check_final=check_final),
+        config=Config(n_final_checks=1 if check_final else 0),
         llm=llm,
         markdown_logger=logger,
         prompts=PromptDb.load_defaults()

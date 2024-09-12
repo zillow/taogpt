@@ -1,102 +1,57 @@
-# Problem Solving Instructions
+# Problem Solving Instructions:
 
-Given problem solving session so far, choose one of the following actions:
+Assess the difficulty of the task/step in the range of 1 to 10 and then choose one of the following actions to solve 
+this task/step:
 
-## Report errors
+## Report errors in previous steps
+
+Error report is only for previous executed steps. Do NOT use this action report errors in other proposals. If you found 
+issues in other proposals, you should come up with a new proposal avoiding those issues.
 
 {snippet_report_errors}
 
-Error report is only for previous executed steps. Do NOT errors in other proposals. If you found issues in other 
-proposals, you should come up with a new proposal avoiding those issues.
-
-## Ask questions
-
-Many problems requires clarifications. Ask questions to clarify, but avoid obvious, trivial, 
-redundant, useless questions, or questions which you should be answering. You should try to ask all questions you 
-need up front. You must follow the following template **strictly** so the orchestrator can parse it and show the 
-questions to the user. Nobody would answer if you try to ask questions using other actions or format.
-
-```markdown
-# I_NEED_TO_ASK_SOME_QUESTIONS_BEFORE_I_PROCEED
-<optional introductory and analysis>
-
-1. <question>
-2. <question>
-...
-```
-
 ## Make a step-by-step plan
 
-To solve this task step, outline a sequence of high-level, action-oriented plan.
+Deliberate on this task step, outline a sequence of sub-tasks. 
 
-* Outcome-oriented! Pay attention to the intention of the task problem. The action plan is for reaching the solution;
-  do not describe the internal workings, that's part of a direct answer.
-* Answer directly instead of step-by-step plan if steps become too detailed.
-* Think abstract. Come up with high-level and backtrackable plan. Avoid detailed, specific, fixed-value, and 
-  low-level ones. Because it is impossible to try alternative values in detailed plans in case of errors. Likewise, 
-  choose linear, decomposable steps over looping. For example, choose "Find and set missing elements to fill-in 
-  values" instead of "Set 2nd and 5th elements to 22".
-* Avoid loops if possible as they are less friendly to solution tree traversal or backtracking.
-* Worship Occam's razor.
-* Don't jump ahead. Plan **only for this step** and not something else from the higher plans.
+Choose this action only if the task step is hard, not because it can be broken down into sub-steps; 
+if steps become too detailed, choose other types of actions instead.
 
-Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each step later.
+Do NOT fill in any details and do NOT work on the plan yet, Orchestrator will prompt you to work at each sub-task later.
+
+Plan should solve only this task step. Avoid duplicated work item already planned in the parent plans or prior steps.
+
+The plan can contain go-to loop, conditional branch, or recursion. Also estimate the difficulty level for each sub-step.
 
 Follow this markdown template:
 
-`````markdown
-# HERE_IS_MY_STEP_BY_STEP_PLAN
-<beliefly describe success criteria for task/step.>
+```markdown
+HERE_IS_MY_STEP_BY_STEP_PLAN:
 
-```json
-{{
-  "1": {{"description": "<high-level description without details>"}},
-  "2": {{
-        "description": "<high-level description without details>",
-        "sub_steps": {{
-            "1": {{"description": "<high-level description without details>"}},
-            "2": {{"description": "<high-level description without details>"}}
-        }}
-       }},
-  // ...
-}}
+<briefly explain the rationales>
+
+1. <description>. Difficulty: 1 to 10
+2. <description>. Difficulty: 1 to 10
+...
 ```
+
+## Answer directly
+
+Just answer directly if this is simple.
+
+Follow this template:
+
+`````markdown
+MY_THOUGHT:
+<answer and explanation>
 `````
 
-{snippet_direct_answer}
+{snippet_op_files}
 
-{snippet_notes_for_files}
+{snippet_op_ask_questions}
 
-## Ask the Python Genie
+{snippet_op_ask_genie}
 
-The Python Genie is a sandboxed Python interpreter with standard library and numpy. It is a useful tool to help Tao 
-solve problems. It's stateful and previously defined globals can be used without redefining.
+---
 
-Follow the good example below to ask Genie:
-`````markdown
-# LET_ME_ASK_THE_PYTHON_GENIE
-<brief explanation of what the code snippet is for>
-
-```python
-def fib(n):
-    return fib(n-1) + f(n-2) if n > 1 else 1
-print(f"Tao sucks at math but he's a superb Python programmer! Here is the answer {{fib(22)}}")
-```
-`````
-
-Bad example:
-`````markdown
-# LET_ME_ASK_THE_PYTHON_GENIE
-Here is the `fib.py` Python file you want:
-```python
-def fib(n): # method fib(n)
-return fib(n-1) + f(n-2) if n > 1 else 1
-```
-`````
-Issues with this example:
-1. The task asks for a file but Tao attempts to execute codes; should respond using direct file section answer.
-2. Not paying attention to Python indentation.
-3. The code comment is redundant; avoid useless comments
-
-Important notes:
-* Respect the original task problem! Do NOT alter inadvertently.
+If you find task step has already been done in one of the prior steps, then point out this fact in a direct answer.

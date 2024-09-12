@@ -9,25 +9,38 @@
 <div style="text-align: center">
 
 
-*In the essence of the Tao, where simplicity reigns and complexity falls away, there lies a path for the solver of 
-problems. He who grasps the Tao seeks not to add but to subtract, to reduce each challenge to its core. With each 
-step taken, the path unfolds; with each error found, wisdom grows. The master problem solver, like water, adapts, flowing around obstacles, finding the way with ease. In the art of the Tao, the solution is not forced but emerges naturally, as if it was always there, waiting to be uncovered by those who understand that to solve is to follow the Tao, effortlessly.*
+*Embrace the way of Tao in problem-solving, where every step is a path to deeper understanding. Like water, the Tao 
+problem solver flows around obstacles with flexibility and patience, never rigid but adapting to the shape of the 
+challenge. With intuition as a guide and reason as a companion, seek clarity through simplicity, and find solutions 
+in stillness. This is the art of solving problems by not contending, by aligning with the natural course of events. 
+Here, every problem is an opportunity to practice the virtues of wisdom, simplicity, and serenity.*
 
--- [Self-pitch by TaoGPT](/examples/gpt-4-turbo/taogpt_self_pitch-steps.log.md)
+-- [Self-pitch by TaoGPT](examples/taogpt_self_pitch.direct.log.md)
 
 </div>
 
 ## Introduction
 
-(*This section [is written by TaoGPT](examples/gpt-4-turbo/taogpt_self_description-direct.log.md) with illustration by the authors.*)
+(*This section [is written by TaoGPT](examples/taogpt_self_description.direct.log.md) with illustration by the authors.*)
 
 ![TaoGPT High-level design](assets/high_level_design.png)
 
-Tao is an integral component of a sophisticated problem-solving system, designed to tackle issues in a structured and methodical manner. As a diligent problem solver, Tao is implemented by a large language model, which can either operate independently or in conjunction with another model. Tao's primary responsibility is to dissect problems recursively, working from the top down to ensure that each aspect of the issue is addressed thoroughly. This approach allows for a comprehensive understanding of the problem, enabling Tao to develop well-rounded and effective solutions.
+Recent advancements in artificial intelligence have spotlighted the proficiency of Large Language Models (LLMs) in
+tasks that involve human-like textual interactions. These models are adept in applications requiring quick responses
+and basic reasoning, aligning with System 1 cognitive functions. However, their performance in complex tasks
+demanding in-depth planning and intricate reasoning—related to System 2 cognitive processes—has been less effective.
 
-The Orchestrator is the backbone of the system, a mechanical program that directs the workflow and ensures that each component operates within its designated role. It does not engage in problem-solving itself but is essential for maintaining the structure of the process. The Orchestrator initiates the problem-solving sequence by invoking Tao and subsequently calls upon Sage when a solution needs to be evaluated. This ensures that the process is not only systematic but also adheres to a high standard of quality control.
+This work introduces the Template-guided Autoregressive Orchestrator for General Problem Tackling (TaoGPT), a
+framework aimed at enhancing the problem-solving capabilities of LLMs for these more demanding tasks. TaoGPT
+employs a dual-role functionality, alternating between a problem solver (Tao) and a critical analyzer (Sage), to
+harness the intrinsic strengths of LLMs while addressing their limitations in structured task management.
 
-Sage serves as the system's analytical critic, providing a layer of scrutiny to the solutions proposed by Tao. Sage's role is to meticulously examine the strategies and solutions, offering constructive criticism and expert opinions. This critical analysis is vital for refining the problem-solving process, as it helps to identify any potential flaws or areas for improvement. Sage's feedback is then integrated into Tao's problem-solving approach, allowing for iterative enhancements. This collaborative dynamic between Tao and Sage, facilitated by the Orchestrator, ensures that the solutions are not only creative but also robust and reliable. The types of problems Tao might solve can range from technical issues to complex analytical tasks, and Sage's feedback is crucial in ensuring that the solutions are practical and applicable to real-world scenarios.
+This approach is designed to deepen the engagement of LLMs with complex problems, thereby improving their ability to 
+navigate through tasks that require sophisticated planning and reasoning. The incorporation of self-hinting 
+techniques and the TRIPS (Targeted Repair, Improvement, and Partial Summarization) methodology further aims to 
+refine the accuracy and effectiveness of LLMs in complex problem-solving scenarios.
+
+(The above introduction is written by TaoGPT with minor edits by the author.)
 
 ## Philosophy
 
@@ -155,221 +168,11 @@ Some of these limitations and costs can be reduced over time as hardware availab
 
 ## Examples
 
-(The problem solving logs are markdown format with colored sections. Some Markdown viewers, such as those built in 
-the git source control system, may remove `<div>`s used for coloring sections. For best viewing pleasure, it is 
-recommended to view the log contents using a proper Markdown browser plugin.)
-
-This a final problem solving chain showing TaoGPT tackling a travel planning task. The steps go through:
-
-1. Analyze the task problem;
-2. Ask user some questions for clarification;
-3. Propose step-by-step plans;
-4. Rank step-by-step plans;
-5. Work on the best ranked step-by-step plan to come up with a feasible answer;
-6. Summary into the final answer;
-7. Check the final answer.
-
-Comparing the TaoGPT, GPT-4 with the default system prompt produced
-a [generic and vague response](/examples/gpt-4/travel-planning.default.md). The details of execution
-log can be found [here](/examples/gpt-4/travel-planning.log.md).
-
-More examples are in the [examples folder](/examples).
-
-### TaoGPT final trajectory
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[0] <b>user</b>: </div>
-
-I want to travel to Moscow. I just need a route plan and I will do the booking later.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[1] <b>Tao</b>: </div>
-
-The problem statement does not contain any fundamental errors, invalid assumptions, or contradictions. The task is to create a route plan for a trip to Moscow, which is a feasible and straightforward request.
-
-The successful completion of this task would be evaluated based on the following criteria:
-
-1. The route plan should start from the requester's current location.
-2. The route plan should end in Moscow.
-3. The route plan should include all necessary transit points (airports, train stations, etc.).
-4. The route plan should consider the most efficient and practical routes.
-5. The route plan should provide alternatives, if possible, to accommodate any changes or preferences.
-6. The route plan should not include the booking details as per the requester's preference.
-
-
-</div>
-
-<div style="background-color:lightgreen; padding: 5px; border-bottom: 1px dotted grey">
-<div>[2] <b>user</b>: </div>
-
-> Where is your current location?
-
-Urumuqi.
-
-> What is your preferred mode of transportation (air, rail, road)?
-
-'m afraid of flying.
-
-> Do you have any specific transit points or stops you would like to make along the way?
-
-I like to visit Lahsa.
-
-> Do you have any preferences for the route (scenic, fastest, cheapest, etc.)?
-
-I like comfort and prefer fewer stopovers.
-
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[3] <b>Tao</b>: </div>
-
-
-1. Identify the major transportation hubs (train stations, bus stations) in Urumuqi, Lahsa, and Moscow
-2. Find the most direct and comfortable routes from Urumuqi to Lahsa
-3. Find the most direct and comfortable routes from Lahsa to Moscow
-4. Combine the best routes from Urumuqi to Lahsa and Lahsa to Moscow to create a complete route plan
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[4] <b>Tao</b>: </div>
-
-The major transportation hubs in Urumuqi, Lahsa, and Moscow are as follows:
-
-Urumuqi:
-- Urumqi South Railway Station
-- Urumqi Railway Station
-
-Lahsa:
-- Lhasa Railway Station
-
-Moscow:
-- Moscow Kazansky Railway Station
-- Moscow Yaroslavsky Railway Station
-- Moscow Kursky Railway Station
-
-These stations have connections to major cities and regions, and they offer various types of trains, from high-speed to regular, to suit different travel preferences.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[5] <b>Tao</b>: </div>
-
-The most direct and comfortable route from Urumuqi to Lahsa is by train. The train journey from Urumuqi to Lahsa takes approximately 24 hours. The train departs from Urumqi South Railway Station and arrives at Lhasa Railway Station. The train offers soft sleeper class, which is the most comfortable option. It includes four berths in each compartment with a door, providing a quiet and private space. The train also has a dining car where you can buy meals and drinks.
-
-Please note that the travel time for each leg of the journey is an approximation and may vary depending on the specific train schedules. It is advised to check the actual train schedules when planning the trip.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[6] <b>Tao</b>: </div>
-
-Based on the information gathered, here is your complete route plan:
-
-1. Start from Urumuqi. Take a train from Urumuqi South Railway Station to Lhasa Railway Station. The journey takes approximately 24 hours. The train offers soft sleeper class for a comfortable journey.
-
-2. From Lahsa, take a train to Beijing. The journey takes approximately 40 hours. The train offers soft sleeper class for a comfortable journey.
-
-3. From Beijing, take a train to Moscow. The journey takes approximately 6 days. The train offers first-class sleeper for a comfortable journey.
-
-Please note that the travel time for each leg of the journey is an approximation and may vary depending on the specific train schedules. It is advised to check the actual train schedules when planning the trip.
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[7] <b>Tao</b>: </div>
-
-Here is your complete route plan:
-
-1. Start from Urumuqi South Railway Station and take a train to Lahsa. The journey will take approximately 24 hours. You will be travelling in a soft sleeper class for a comfortable journey.
-
-2. After exploring Lahsa, head to Lhasa Railway Station and take a train to Beijing. This journey will take approximately 40 hours. Again, you will be travelling in a soft sleeper class for a comfortable journey.
-
-3. From Beijing, take a train to Moscow. This journey will take approximately 6 days. You will be travelling in a first-class sleeper for a comfortable journey.
-
-Please note that the actual travel time may vary depending on the specific train schedules.
-
-As for the visa requirements, you will need to apply for a Chinese visa for your stops in Lahsa and Beijing. For your final destination, Moscow, you will need a Russian visa. Please check the specific requirements and application process for each visa at the respective embassies or consulates in your country. Safe travels!
-
-
-</div>
-
-<div style="background-color:lightyellow; padding: 5px; border-bottom: 1px dotted grey">
-<div>[8] <b>Tao</b>: </div>
-
-Based on your preferences, I have created a route plan for your trip from Urumuqi to Moscow with a stopover in Lahsa. Here is the complete plan:
-
-1. **Urumuqi to Lahsa**: Start from Urumuqi South Railway Station and take a train to Lahsa. The journey will take approximately 24 hours. You will be travelling in a soft sleeper class for a comfortable journey. The train offers four berths in each compartment with a door, providing a quiet and private space. The train also has a dining car where you can buy meals and drinks.
-
-2. **Lahsa to Beijing**: After exploring Lahsa, head to Lhasa Railway Station and take a train to Beijing. This journey will take approximately 40 hours. Again, you will be travelling in a soft sleeper class for a comfortable journey.
-
-3. **Beijing to Moscow**: From Beijing, take a train to Moscow. This journey will take approximately 6 days. You will be travelling in a first-class sleeper for a comfortable journey. The train offers two berths in each compartment with a door, providing a quiet and private space. The train also has a dining car where you can buy meals and drinks.
-
-Please note that the actual travel time may vary depending on the specific train schedules. Also, remember to check the visa requirements for each country you will be passing through. Safe travels!
-
-
-</div>
-
----
-
-In [the detailed long log](examples/gpt-4/travel_advice-questions_steps.log.md), we can see that TaoGPT found 
-multiple issues in the passes and fixed the issues (without backtracking since they are non-fatal for this task.)
-
-### Comparing to GPT-4-turbo answer using system default prompt
-
-(See [this example](examples/gpt-4-turbo/travel_advice.default.md))
-
-**user:**
-
-I want to travel to Moscow. I just need a detailed route plan.
-(I don't need the actual schedule. And you don't have access to the internet.)
-
-**assistant:**
-
-Creating a detailed route plan to Moscow without access to the internet for real-time information is challenging, but I can provide you with a general outline of how you might plan your trip. The specifics, such as transportation schedules and availability, will need to be confirmed with the relevant providers or through research on your part.
-
-**Step 1: Determine Your Starting Location**
-The route to Moscow will vary greatly depending on your starting point. For this example, let's assume you are starting from New York City, USA.
-
-**Step 2: Travel to the Airport**
-- From within New York City, you can take a taxi, rideshare, or public transportation to John F. Kennedy International Airport (JFK), which is a major international airport with flights to Moscow.
-
-**Step 3: Book a Flight to Moscow**
-- You will need to book a flight from JFK to one of Moscow's international airports. The main airport is Sheremetyevo International Airport (SVO), but there are also flights to Domodedovo International Airport (DME) and Vnukovo International Airport (VKO).
-- Direct flights are available, but depending on the airline and time of year, you may have to book a connecting flight.
-
-**Step 4: Arrive in Moscow**
-- Upon arrival in Moscow, you will go through customs and immigration. Make sure you have all the necessary visas and documentation required for entry into Russia.
-
-**Step 5: Travel from the Airport to Your Accommodation**
-- From the airport, you can take a taxi, airport express train, or bus to get to your accommodation in Moscow. The Aeroexpress train is a popular option for travel from SVO to the city center.
-
-**Step 6: Getting Around Moscow**
-- Moscow has an extensive and efficient metro system that can take you to most tourist destinations.
-- You can also use buses, trams, taxis, or rideshare services to get around the city.
-
-**Step 7: Sightseeing in Moscow**
-- Plan your sightseeing itinerary. Some must-see attractions include the Kremlin, Red Square, St. Basil's Cathedral, the Bolshoi Theatre, and the Tretyakov Gallery.
-
-**Step 8: Departure**
-- When your visit is over, you will need to reverse your route to return to the airport and fly back to your starting location.
-
-**Additional Tips:**
-- Always check the visa requirements for Russia well in advance of your trip.
-- Consider travel insurance for your journey.
-- Learn some basic Russian phrases, as English is not widely spoken outside of tourist areas and hotels.
-- Keep an eye on travel advisories and local news for any changes that might affect your travel plans.
-
-Remember, this is a very general guide and you will need to fill in the details based on your specific circumstances and preferences. It's important to check the latest information on flights, local transportation, and entry requirements before you travel.
+Examples of diverse task types can be found in the [examples folder](/examples).
+
+The problem solving logs are markdown format with colored sections. Some Markdown viewers, such as those built in 
+the github source control system, may remove `<div>`s used for coloring sections. For best viewing pleasure, it is 
+recommended to view the log contents using a proper Markdown browser plugin.
 
 # Installation
 

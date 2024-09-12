@@ -8,8 +8,31 @@ from taogpt.constants import role_color_map, ROLE_ORCHESTRATOR
 from taogpt.parsing import extract_fenced_blocks, restore_fenced_block
 from taogpt import utils as _utils
 
+
 _fix_fenced_block_backticks_re = _re.compile(r"(`{3,})(\d+)")
 
+_style = """
+<style>
+    .section_header {
+        padding: 5px; 
+        border-bottom: 1px dotted grey
+    }
+
+    .collapsible .content {
+        max-height: 50px;
+        overflow: scroll;
+        transition: max-height 0.5s ease-in-out;
+    }
+
+    .collapsible:hover .content {
+        max-height: 400px;
+    }
+
+    .collapsible .header {
+        cursor: pointer;
+    }
+</style>
+"""
 
 class MarkdownLogger:
     H1_RE = _re.compile(r"^# +(.+)")
@@ -25,6 +48,8 @@ class MarkdownLogger:
         self._log_debug = log_debug
         self._console_out = console_out
         self._limit_console_for_roles = limit_console_for_roles
+        self._log.write(_style)
+        self._log.write('\n\n')
 
     def close(self):
         if self._log is not None:
@@ -60,6 +85,9 @@ class MarkdownLogger:
             self._log.write('\n')
         finally:
             self._log.flush()
+
+    def log_error(self, error: str):
+        self.log(f'<div style="background-color: red; color: white">\n\n{error}\n</div>\n\n')
 
     @staticmethod
     def demote_h1(message: str):
@@ -97,24 +125,29 @@ class MarkdownLogger:
             return
         orig_log_to_stdout = self._console_out
         try:
-            self.new_message_section('debug', 'DEBUG')
+            self.new_message_section('debug', 'DEBUG', collapsible=True)
             self.log(markup, demote_h1=False, role='debug')
             self.close_message_section()
         finally:
             self._console_out = orig_log_to_stdout
 
-    def new_message_section(self, role, step_index, tokens: int=None):
+    def new_message_section(self, role, step_index, tokens: int=None, collapsible=False):
         tokens = f"(tokens: {tokens})" if tokens is not None else ""
         color = role_color_map.get(role, 'white')
         if role == 'debug':
             color = 'aliceblue'
-        self._log.write(f'<div style="background-color:{color}; padding: 5px; border-bottom: 1px dotted grey">\n'
-                 f'<div>[{step_index}] <b>{role}</b>: {tokens}</div>\n\n')
+        collapsible_cls = 'collapsible' if collapsible else ''
+        collapsible_marker = '+' if collapsible else ''
+        self._log.write(f'<div class="section_header {collapsible_cls}" style="background-color:{color}">\n'
+                        f'<div class="header"><b>{role}</b>: {tokens} {collapsible_marker}</div>\n')
+        self._log.write('<div class="content">\n\n')
+        self._log.flush()
         if self._console_out is not None:
-            print(f"--- [{step_index:03d}] {role.strip()} ---", file=self._console_out)
+            self._console_out.write(f"\n--- {role.strip()} ---\n")
 
     def close_message_section(self):
-        self._log.write('\n</div>\n\n')
+        self._log.write('\n</div></div>\n\n') # close: content section_header
+        self._log.flush()
         if self._console_out is not None:
             self._console_out.write('\n')
             self._console_out.flush()

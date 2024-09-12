@@ -1,0 +1,50 @@
+/* Basic styling for the Weiqi board */
+#weiqi-board {
+    display: grid;
+    grid-template-columns: repeat(19, 100px); /* 19 columns, each 100px wide */
+    grid-template-rows: repeat(19, 100px); /* 19 rows, each 100px high */
+    width: 1900px; /* Total width */
+    height: 1900px; /* Total height */
+    background-color: #f4e2c0; /* Light wood color */
+    border: 10px solid #8b4513; /* Dark wood border */
+    margin: 20px auto; /* Centering the board */
+}
+
+/* Styling for the grid cells */
+#weiqi-board div {
+    width: 100px;
+    height: 100px;
+    background-repeat: no-repeat;
+    background-position: center;
+    position: relative; /* Needed for stone positioning */
+    background-image: url('assets/grid_point_mid.png'); /* Default grid point image */
+}
+
+/* Different grid point images for special positions */
+#weiqi-board div[data-row='0'] { background-image: url('assets/grid_point_north.png'); }
+#weiqi-board div[data-row='18'] { background-image: url('assets/grid_point_south.png'); }
+#weiqi-board div[data-col='0'] { background-image: url('assets/grid_point_west.png'); }
+#weiqi-board div[data-col='18'] { background-image: url('assets/grid_point_east.png'); }
+#weiqi-board div[data-row='0'][data-col='18'] { background-image: url('assets/grid_point_north_east.png'); }
+#weiqi-board div[data-row='0'][data-col='0'] { background-image: url('assets/grid_point_north_west.png'); }
+#weiqi-board div[data-row='18'][data-col='18'] { background-image: url('assets/grid_point_south_east.png'); }
+#weiqi-board div[data-row='18'][data-col='0'] { background-image: url('assets/grid_point_south_west.png'); }
+
+/* Styling for stones */
+.stone {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    pointer-events: none; /* Prevents the stone from blocking click events on the grid cell */
+}
+
+.black-stone {
+    background-image: url('assets/black_stone.png');
+}
+
+.white-stone {
+    background-image: url('assets/white_stone.png');
+}

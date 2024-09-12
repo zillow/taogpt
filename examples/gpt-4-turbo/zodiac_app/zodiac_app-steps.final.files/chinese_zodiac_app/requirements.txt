@@ -1,2 +1,0 @@
-Flask==2.0.3
-# lunar_cal==1.0.0 commented out by human as this is given in the task
